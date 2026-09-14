@@ -25,6 +25,9 @@ jobs:
           swift --version
           xcodebuild -version
 
+      - name: Install libgphoto2 build dependency
+        run: brew install libgphoto2
+
       - name: Test Core and PTP packages
         shell: bash
         run: |

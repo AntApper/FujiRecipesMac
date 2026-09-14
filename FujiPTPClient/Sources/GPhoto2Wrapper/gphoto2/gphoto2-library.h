@@ -1,0 +1,1 @@
+/opt/homebrew/Cellar/libgphoto2/2.5.34/include/gphoto2/gphoto2-library.h

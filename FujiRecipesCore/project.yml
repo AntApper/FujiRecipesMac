@@ -1,0 +1,24 @@
+name: FujiRecipesCore
+options:
+  bundleIdPrefix: com.ant
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+
+targets:
+  FujiRecipesCore:
+    type: framework
+    platform: [iOS, macOS]
+    sources: [Sources/FujiRecipesCore]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-recipes-core
+        SKIP_INSTALL: NO
+        INSTALL_PATH: /usr/local/lib
+      configurations:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"

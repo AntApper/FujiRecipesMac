@@ -1,0 +1,1 @@
+../../gphoto2/gphoto2-result.h

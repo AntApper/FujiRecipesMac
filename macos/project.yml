@@ -1,0 +1,78 @@
+name: FujiRecipesMac
+options:
+  bundleIdPrefix: com.ant
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  generateLastUpgradeCheck: "1500"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ENABLE_BITCODE: NO
+    LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @loader_path/Frameworks"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  FujiRecipesMac:
+    type: application
+    platform: macOS
+    sources:
+      - Source
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+      - path: Resources/recipes-data.json
+        buildPhase: resources
+      - path: Resources/x100vi_helper
+        buildPhase: resources
+      - path: Resources/libusb-1.0.0.dylib
+        buildPhase: resources
+      - path: Resources/x100vi_helper.provenance.json
+        buildPhase: resources
+      - path: Resources/ThirdPartyNotices/libusb-COPYING.txt
+        buildPhase: resources
+    dependencies:
+      - package: FujiRecipesCore
+      - package: FujiPTPClient
+        product: PTPClientMacOS
+      - package: FujiPTPClient
+        product: X100VIHelper
+    settings:
+      base:
+        INFOPLIST_FILE: Source/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: "Fuji Recipes"
+        INFOPLIST_KEY_CFBundleName: "Fuji Recipes"
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.photography"
+        PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-recipes-mac
+        DEVELOPMENT_TEAM: ""
+      configurations:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-recipes-mac.debug
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          # Distribution keeps the registered, stable identifier. The Debug
+          # variant remains distinct so development installs cannot overwrite
+          # a signed release app.
+          # The direct-distribution package script also enforces this at
+          # signing time with `codesign --options runtime`.
+          ENABLE_HARDENED_RUNTIME: "YES"
+  FujiRecipesMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - Tests/FujiRecipesMacUITests
+    dependencies:
+      - target: FujiRecipesMac
+      - package: FujiRecipesCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-recipes-mac.uitests
+        TEST_TARGET_NAME: FujiRecipesMac
+        GENERATE_INFOPLIST_FILE: YES
+
+packages:
+  FujiRecipesCore:
+    path: ../FujiRecipesCore
+  FujiPTPClient:
+    path: ../FujiPTPClient

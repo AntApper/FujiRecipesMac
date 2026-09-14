@@ -1,0 +1,51 @@
+name: FujiPTPClient
+options:
+  bundleIdPrefix: com.ant
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+
+targets:
+  PTPClient:
+    type: framework
+    platform: macOS
+    sources: [Sources/PTPClient]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-ptp-client
+        SKIP_INSTALL: NO
+        INSTALL_PATH: /usr/local/lib
+    dependencies:
+      - package: FujiRecipesCore
+
+  PTPClientMacOS:
+    type: framework
+    platform: macOS
+    sources: [Sources/PTPClientMacOS]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-ptp-client-macos
+        SKIP_INSTALL: NO
+        INSTALL_PATH: /usr/local/lib
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @loader_path/../Frameworks"
+    dependencies:
+      - target: PTPClient
+      - package: FujiRecipesCore
+
+  PTPClientiOS:
+    type: framework
+    platform: iOS
+    sources: [Sources/PTPClientiOS]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-ptp-client-ios
+        SKIP_INSTALL: NO
+        INSTALL_PATH: /usr/local/lib
+    dependencies:
+      - package: FujiRecipesCore
+
+packages:
+  FujiRecipesCore:
+    path: ../FujiRecipesCore

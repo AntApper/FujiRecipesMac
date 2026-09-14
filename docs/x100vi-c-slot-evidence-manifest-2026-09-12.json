@@ -1,0 +1,215 @@
+{
+  "schema_version": "1.0",
+  "document_type": "final C-slot evidence manifest",
+  "date": "2026-09-12",
+  "scope": {
+    "included": [
+      "X100VI direct raw-PTP helper C1-C7 persistence and rollback regression",
+      "macOS production Send to Dial C4 write, readback, persistence, and rollback",
+      "software request-encoding tests run during this documentation audit"
+    ],
+    "excluded": [
+      "iOS physical transport and C-slot validation",
+      "firmware-version validation",
+      "raw USB/PTP packet-trace validation"
+    ]
+  },
+  "acceptance_status": {
+    "direct_helper_c1_c7": "PASS",
+    "macos_production_ui_c4": "PASS",
+    "overall": "PASS_WITH_EVIDENCE_LIMITATIONS"
+  },
+  "final_direct_helper_results": [
+    {
+      "slot": "C1",
+      "baseline_policy": "restore original Dreamy Negative backup",
+      "outcome": "PASS",
+      "validation": [
+        "complete 26-property raw backup plus PTP name",
+        "distinct valid fixture write",
+        "immediate selected-slot readback",
+        "read-only C2 switch then return",
+        "helper disconnect/reconnect readback",
+        "restore original baseline and exact post-reconnect raw/name comparison"
+      ]
+    },
+    {
+      "slot": "C2",
+      "baseline_policy": "restore original Kodachrome backup",
+      "outcome": "PASS",
+      "validation": [
+        "complete 26-property raw backup plus PTP name",
+        "distinct valid fixture write",
+        "immediate readback, read-only C1 switch/return, and helper reconnect readback",
+        "exact original raw/name restore after reconnect"
+      ]
+    },
+    {
+      "slot": "C3",
+      "baseline_policy": "manual overwrite became the accepted replacement baseline; raw-zero empty sentinel was not restorable",
+      "outcome": "PASS",
+      "validation": [
+        "complete replacement-baseline raw/name capture",
+        "distinct valid fixture immediate readback",
+        "read-only C1 switch/return and helper reconnect readback",
+        "exact replacement-baseline raw/name restore after reconnect"
+      ]
+    },
+    {
+      "slot": "C4",
+      "baseline_policy": "C4 PTP VERIFY fixture accepted as the replacement baseline; raw-zero empty sentinel was not restorable",
+      "outcome": "PASS",
+      "validation": [
+        "complete 26-property raw backup plus PTP name",
+        "distinct C4 PTP VERIFY B fixture immediate readback",
+        "read-only C1 switch/return and helper reconnect readback",
+        "exact C4 PTP VERIFY raw/name restore after reconnect"
+      ]
+    },
+    {
+      "slot": "C5",
+      "baseline_policy": "intentional complete C4 PTP VERIFY replacement-baseline copy",
+      "outcome": "PASS",
+      "validation": [
+        "C4 baseline-copy immediate, read-only C1 switch/return, and reconnect checks",
+        "distinct valid fixture immediate, switch, and reconnect checks",
+        "C4 baseline restore with applicable raw fields and PTP name matching after reconnect"
+      ]
+    },
+    {
+      "slot": "C6",
+      "baseline_policy": "intentional complete C4 PTP VERIFY replacement-baseline copy",
+      "outcome": "PASS",
+      "validation": [
+        "C4 baseline-copy immediate, read-only C1 switch/return, and reconnect checks",
+        "distinct valid fixture immediate, switch, and reconnect checks",
+        "C4 baseline restore with applicable raw fields and PTP name matching after reconnect"
+      ]
+    },
+    {
+      "slot": "C7",
+      "baseline_policy": "intentional complete C4 PTP VERIFY replacement-baseline copy",
+      "outcome": "PASS",
+      "validation": [
+        "C4 baseline-copy immediate, read-only C1 switch/return, and reconnect checks",
+        "distinct valid fixture immediate, switch, and reconnect checks",
+        "C4 baseline restore with applicable raw fields and PTP name matching after reconnect"
+      ]
+    }
+  ],
+  "final_macos_production_ui_c4": {
+    "outcome": "PASS",
+    "recipe": "Universal Negative - 14 Fujifilm X100VI (X-Trans V) Film Simulation Recipes (Yes, 14!!)",
+    "ui_confirmation": "was verified on camera slot C4",
+    "validations": [
+      "capture C4 replacement baseline: 26 raw properties plus PTP name",
+      "connect the Debug FujiRecipesMac Camera Hub and invoke the actual Send to Dial C4 UI action",
+      "direct-helper immediate C4 readback",
+      "read-only C1 switch then C4 readback",
+      "helper disconnect/reconnect then C4 readback",
+      "restore saved C4 baseline through helper",
+      "post-reconnect exact 26-property raw and PTP-name comparison"
+    ],
+    "result_details": {
+      "written_camera_name": "Universal Negat",
+      "persistence_mismatches_after_slot_switch": 0,
+      "persistence_mismatches_after_reconnect": 0,
+      "rollback_mismatches_after_reconnect": 0,
+      "all_rollback_property_reads_rc_zero": true
+    }
+  },
+  "baseline_policy": {
+    "rule": "A raw-zero empty C-slot readout is a camera sentinel, not a writable rollback fixture. Do not claim restoration to it.",
+    "C3": "Use the manually overwritten, camera-accepted configuration as the replacement baseline.",
+    "C4": "Use C4 PTP VERIFY as the replacement baseline.",
+    "C5_C7": "Use intentional complete copies of the C4 PTP VERIFY replacement baseline.",
+    "source": "docs/x100vi-c-slot-hardware-regression-2026-09-12.md#c3-c7-continuation-2026-09-12"
+  },
+  "helper_identity": {
+    "camera": "Fujifilm X100VI, USB PTP Camera, VID:PID 04cb:0305",
+    "direct_helper_source": "poc-x100vi-reader/x100vi_helper.c",
+    "direct_helper_binary": "poc-x100vi-reader/x100vi_helper",
+    "macos_bundled_helper": "FujiRecipesMac/macos/Resources/x100vi_helper",
+    "current_audit_identity": {
+      "observed_on": "2026-09-12",
+      "sha256": "cb8855f6707460a1a0ea28ca9303258d43c8b1861aa7e7d649660570c22768e7",
+      "architecture": "Mach-O 64-bit executable arm64",
+      "direct_and_bundled_binaries_identical": true
+    },
+    "evidence_time_identity": {
+      "nearest_recorded_bundled_helper_sha256": "0a005901c5fe71714addba7ba87280a85c011a72302d2faeacb7f017356caa68",
+      "recorded_in": "docs/x100vi-c-slot-hardware-regression-2026-09-12.md#final-production-ui-c4-validation",
+      "caveat": "No binary hash is retained specifically beside the final successful UI C4 run. Do not infer that the current-audit binary or nearest recorded hash is byte-identical to that run's binary."
+    }
+  },
+  "commands_and_results": [
+    {
+      "purpose": "build direct helper for documented hardware regression",
+      "command": "cd poc-x100vi-reader && gcc -O2 -o x100vi_helper x100vi_helper.c -I/opt/homebrew/include -L/opt/homebrew/lib -lusb-1.0 && shasum -a 256 x100vi_helper",
+      "result": "Documented successful builds; historical build hashes are retained in the regression report. This documentation audit did not rebuild the helper."
+    },
+    {
+      "purpose": "core C-slot encoder and creation tests",
+      "command": "cd FujiRecipesCore && swift test",
+      "result": "PASS on 2026-09-12: 19 tests, 0 failures (includes 8 CSlotPresetEncoderTests and 11 PresetSlotCreationTests)."
+    },
+    {
+      "purpose": "helper request serialization test",
+      "command": "cd FujiPTPClient && swift test",
+      "result": "PASS on 2026-09-12: 1 test, 0 failures (X100VIHelperRequestTests)."
+    },
+    {
+      "purpose": "macOS app build used in hardware record",
+      "command": null,
+      "result": "Documented as ** BUILD SUCCEEDED ** in the regression report; the exact xcodebuild invocation/output was not retained, so this manifest does not invent one."
+    }
+  ],
+  "evidence_sources": [
+    {
+      "path": "docs/x100vi-c-slot-hardware-regression-2026-09-12.md",
+      "date": "2026-09-12",
+      "role": "authoritative hardware chronology; final direct-helper and production-UI results"
+    },
+    {
+      "path": "docs/x100vi-c-slot-hardware-test.md",
+      "date": "2026-09-12",
+      "role": "required direct-helper validation procedure and pass criteria"
+    },
+    {
+      "path": "docs/x100vi-c-slot-creation-behavior-2026-09-12.md",
+      "date": "2026-09-12",
+      "role": "empty-slot and replacement-baseline policy"
+    },
+    {
+      "path": "docs/setting-to-ptp-map.md",
+      "date": "2026-09-12",
+      "role": "C-slot raw property encoding reference"
+    },
+    {
+      "path": "FujiRecipesCore/Tests/FujiRecipesCoreTests/CSlotPresetEncoderTests.swift",
+      "date": "2026-09-12",
+      "role": "software encoding assertions"
+    },
+    {
+      "path": "FujiPTPClient/Tests/X100VIHelperTests/X100VIHelperRequestTests.swift",
+      "date": "2026-09-12",
+      "role": "production encoder-to-helper request serialization assertion"
+    }
+  ],
+  "limitations": [
+    "Raw PTP/USB packet traces and complete helper JSON fixtures were not retained in the repository; narrative observations and summarized comparisons are not packet-level evidence.",
+    "Camera firmware version was unavailable for the retained runs.",
+    "The iOS transport is out of scope and remains a stub; this manifest does not establish iOS C-slot support.",
+    "Some historical failed attempts remain in the regression report as chronology only. They are superseded by the final acceptance outcomes in this manifest and must not be read as the final status.",
+    "The hardware results are operator-recorded evidence, not independently replayable from repository artifacts."
+  ],
+  "evidence_strength": {
+    "rating": "strong functional, limited forensic reproducibility",
+    "basis": [
+      "all seven slots have documented direct-helper write/readback/switch/reconnect/rollback outcomes",
+      "C4 has a documented app-originated write, independent helper readbacks, reconnect persistence, and exact rollback",
+      "current source-level encoder and request-serialization tests pass",
+      "raw transaction traces, final-run binary hash, and firmware identifier are unavailable"
+    ]
+  }
+}

@@ -1,0 +1,459 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0226C0D1FDE01C09B3A1905C /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B5BB39B7CC3474BEEDF43E /* FavoritesStore.swift */; };
+		0EA68F61926741ED58F3F282 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4465AEE694517412281AF398 /* CameraManager.swift */; };
+		146881519CB5FE2F36D4ECA7 /* LoadoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875614B04BEDBF25F3FCBA39 /* LoadoutStore.swift */; };
+		159B88F74DC7D56ADF7DCB05 /* PTPConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F552636700A2461E11C95C3A /* PTPConstants.swift */; };
+		189E1AB4E06FCCD865863342 /* EffectIntensity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0815A28D6BB86760831BE5 /* EffectIntensity.swift */; };
+		33C730AB66E06EC80104E0A8 /* GrainEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132B1BD375C38A71F06E62EF /* GrainEffect.swift */; };
+		38598B58C3B2161C6BC10068 /* FilmSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A976B5E1A6946AABDBA234 /* FilmSimulation.swift */; };
+		432BF628A1C8228B8A3101DD /* FilmSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A976B5E1A6946AABDBA234 /* FilmSimulation.swift */; };
+		4D695F976FDDAF5AFFDE76D0 /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4596BE669854A41A6B47EF78 /* Recipe.swift */; };
+		4FCAB65989ED68CDBD8AB64A /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4465AEE694517412281AF398 /* CameraManager.swift */; };
+		5085A37C22AAA57EDC72175E /* PresetSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */; };
+		53EA2196E1C97B4D6D214F4E /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4596BE669854A41A6B47EF78 /* Recipe.swift */; };
+		63F1399D508AEEBFD42A3815 /* DynamicRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EA4AEE17C12FA4754D0BB7 /* DynamicRange.swift */; };
+		740D37035E27905FC3A6156F /* EffectIntensity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0815A28D6BB86760831BE5 /* EffectIntensity.swift */; };
+		9DBB2FB7736ED927C166F544 /* DynamicRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EA4AEE17C12FA4754D0BB7 /* DynamicRange.swift */; };
+		A21D649AD3454D2B62BCE661 /* GrainEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132B1BD375C38A71F06E62EF /* GrainEffect.swift */; };
+		BBD7DCE4F9EF0663E4E9C1F6 /* WhiteBalanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */; };
+		C280F870FF663028BB6D44AC /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B5BB39B7CC3474BEEDF43E /* FavoritesStore.swift */; };
+		D3140AC40792BDA8B75F3514 /* PTPConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F552636700A2461E11C95C3A /* PTPConstants.swift */; };
+		DE7300DF2CB796B3732CB4AC /* PresetSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */; };
+		E6E51D8C1A964A81678BB229 /* WhiteBalanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */; };
+		EC911AFB6AD7F49A2B1AD464 /* LoadoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875614B04BEDBF25F3FCBA39 /* LoadoutStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		11D54A2D26CA3CB328FF4E27 /* FujiRecipesCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FujiRecipesCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		12B5BB39B7CC3474BEEDF43E /* FavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesStore.swift; sourceTree = "<group>"; };
+		132B1BD375C38A71F06E62EF /* GrainEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrainEffect.swift; sourceTree = "<group>"; };
+		30EA4AEE17C12FA4754D0BB7 /* DynamicRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicRange.swift; sourceTree = "<group>"; };
+		4465AEE694517412281AF398 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
+		4596BE669854A41A6B47EF78 /* Recipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recipe.swift; sourceTree = "<group>"; };
+		5E0815A28D6BB86760831BE5 /* EffectIntensity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectIntensity.swift; sourceTree = "<group>"; };
+		875614B04BEDBF25F3FCBA39 /* LoadoutStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadoutStore.swift; sourceTree = "<group>"; };
+		A7A976B5E1A6946AABDBA234 /* FilmSimulation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmSimulation.swift; sourceTree = "<group>"; };
+		B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhiteBalanceMode.swift; sourceTree = "<group>"; };
+		D9FE01CFF049C98715CBCC43 /* FujiRecipesCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FujiRecipesCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetSlot.swift; sourceTree = "<group>"; };
+		F552636700A2461E11C95C3A /* PTPConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTPConstants.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		015C0A599D6BBD7EA43E7898 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				4465AEE694517412281AF398 /* CameraManager.swift */,
+				12B5BB39B7CC3474BEEDF43E /* FavoritesStore.swift */,
+				875614B04BEDBF25F3FCBA39 /* LoadoutStore.swift */,
+				EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */,
+				4596BE669854A41A6B47EF78 /* Recipe.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		2BB6A21548ACCAF88BE1138B = {
+			isa = PBXGroup;
+			children = (
+				CBDD0BBE29492C61E1C22CB0 /* FujiRecipesCore */,
+				9C43F92D1BA3E723E8525136 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		8B76C14BF7CE49869B3C6906 /* Mapping */ = {
+			isa = PBXGroup;
+			children = (
+				F552636700A2461E11C95C3A /* PTPConstants.swift */,
+			);
+			path = Mapping;
+			sourceTree = "<group>";
+		};
+		9C43F92D1BA3E723E8525136 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D9FE01CFF049C98715CBCC43 /* FujiRecipesCore.framework */,
+				11D54A2D26CA3CB328FF4E27 /* FujiRecipesCore.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CBDD0BBE29492C61E1C22CB0 /* FujiRecipesCore */ = {
+			isa = PBXGroup;
+			children = (
+				E7332066BBA48FA336CA9320 /* Enums */,
+				8B76C14BF7CE49869B3C6906 /* Mapping */,
+				015C0A599D6BBD7EA43E7898 /* Models */,
+			);
+			name = FujiRecipesCore;
+			path = Sources/FujiRecipesCore;
+			sourceTree = "<group>";
+		};
+		E7332066BBA48FA336CA9320 /* Enums */ = {
+			isa = PBXGroup;
+			children = (
+				30EA4AEE17C12FA4754D0BB7 /* DynamicRange.swift */,
+				5E0815A28D6BB86760831BE5 /* EffectIntensity.swift */,
+				A7A976B5E1A6946AABDBA234 /* FilmSimulation.swift */,
+				132B1BD375C38A71F06E62EF /* GrainEffect.swift */,
+				B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */,
+			);
+			path = Enums;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		98B74E840668CCB3CAE9C1E4 /* FujiRecipesCore_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0903450294E11FFD968BA6A4 /* Build configuration list for PBXNativeTarget "FujiRecipesCore_macOS" */;
+			buildPhases = (
+				70B279BDAEA785CE1542A665 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FujiRecipesCore_macOS;
+			packageProductDependencies = (
+			);
+			productName = FujiRecipesCore_macOS;
+			productReference = 11D54A2D26CA3CB328FF4E27 /* FujiRecipesCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		D6CE5902DB62411D8F054A15 /* FujiRecipesCore_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 54035DD4579D900CD7E9E676 /* Build configuration list for PBXNativeTarget "FujiRecipesCore_iOS" */;
+			buildPhases = (
+				CBC7D2954E4612B325CD0BEA /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FujiRecipesCore_iOS;
+			packageProductDependencies = (
+			);
+			productName = FujiRecipesCore_iOS;
+			productReference = D9FE01CFF049C98715CBCC43 /* FujiRecipesCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8D37B3B02F0FE846A2325A96 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 77661F3E44906BAA3E8C0002 /* Build configuration list for PBXProject "FujiRecipesCore" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 2BB6A21548ACCAF88BE1138B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9C43F92D1BA3E723E8525136 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D6CE5902DB62411D8F054A15 /* FujiRecipesCore_iOS */,
+				98B74E840668CCB3CAE9C1E4 /* FujiRecipesCore_macOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		70B279BDAEA785CE1542A665 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4FCAB65989ED68CDBD8AB64A /* CameraManager.swift in Sources */,
+				9DBB2FB7736ED927C166F544 /* DynamicRange.swift in Sources */,
+				740D37035E27905FC3A6156F /* EffectIntensity.swift in Sources */,
+				0226C0D1FDE01C09B3A1905C /* FavoritesStore.swift in Sources */,
+				38598B58C3B2161C6BC10068 /* FilmSimulation.swift in Sources */,
+				33C730AB66E06EC80104E0A8 /* GrainEffect.swift in Sources */,
+				146881519CB5FE2F36D4ECA7 /* LoadoutStore.swift in Sources */,
+				159B88F74DC7D56ADF7DCB05 /* PTPConstants.swift in Sources */,
+				5085A37C22AAA57EDC72175E /* PresetSlot.swift in Sources */,
+				53EA2196E1C97B4D6D214F4E /* Recipe.swift in Sources */,
+				BBD7DCE4F9EF0663E4E9C1F6 /* WhiteBalanceMode.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CBC7D2954E4612B325CD0BEA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0EA68F61926741ED58F3F282 /* CameraManager.swift in Sources */,
+				63F1399D508AEEBFD42A3815 /* DynamicRange.swift in Sources */,
+				189E1AB4E06FCCD865863342 /* EffectIntensity.swift in Sources */,
+				C280F870FF663028BB6D44AC /* FavoritesStore.swift in Sources */,
+				432BF628A1C8228B8A3101DD /* FilmSimulation.swift in Sources */,
+				A21D649AD3454D2B62BCE661 /* GrainEffect.swift in Sources */,
+				EC911AFB6AD7F49A2B1AD464 /* LoadoutStore.swift in Sources */,
+				D3140AC40792BDA8B75F3514 /* PTPConstants.swift in Sources */,
+				DE7300DF2CB796B3732CB4AC /* PresetSlot.swift in Sources */,
+				4D695F976FDDAF5AFFDE76D0 /* Recipe.swift in Sources */,
+				E6E51D8C1A964A81678BB229 /* WhiteBalanceMode.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5EA4938A9B3699AEB09E0E88 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = /usr/local/lib;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ant.fuji-recipes-core";
+				PRODUCT_NAME = FujiRecipesCore;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		807F8B59E387C084A864DA0C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		967B335B283854E0E4E7429F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B9A2AB9BFA32AD2061EB4586 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = /usr/local/lib;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ant.fuji-recipes-core";
+				PRODUCT_NAME = FujiRecipesCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = NO;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		E57C3BD61D3ACFDFF712B05F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = /usr/local/lib;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ant.fuji-recipes-core";
+				PRODUCT_NAME = FujiRecipesCore;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		FBA6626D0098B491C19FA584 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = /usr/local/lib;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ant.fuji-recipes-core";
+				PRODUCT_NAME = FujiRecipesCore;
+				SDKROOT = macosx;
+				SKIP_INSTALL = NO;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0903450294E11FFD968BA6A4 /* Build configuration list for PBXNativeTarget "FujiRecipesCore_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B9A2AB9BFA32AD2061EB4586 /* Debug */,
+				FBA6626D0098B491C19FA584 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		54035DD4579D900CD7E9E676 /* Build configuration list for PBXNativeTarget "FujiRecipesCore_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E57C3BD61D3ACFDFF712B05F /* Debug */,
+				5EA4938A9B3699AEB09E0E88 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		77661F3E44906BAA3E8C0002 /* Build configuration list for PBXProject "FujiRecipesCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				807F8B59E387C084A864DA0C /* Debug */,
+				967B335B283854E0E4E7429F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8D37B3B02F0FE846A2325A96 /* Project object */;
+}

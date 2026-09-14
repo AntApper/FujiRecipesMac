@@ -1,0 +1,14 @@
+# Workspace config — generates FujiRecipes.xcworkspace
+# Run: xcodegen --workspace
+
+workspace:
+  name: FujiRecipes
+  schemes:
+    FujiRecipes:
+      build:
+        targets:
+          FujiRecipes: all
+    FujiRecipesMac:
+      build:
+        targets:
+          FujiRecipesMac: all

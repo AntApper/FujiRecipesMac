@@ -66,16 +66,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             throw PTPError.connectionFailed("X100VI helper connection is already active")
         }
 
-        // ptpcamerad auto-respawns and grabs the USB interface on macOS.
-        // Kill it before every connect so libusb can claim the device.
-        #if os(macOS)
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-        task.arguments = ["-9", "ptpcamerad"]
-        try? task.run()
-        task.waitUntilExit()
-        #endif
-
         do {
             try await withTimeout(timeout: 30) {
                 try await self.connectInternal()
@@ -180,13 +170,9 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
 
             let connectionResponse = try await sendCommand("connect", params: [:])
             guard connectionResponse["success"] as? Bool == true else {
-                let reason = connectionResponse["error"] as? String ?? "unknown error"
-                let code = helperInteger(connectionResponse["transport_code"])
-                    ?? helperInteger(connectionResponse["code"])
-                let detail = code.map {
-                    " (\(formattedHelperCode($0)))"
-                } ?? ""
-                throw PTPError.connectionFailed("Unable to open X100VI: \(reason)\(detail)")
+                throw PTPError.connectionFailed(
+                    helperConnectionFailure(in: connectionResponse).userActionableDescription
+                )
             }
 
             self.cameraInfo = PTPCameraInfo(
@@ -413,25 +399,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
         let params = Self.presetWriteParameters(index: index, data: data)
 
         let response = try await sendCommand("write_preset_slot", params: params)
-        if let retryCode = transientSlotSelectionCode(in: response) {
-            do {
-                try await reconnect()
-            } catch {
-                throw PTPError.writeFailed(
-                    0xD18C,
-                    "slot_selection failed (\(formattedHelperCode(retryCode))); reconnect retry failed: \(error.localizedDescription)"
-                )
-            }
-            return try await writePresetSlotWithoutRetry(index, params: params)
-        }
-        return try parsePresetWriteResponse(response, index: index)
-    }
-
-    private func writePresetSlotWithoutRetry(
-        _ index: Int,
-        params: [String: any Sendable]
-    ) async throws -> PTPPresetSlotWriteResult {
-        let response = try await sendCommand("write_preset_slot", params: params)
         return try parsePresetWriteResponse(response, index: index)
     }
 
@@ -592,7 +559,9 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     public func reconnect() async throws {
         let response = try await sendCommand("reconnect", params: [:])
         guard response["success"] as? Bool == true else {
-            throw PTPError.connectionFailed("Reconnect failed")
+            throw PTPError.connectionFailed(
+                helperConnectionFailure(in: response).userActionableDescription
+            )
         }
     }
 
@@ -1099,6 +1068,63 @@ private func helperInteger(_ value: Any?) -> Int? {
     if let value = value as? NSNumber { return value.intValue }
     if let value = value as? String { return Int(value) }
     return nil
+}
+
+/// The helper reports stable machine-readable connection failures. Keep their
+/// interpretation separate from transport orchestration so callers receive a
+/// recovery instruction without taking destructive action against macOS
+/// services or replaying a camera mutation.
+enum HelperConnectionFailure: Equatable {
+    case cameraNotFound
+    case interfaceUnavailable(transportCode: Int?)
+    case sessionOpenFailed(code: Int?)
+    case alreadyConnected
+    case notConnected
+    case unknown(error: String, code: Int?)
+
+    var userActionableDescription: String {
+        switch self {
+        case .cameraNotFound:
+            return "No Fuji X100VI was detected. Turn the camera on, reconnect its USB-C cable, and select USB RAW CONVERSION mode before trying again."
+        case .interfaceUnavailable(let transportCode):
+            let code = transportCode.map { " (\(formattedHelperCode($0)))" } ?? ""
+            return "macOS could not claim the X100VI USB interface\(code). Another camera app or the system PTP service may be using it. Close camera-accessing apps, unplug and reconnect the camera, then try again."
+        case .sessionOpenFailed(let code):
+            let detail = code.map { " (\(formattedHelperCode($0)))" } ?? ""
+            return "The X100VI did not complete its PTP session handshake\(detail). Power-cycle the camera or reconnect USB, then try again."
+        case .alreadyConnected:
+            return "The X100VI helper already has an active connection. Disconnect it before starting another connection."
+        case .notConnected:
+            return "The X100VI is no longer connected. Reconnect the camera before retrying."
+        case .unknown(let error, let code):
+            let detail = code.map { " (\(formattedHelperCode($0)))" } ?? ""
+            return "The X100VI helper could not connect: \(error)\(detail). Check the USB connection and try again."
+        }
+    }
+}
+
+func helperConnectionFailure(in response: [String: Any]) -> HelperConnectionFailure {
+    let error = (response["error"] as? String ?? "unknown error").lowercased()
+    let transportCode = helperInteger(response["transport_code"])
+    let code = (transportCode == 0 ? nil : transportCode) ?? helperInteger(response["code"])
+    let normalizedError = error.hasPrefix("reconnect_")
+        ? String(error.dropFirst("reconnect_".count))
+        : error
+
+    switch normalizedError {
+    case "camera_not_found":
+        return .cameraNotFound
+    case "interface_claim_failed":
+        return .interfaceUnavailable(transportCode: code)
+    case "session_open_failed":
+        return .sessionOpenFailed(code: code)
+    case "already_connected":
+        return .alreadyConnected
+    case "not_connected":
+        return .notConnected
+    default:
+        return .unknown(error: error, code: code)
+    }
 }
 
 /// Turns the helper's structured retrieval state into user-facing evidence.

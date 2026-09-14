@@ -81,6 +81,18 @@ final class RecipeCatalogTests: XCTestCase {
         XCTAssertEqual(recipe.filmSimulation, .classicChrome)
     }
 
+    func testLoaderKeepsLegacyXTransVRecipesAndExcludesExplicitlyIncompatibleRecords() {
+        XCTAssertTrue(RecipeLoader.shouldIncludeInX100VICatalog(recipeJSON(compatibleCameras: nil)))
+        XCTAssertTrue(RecipeLoader.shouldIncludeInX100VICatalog(recipeJSON(compatibleCameras: [])))
+        XCTAssertTrue(RecipeLoader.shouldIncludeInX100VICatalog(recipeJSON(compatibleCameras: ["X100VI"])))
+        XCTAssertFalse(RecipeLoader.shouldIncludeInX100VICatalog(recipeJSON(compatibleCameras: ["X-T5"])))
+        XCTAssertFalse(
+            RecipeLoader.shouldIncludeInX100VICatalog(
+                recipeJSON(sensorGeneration: "X-Trans IV", compatibleCameras: nil)
+            )
+        )
+    }
+
     private func recipe(
         name: String,
         filmSimulation: FilmSimulation,
@@ -100,6 +112,27 @@ final class RecipeCatalogTests: XCTestCase {
             dynamicRange: dynamicRange,
             whiteBalanceMode: whiteBalance,
             tags: tags
+        )
+    }
+
+    private func recipeJSON(
+        sensorGeneration: String = "X-Trans V",
+        compatibleCameras: [String]?
+    ) -> RecipeJSON {
+        RecipeJSON(
+            id: "catalog-filter-test",
+            name: "Catalog Filter Test",
+            sensorGeneration: sensorGeneration,
+            filmSimulation: nil,
+            filmSimEnum: nil,
+            settings: [:],
+            ptpSettings: [:],
+            presetSettings: [:],
+            sourceUrl: nil,
+            previewImageUrl: nil,
+            imageUrls: nil,
+            date: nil,
+            compatibleCameras: compatibleCameras
         )
     }
 

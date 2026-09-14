@@ -6,7 +6,7 @@ import FujiRecipesCore
 public struct LoadoutsView: View {
     @ObservedObject public var loadouts: LoadoutStore
     @ObservedObject public var cameraManager: CameraManager
-    @State private var slotPendingClear: Int?
+    @State private var slotPendingLocalClear: Int?
     @State private var slotToEdit: Loadout?
     @State private var selectedDialSlot: Int = 1
     @State private var refreshMessage: String?
@@ -38,8 +38,9 @@ public struct LoadoutsView: View {
                             loadout: loadout,
                             slot: slot,
                             isSelected: selectedDialSlot == slot,
+                            isDirty: loadouts.isDirty(slot),
                             onSelect: { selectedDialSlot = slot },
-                            onClear: { slotPendingClear = slot },
+                            onClear: { slotPendingLocalClear = slot },
                             onEdit: { slotToEdit = loadout }
                         )
                     }
@@ -50,25 +51,25 @@ public struct LoadoutsView: View {
         }
         .navigationTitle("C1–C7 Preset Dial Matrix")
         .confirmationDialog(
-            "Clear Custom Slot?",
+            "Clear Local Draft?",
             isPresented: Binding(
-                get: { slotPendingClear != nil },
-                set: { if !$0 { slotPendingClear = nil } }
+                get: { slotPendingLocalClear != nil },
+                set: { if !$0 { slotPendingLocalClear = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Clear Slot", role: .destructive) {
-                if let slot = slotPendingClear {
+            Button("Clear Local Draft", role: .destructive) {
+                if let slot = slotPendingLocalClear {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                         loadouts.clearLoadout(for: slot)
                     }
                 }
-                slotPendingClear = nil
+                slotPendingLocalClear = nil
             }
-            Button("Cancel", role: .cancel) { slotPendingClear = nil }
+            Button("Cancel", role: .cancel) { slotPendingLocalClear = nil }
         } message: {
-            if let slot = slotPendingClear {
-                Text("This will remove all custom film recipe parameters from C\(slot).")
+            if let slot = slotPendingLocalClear {
+                Text("This removes only FujiRecipes’ local draft for C\(slot). It does not clear, reset, or otherwise change the physical camera slot.")
             }
         }
         .sheet(item: $slotToEdit) { loadout in
@@ -96,7 +97,7 @@ public struct LoadoutsView: View {
             accentColor: Theme.fujiAmber
         )
         HStack {
-            Text("Selected: C\(selectedDialSlot). Local drafts are not camera-synced until a verified write succeeds.")
+            Text("Selected: C\(selectedDialSlot). Local drafts are not camera-synced until a verified write succeeds. Clearing a draft never clears the camera slot.")
                 .font(.caption2)
                 .foregroundStyle(Theme.textSecondary)
             Spacer()
@@ -206,6 +207,7 @@ public struct LoadoutCard: View {
     public let loadout: Loadout?
     public let slot: Int
     public var isSelected: Bool = false
+    public var isDirty: Bool = false
     public var onSelect: () -> Void = {}
     public var onClear: () -> Void = {}
     public var onEdit: () -> Void = {}
@@ -219,6 +221,7 @@ public struct LoadoutCard: View {
         loadout: Loadout?,
         slot: Int,
         isSelected: Bool = false,
+        isDirty: Bool = false,
         onSelect: @escaping () -> Void = {},
         onClear: @escaping () -> Void = {},
         onEdit: @escaping () -> Void = {}
@@ -226,6 +229,7 @@ public struct LoadoutCard: View {
         self.loadout = loadout
         self.slot = slot
         self.isSelected = isSelected
+        self.isDirty = isDirty
         self.onSelect = onSelect
         self.onClear = onClear
         self.onEdit = onEdit
@@ -270,7 +274,7 @@ public struct LoadoutCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture(perform: onSelect)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Custom slot C\(slot), \(isConfigured ? "configured" : "empty")")
+        .accessibilityLabel("Custom slot C\(slot), \(isConfigured ? "configured" : "empty"), \(syncStateLabel)")
         .accessibilityHint(isSelected ? "Selected. Use the edit button to change this local draft." : "Selects this custom slot.")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Select slot C\(slot)") { onSelect() }
@@ -318,9 +322,10 @@ public struct LoadoutCard: View {
                             .padding(3)
                     }
                     .buttonStyle(.plain)
-                    .help("Clear slot C\(slot)")
-                    .accessibilityLabel("Clear slot C\(slot)")
-                    .accessibilityHint("Removes the local recipe settings from this slot.")
+                    .help("Clear local draft for C\(slot)")
+                    .accessibilityLabel("Clear local draft for C\(slot)")
+                    .accessibilityHint("Removes only the local recipe draft; it does not change the camera slot.")
+                    .accessibilityIdentifier("clear-local-draft-slot-\(slot)")
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
             } else {
@@ -342,6 +347,15 @@ public struct LoadoutCard: View {
                 .font(.system(size: 14, weight: .bold))
                 .glassPrimary()
                 .lineLimit(1)
+
+            Text(syncStateLabel)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundStyle(isDirty ? Theme.fujiAmber : Theme.emeraldGreen)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background((isDirty ? Theme.fujiAmber : Theme.emeraldGreen).opacity(0.14))
+                .clipShape(Capsule())
+                .accessibilityIdentifier("slot-sync-state-\(slot)")
 
             // Film Sim Badge + Dynamic Range
             HStack(spacing: 5) {
@@ -398,7 +412,9 @@ public struct LoadoutCard: View {
                     .font(.caption.weight(.semibold))
                     .glassSecondary()
             }
-            Text("Choose any recipe from the Recipes tab and click “Send to Dial”.")
+            Text(isDirty
+                ? "Local draft cleared. The physical camera slot was not changed."
+                : "Choose any recipe from the Recipes tab and click “Send to Dial”.")
                 .font(.caption2)
                 .glassTertiary()
                 .lineLimit(2)
@@ -406,6 +422,12 @@ public struct LoadoutCard: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var syncStateLabel: String {
+        if isDirty { return "LOCAL DRAFT · NOT WRITTEN" }
+        if loadout?.provenance == .cameraSynced { return "CAMERA-VERIFIED" }
+        return "LOCAL ONLY"
     }
 }
 
@@ -601,14 +623,51 @@ public struct SlotEditorSheet: View {
         Task {
             do {
                 let result = try await cameraManager.writeLoadout(loadout, to: loadout.slot)
+                guard let observedSnapshot = result.observedSnapshot,
+                      observedSnapshot.slot == loadout.slot else {
+                    writeMessage = "C\(loadout.slot) was sent to the camera, but the post-write camera readback was unavailable. This local draft remains unverified."
+                    return
+                }
+                store.syncFromCameraPresetData(
+                    [observedSnapshot],
+                    overwriteDirtyDrafts: true
+                )
                 store.markCameraWriteVerified(slot: loadout.slot)
+                if let observedLoadout = store.loadout(for: loadout.slot) {
+                    loadout = observedLoadout
+                }
+                let action = result.createdFromEmpty ? "Created and verified" : "Updated and verified"
                 writeMessage = result.warnings.isEmpty
-                    ? "Verified write to C\(loadout.slot)."
-                    : "Verified C\(loadout.slot) with warnings: \(result.warnings.joined(separator: ", "))"
+                    ? "\(action) camera slot C\(loadout.slot)."
+                    : "\(action) C\(loadout.slot) with warnings: \(result.warnings.joined(separator: ", "))"
+            } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
+                writeMessage = cSlotWriteFailureMessage(recoveryError)
             } catch {
                 writeMessage = "Camera did not verify the write: \(error.localizedDescription)"
             }
         }
+    }
+
+    private func cSlotWriteFailureMessage(_ error: PTPPresetSlotWriteRecoveryError) -> String {
+        let failure: String
+        switch error.failurePhase {
+        case .write:
+            failure = "C\(error.slot) write failed before post-write verification"
+        case .postWriteVerification:
+            failure = "C\(error.slot) write completed, but post-write verification failed"
+        }
+        let recovery: String
+        switch error.rollback {
+        case .restored:
+            recovery = "Previous camera settings were restored."
+        case .notAttemptedEmptySentinel:
+            recovery = "The camera slot was previously empty, so there were no settings to restore."
+        case .failed(let message):
+            recovery = "Recovery could not restore previous camera settings: \(message)"
+        case .notNeeded:
+            recovery = "No recovery was required."
+        }
+        return "\(failure): \(error.writeErrorDescription). \(recovery)"
     }
 
     private func pickerSection<T: Hashable>(

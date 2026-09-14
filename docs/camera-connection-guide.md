@@ -2,10 +2,15 @@
 
 ## Platform scope
 
-This guide covers the macOS production path: the bundled `x100vi_helper`
-uses libusb raw PTP and verifies requested C-slot writes by readback before
-the app reports a physical save. The iOS transport remains a stub; it does
-not currently provide verified C1–C7 read or write support.
+This guide covers the macOS helper path for the X100VI: the bundled
+`x100vi_helper` uses libusb raw PTP and verifies requested C-slot writes by
+readback before the app reports a physical save. The iOS transport remains a
+stub; it does not currently provide verified C1–C7 read or write support.
+
+USB PTP-service ownership is a current operational limitation, not a public
+release reliability claim. macOS or another camera application can own the
+same interface, and a failed connection must be treated as unavailable rather
+than as a condition the app can safely override.
 
 ## Camera Hub connect regression — 2026-09-12
 
@@ -35,7 +40,7 @@ connected UI or its write action unavailable.
 ## How to Connect Your Fuji X100VI
 
 ### Prerequisites
-- Fuji X100VI (or X100V, X-T5, X-T30, X-T4)
+- Fujifilm X100VI
 - USB-C data cable (not charge-only)
 - macOS 14+ with FujiRecipesMac app installed
 
@@ -46,17 +51,21 @@ connected UI or its write action unavailable.
 2. Go to **Menu → Setup → USB Connection → PTP** (not Mass Storage)
 3. Set **USB Mass Storage** to **OFF** (if present)
 
-#### 2. Release macOS's PTP daemon
-macOS may automatically grab USB cameras through `ptpcamerad`. FujiRecipes
-attempts to release it before connecting. If that fails, close Photos, Image
-Capture, and Preview, then retry after reconnecting the camera.
+#### 2. Resolve competing camera ownership
+macOS's PTP service (`ptpcamerad`) or another camera application may own the
+USB interface. FujiRecipes does not terminate that service and cannot promise
+that it can reclaim the interface.
 
-```bash
-# If diagnostics show the daemon owns the camera:
-killall -9 ptpcamerad
-```
+Use only non-destructive recovery steps:
 
-Then **quit Photos, Image Capture, and Preview** if they're running.
+1. Quit Photos, Image Capture, Preview, Adobe Bridge, and other camera apps.
+2. Disconnect the USB-C cable, wait a few seconds, and reconnect it.
+3. Retry the connection from FujiRecipes.
+4. If the camera remains unavailable, power-cycle the camera, reconnect it,
+   and retry once.
+
+If ownership continues to prevent a connection, stop there and keep the
+camera unchanged. This is a known limitation of the current helper path.
 
 #### 3. Connect USB Cable
 1. Plug USB-C cable into camera and Mac
@@ -95,22 +104,24 @@ Once connected, the app can read preset slots C1-C7 from the camera. This uses r
 - Use a USB-C **data** cable (not charge-only)
 - Camera USB mode must be set to PTP
 - Quit Photos, Image Capture, Preview
-- Run: `sudo killall PTPCamera`
 - Disconnect and reconnect USB cable
+- If it still does not appear, power-cycle the camera before retrying
 
 #### "Camera connecting forever" or "Connection timed out"
 - A stale app build may contain an outdated helper; rebuild the app so its
   bundled `x100vi_helper` is refreshed from the repository resource.
 - `ptpcamerad` or another camera app may own the USB interface.
-- Run: `killall -9 ptpcamerad`
 - Quit all camera-related apps (Photos, Image Capture, Preview, Adobe Bridge)
-- Wait 5 seconds
-- Try again
+- Disconnect and reconnect the USB cable, then retry.
+- If ownership persists, power-cycle the camera and retry once. Do not force
+  terminate macOS PTP services.
 
 #### "Failed to communicate with camera"
 - `ptpcamerad` may still be blocking the interface.
-- Check: `pgrep -a ptpcamerad` — if a process shows, quit competing camera
-  apps, reconnect the camera, and retry.
+- Quit competing camera apps, reconnect the camera, and retry.
+- If the helper still cannot open a session, power-cycle the camera and retry
+  once. The current transport does not guarantee recovery from service
+  ownership.
 - Run a read-only helper check before attempting any C-slot write.
 
 #### Camera not showing in system_profiler
@@ -122,39 +133,27 @@ If nothing shows, the USB connection isn't working. Try:
 - Different USB port on Mac
 - Different USB hub (if using one)
 
-### Test Script
-```bash
-# Run the comprehensive camera connection test
-bash tools/test-camera-connection.sh
-```
+### Tested camera scope
 
-This script will:
-1. Check if a Fuji camera is connected
-2. Kill PTPCamera if running
-3. Verify libgphoto2 availability
-4. Test gphoto2 CLI
-5. Show camera details
-
-### Supported Cameras
-
-| Camera | USB VID:PID | PTP Code |
-|--------|------------|----------|
-| X100VI | 0x04CB:0x0305 | Supported |
-| X100V  | 0x04CB:0x02E5 | Supported |
-| X-T5   | 0x04CB:0x02E3 | Supported |
-| X-T30  | 0x04CB:0x02E3 | Supported |
-| X-T4   | 0x04CB:0x02E7 | Supported |
+The C1–C7 workflow is hardware-validated only for the Fujifilm X100VI
+(`0x04CB:0x0305`). It is not a support or release-reliability claim for other
+Fujifilm bodies. See [RELEASE.md](RELEASE.md) for the supported scope and
+release boundary.
 
 ### Technical Details
 
 The macOS connection flow:
-1. Release the competing `ptpcamerad` process when present.
-2. Launch the bundled `x100vi_helper`.
+1. Ask the user to close competing camera applications and retry after a
+   reconnect when the interface is unavailable.
+2. Launch the bundled `x100vi_helper` without terminating macOS PTP services.
 3. Verify its line-delimited JSON protocol with `ping`.
 4. Send the helper's `connect` command, which claims the USB interface and
    opens the PTP session.
 5. Publish the connected UI state.
 6. Start the C1–C7 read-only sync in the background.
+
+If step 4 cannot claim the interface, the flow reports the failure. It does
+not establish dependable public-release access to the USB PTP service.
 
 For raw PTP communication, we use:
 - `GetDevicePropValue` (0x1015) — read property values

@@ -2,14 +2,14 @@
 # Rebuilds the X100VI helper and its libusb runtime for the macOS app bundle.
 #
 # This script is the only supported way to refresh:
-#   FujiRecipesMac/macos/Resources/x100vi_helper
-#   FujiRecipesMac/macos/Resources/libusb-1.0.0.dylib
-#   FujiRecipesMac/macos/Resources/x100vi_helper.provenance.json
+#   macos/Resources/x100vi_helper
+#   macos/Resources/libusb-1.0.0.dylib
+#   macos/Resources/x100vi_helper.provenance.json
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_file="$root/poc-x100vi-reader/x100vi_helper.c"
-resources="$root/FujiRecipesMac/macos/Resources"
+resources="$root/macos/Resources"
 helper="$resources/x100vi_helper"
 runtime="$resources/libusb-1.0.0.dylib"
 provenance="$resources/x100vi_helper.provenance.json"

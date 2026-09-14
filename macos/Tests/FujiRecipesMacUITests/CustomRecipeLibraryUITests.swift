@@ -82,6 +82,7 @@ final class CustomRecipeLibraryUITests: XCTestCase {
         XCTAssertTrue(sendToDial.waitForExistence(timeout: 5))
         sendToDial.click()
         XCTAssertTrue(element("send-to-dial-slot-1").waitForExistence(timeout: 3))
+        XCTAssertTrue(element("c-slot-picker-local-draft-notice").waitForExistence(timeout: 3))
     }
 
     @MainActor

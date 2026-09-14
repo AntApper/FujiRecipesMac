@@ -179,13 +179,30 @@ public struct RecipeListView: View {
         if cameraManager.status == .connected {
             do {
                 let result = try await cameraManager.importRecipeToCState(recipe, slot: slot)
+                guard let observedSnapshot = result.observedSnapshot,
+                      observedSnapshot.slot == slot else {
+                    slotWriteMessage = "\"\(recipe.name)\" was sent to camera slot C\(slot), but the post-write camera readback was unavailable. The local slot was left unchanged and is not marked verified."
+                    return
+                }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    // Preserve recipe attribution before importing the camera's
+                    // observed values. `syncFromCameraPresetData` replaces the
+                    // editable settings with the readback rather than assuming
+                    // the requested recipe is the camera's authoritative state.
                     store.loadouts.applyRecipe(recipe, to: slot)
+                    store.loadouts.syncFromCameraPresetData(
+                        [observedSnapshot],
+                        overwriteDirtyDrafts: true
+                    )
+                    store.loadouts.markCameraWriteVerified(slot: slot)
                 }
                 let warningSuffix = result.warnings.isEmpty
                     ? ""
                     : "\n\nCamera skipped inapplicable settings: \(result.warnings.joined(separator: ", "))."
-                slotWriteMessage = "\"\(recipe.name)\" was verified on camera slot C\(slot).\(warningSuffix)"
+                let action = result.createdFromEmpty ? "created and verified" : "updated and verified"
+                slotWriteMessage = "\"\(recipe.name)\" \(action) camera slot C\(slot).\(warningSuffix)"
+            } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
+                slotWriteMessage = cSlotWriteFailureMessage(recoveryError)
             } catch {
                 slotWriteMessage = "Camera slot C\(slot) was not changed: \(error.localizedDescription)"
             }
@@ -195,6 +212,28 @@ public struct RecipeListView: View {
             }
             slotWriteMessage = "\"\(recipe.name)\" was saved locally to C\(slot). Connect a camera to write it to the physical slot."
         }
+    }
+
+    private func cSlotWriteFailureMessage(_ error: PTPPresetSlotWriteRecoveryError) -> String {
+        let failure: String
+        switch error.failurePhase {
+        case .write:
+            failure = "Camera slot C\(error.slot) write failed before post-write verification"
+        case .postWriteVerification:
+            failure = "Camera slot C\(error.slot) write completed, but post-write verification failed"
+        }
+        let recovery: String
+        switch error.rollback {
+        case .restored:
+            recovery = "The previous camera settings were restored."
+        case .notAttemptedEmptySentinel:
+            recovery = "The camera slot was previously empty, so there were no settings to restore."
+        case .failed(let message):
+            recovery = "Recovery could not restore the previous camera settings: \(message)"
+        case .notNeeded:
+            recovery = "No recovery was required."
+        }
+        return "\(failure): \(error.writeErrorDescription). \(recovery)"
     }
 
     private var headerControlBar: some View {
@@ -615,6 +654,11 @@ private struct CSlotPickerSheet: View {
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier(
+                    isCameraConnected
+                        ? "c-slot-picker-camera-write-notice"
+                        : "c-slot-picker-local-draft-notice"
+                )
 
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
@@ -640,8 +684,16 @@ private struct CSlotPickerSheet: View {
 
     private func slotButton(_ slot: Int) -> some View {
         let loadout = loadouts.loadout(for: slot)
-        let isNewProfile = loadouts.isCameraSlotEmpty(slot)
-        let destination = isNewProfile ? "New profile" : (loadout?.displayLabel ?? "Empty")
+        let destination: String
+        if isCameraConnected {
+            destination = loadouts.isCameraSlotEmpty(slot)
+                ? "Camera last read as empty"
+                : "Write and verify on camera"
+        } else if let loadout, loadout.hasAnySettings {
+            destination = "Local draft: \(loadout.displayLabel)"
+        } else {
+            destination = "No local draft"
+        }
 
         return Button {
             onSelect(slot)

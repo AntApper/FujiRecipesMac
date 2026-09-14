@@ -226,35 +226,67 @@ public final class CameraManager: ObservableObject {
             ? .emptySentinel
             : .configured(observed)
 
+        let helperResult: PTPPresetSlotWriteResult
         do {
-            let result = try await client.writePresetSlot(slot, data: data)
-            return PTPPresetSlotWriteResult(
-                slot: result.slot,
-                createdFromEmpty: result.createdFromEmpty,
-                warnings: result.warnings,
-                baseline: baseline,
-                rollback: .notNeeded
-            )
+            helperResult = try await client.writePresetSlot(slot, data: data)
         } catch {
-            let rollback: PTPPresetSlotRollbackOutcome
-            switch baseline {
-            case .emptySentinel:
-                rollback = .notAttemptedEmptySentinel
-            case .configured(let saved):
-                do {
-                    _ = try await client.writePresetSlot(slot, data: saved)
-                    rollback = .restored
-                } catch {
-                    rollback = .failed(error.localizedDescription)
-                }
-            }
-            throw PTPPresetSlotWriteRecoveryError(
+            throw await recoverPresetSlotWrite(
+                after: error,
+                phase: .write,
                 slot: slot,
-                writeError: error,
                 baseline: baseline,
-                rollback: rollback
+                using: client
             )
         }
+
+        do {
+            let observedSnapshot = try await client.readPresetSlot(slot)
+            return PTPPresetSlotWriteResult(
+                slot: helperResult.slot,
+                createdFromEmpty: helperResult.createdFromEmpty,
+                warnings: helperResult.warnings,
+                baseline: baseline,
+                rollback: .notNeeded,
+                observedSnapshot: observedSnapshot
+            )
+        } catch {
+            throw await recoverPresetSlotWrite(
+                after: error,
+                phase: .postWriteVerification,
+                slot: slot,
+                baseline: baseline,
+                using: client
+            )
+        }
+    }
+
+    private func recoverPresetSlotWrite(
+        after error: Error,
+        phase: PTPPresetSlotWriteFailurePhase,
+        slot: Int,
+        baseline: PTPPresetSlotBaseline,
+        using client: PTPClientProtocol
+    ) async -> PTPPresetSlotWriteRecoveryError {
+        let rollback: PTPPresetSlotRollbackOutcome
+        switch baseline {
+        case .emptySentinel:
+            rollback = .notAttemptedEmptySentinel
+        case .configured(let saved):
+            do {
+                _ = try await client.writePresetSlot(slot, data: saved)
+                rollback = .restored
+            } catch {
+                rollback = .failed(error.localizedDescription)
+            }
+        }
+
+        return PTPPresetSlotWriteRecoveryError(
+            slot: slot,
+            writeError: error,
+            baseline: baseline,
+            rollback: rollback,
+            failurePhase: phase
+        )
     }
 
     private func readAllActiveSettings() async -> ActiveSettingsState {

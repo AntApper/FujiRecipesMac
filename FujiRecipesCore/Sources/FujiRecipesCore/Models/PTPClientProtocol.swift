@@ -243,19 +243,25 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
     /// Recovery attempted after a failed write. Successful writes are
     /// `.notNeeded`.
     public let rollback: PTPPresetSlotRollbackOutcome
+    /// The C-slot state read by `CameraManager` after the helper-level write
+    /// succeeded. A non-nil value is the observed camera state associated with
+    /// this success, rather than an inferred copy of the requested data.
+    public let observedSnapshot: PTPClientPresetData?
 
     public init(
         slot: Int,
         createdFromEmpty: Bool = false,
         warnings: [String] = [],
         baseline: PTPPresetSlotBaseline? = nil,
-        rollback: PTPPresetSlotRollbackOutcome = .notNeeded
+        rollback: PTPPresetSlotRollbackOutcome = .notNeeded,
+        observedSnapshot: PTPClientPresetData? = nil
     ) {
         self.slot = slot
         self.createdFromEmpty = createdFromEmpty
         self.warnings = warnings
         self.baseline = baseline
         self.rollback = rollback
+        self.observedSnapshot = observedSnapshot
     }
 }
 
@@ -273,6 +279,13 @@ public enum PTPPresetSlotRollbackOutcome: Sendable, Equatable {
     case failed(String)
 }
 
+/// The stage at which a C-slot write workflow stopped. This keeps a
+/// successful helper write distinct from a failed manager-side readback.
+public enum PTPPresetSlotWriteFailurePhase: Sendable, Equatable {
+    case write
+    case postWriteVerification
+}
+
 /// A C-slot write failed after the model captured a baseline. The rollback
 /// result is intentionally separate from the original write error.
 public struct PTPPresetSlotWriteRecoveryError: Error, Sendable, LocalizedError {
@@ -280,17 +293,20 @@ public struct PTPPresetSlotWriteRecoveryError: Error, Sendable, LocalizedError {
     public let writeErrorDescription: String
     public let baseline: PTPPresetSlotBaseline
     public let rollback: PTPPresetSlotRollbackOutcome
+    public let failurePhase: PTPPresetSlotWriteFailurePhase
 
     public init(
         slot: Int,
         writeError: Error,
         baseline: PTPPresetSlotBaseline,
-        rollback: PTPPresetSlotRollbackOutcome
+        rollback: PTPPresetSlotRollbackOutcome,
+        failurePhase: PTPPresetSlotWriteFailurePhase = .write
     ) {
         self.slot = slot
         self.writeErrorDescription = writeError.localizedDescription
         self.baseline = baseline
         self.rollback = rollback
+        self.failurePhase = failurePhase
     }
 
     public var errorDescription: String? {
@@ -305,6 +321,13 @@ public struct PTPPresetSlotWriteRecoveryError: Error, Sendable, LocalizedError {
         case .notNeeded:
             recovery = "No rollback was required."
         }
-        return "C\(slot) write failed: \(writeErrorDescription). \(recovery)"
+        let failure: String
+        switch failurePhase {
+        case .write:
+            failure = "C\(slot) write failed"
+        case .postWriteVerification:
+            failure = "C\(slot) post-write verification failed"
+        }
+        return "\(failure): \(writeErrorDescription). \(recovery)"
     }
 }

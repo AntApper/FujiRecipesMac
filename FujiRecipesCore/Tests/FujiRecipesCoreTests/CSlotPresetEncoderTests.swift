@@ -90,7 +90,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
             .deletingLastPathComponent() // FujiRecipesCore
             .deletingLastPathComponent() // repository root
         let resource = repository
-            .appendingPathComponent("FujiRecipesMac/macos/Resources/recipes-data.json")
+            .appendingPathComponent("macos/Resources/recipes-data.json")
         let database = try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
         let source = try XCTUnwrap(database.recipes.first {
             $0.id == "universal-negative-14-fujifilm-x100vi-x-trans-v-film-simulation-recipes-yes-14"

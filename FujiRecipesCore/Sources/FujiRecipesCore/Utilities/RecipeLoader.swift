@@ -96,10 +96,7 @@ public enum RecipeLoader {
         let json = try JSONDecoder().decode(RecipesData.self, from: data)
 
         let parsed = json.recipes
-            .filter { recipe in
-                recipe.sensorGeneration == "X-Trans V" &&
-                (recipe.compatibleCameras ?? []).contains("X100VI")
-            }
+            .filter(shouldIncludeInX100VICatalog)
             .map(recipe(from:))
 
         return parsed.sorted { lhs, rhs in
@@ -154,6 +151,17 @@ public enum RecipeLoader {
             tags: jsonRecipe.tags,
             parseStatus: .ok
         )
+    }
+
+    /// X-Trans V recipes without compatibility metadata predate the normalized
+    /// camera list and are assumed to support the X100VI. A populated list is
+    /// authoritative and must explicitly include the target camera.
+    static func shouldIncludeInX100VICatalog(_ recipe: RecipeJSON) -> Bool {
+        guard recipe.sensorGeneration == "X-Trans V" else { return false }
+        guard let compatibleCameras = recipe.compatibleCameras, !compatibleCameras.isEmpty else {
+            return true
+        }
+        return compatibleCameras.contains("X100VI")
     }
 
     private static func date(from string: String?) -> Date? {

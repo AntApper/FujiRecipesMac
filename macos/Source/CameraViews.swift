@@ -83,7 +83,7 @@ public struct CameraConnectionView: View {
             Button("Replace Local Drafts", role: .destructive) { refreshSlots(overwriteDrafts: true) }
             Button("Keep Local Drafts", role: .cancel) { refreshSlots(overwriteDrafts: false) }
         } message: {
-            Text("Only successfully read slots are updated. Local drafts are kept unless you choose replacement.")
+            Text("Only successfully read slots are updated. Replacing a local draft discards it in favor of the camera read; clearing a local draft elsewhere never clears the camera slot.")
         }
     }
 
@@ -358,10 +358,14 @@ public struct CameraConnectionView: View {
     }
 
     private func slotLabel(_ loadout: Loadout?, isNeverConfigured: Bool) -> String {
-        if let loadout, loadouts.isDirty(loadout.slot) { return "Local draft (not written)" }
+        if let loadout, loadouts.isDirty(loadout.slot) {
+            return loadout.hasAnySettings
+                ? "Local draft (not written)"
+                : "Local draft cleared (camera unchanged)"
+        }
         if isNeverConfigured { return "Camera reports empty" }
         guard let loadout else { return "Not read" }
-        return loadout.provenance == .cameraSynced ? "Camera-synced" : "Local draft"
+        return loadout.provenance == .cameraSynced ? "Camera-verified" : "Local only"
     }
 
     private func refreshSlots(overwriteDrafts: Bool) {

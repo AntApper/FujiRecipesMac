@@ -14,7 +14,7 @@ final class X100VIHelperRequestTests: XCTestCase {
             .deletingLastPathComponent() // FujiPTPClient
             .deletingLastPathComponent() // repository root
         let resource = repository
-            .appendingPathComponent("FujiRecipesMac/macos/Resources/recipes-data.json")
+            .appendingPathComponent("macos/Resources/recipes-data.json")
         let database = try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
         let source = try XCTUnwrap(database.recipes.first {
             $0.id == "universal-negative-14-fujifilm-x100vi-x-trans-v-film-simulation-recipes-yes-14"
@@ -64,6 +64,50 @@ final class X100VIHelperRequestTests: XCTestCase {
         ]
 
         XCTAssertNil(transientSlotSelectionCode(in: response))
+    }
+
+    func testInterfaceClaimFailureProducesActionableRecovery() {
+        let response: [String: Any] = [
+            "success": false,
+            "error": "interface_claim_failed",
+            "code": -2,
+            "transport_code": 0
+        ]
+
+        let failure = helperConnectionFailure(in: response)
+
+        XCTAssertEqual(failure, .interfaceUnavailable(transportCode: -2))
+        XCTAssertTrue(failure.userActionableDescription.contains("could not claim"))
+        XCTAssertTrue(failure.userActionableDescription.contains("Close camera-accessing apps"))
+        XCTAssertFalse(failure.userActionableDescription.contains("killall"))
+    }
+
+    func testReconnectConnectionFailureRetainsTypedCameraRecovery() {
+        let response: [String: Any] = [
+            "success": false,
+            "error": "reconnect_camera_not_found",
+            "code": -1,
+            "transport_code": 0
+        ]
+
+        let failure = helperConnectionFailure(in: response)
+
+        XCTAssertEqual(failure, .cameraNotFound)
+        XCTAssertTrue(failure.userActionableDescription.contains("USB RAW CONVERSION mode"))
+    }
+
+    func testSessionOpenFailurePrefersNonzeroTransportDiagnostic() {
+        let response: [String: Any] = [
+            "success": false,
+            "error": "session_open_failed",
+            "code": -3,
+            "transport_code": -7
+        ]
+
+        XCTAssertEqual(
+            helperConnectionFailure(in: response),
+            .sessionOpenFailed(code: -7)
+        )
     }
 
     func testSlotSelectionFailureIncludesStageAndNumericCode() {

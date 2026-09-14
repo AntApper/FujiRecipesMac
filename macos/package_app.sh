@@ -52,9 +52,9 @@ APP_NAME="Fuji Recipes"
 BUNDLE_ID="com.ant.fuji-recipes-mac"
 
 if [[ "$CONFIG" == "release" ]]; then
-  ../../scripts/verify-helper-resource.sh --require-universal --minimum-macos 14.0
+  ../scripts/verify-helper-resource.sh --require-universal --minimum-macos 14.0
 else
-  ../../scripts/verify-helper-resource.sh
+  ../scripts/verify-helper-resource.sh
 fi
 
 echo "▶ Building ($CONFIG)…"
@@ -137,7 +137,7 @@ fi
 if [[ -n "$SIGNING_IDENTITY" ]]; then
   validation_args+=(--require-developer-id)
 fi
-../../scripts/verify-macos-app-bundle.sh "${validation_args[@]}"
+../scripts/verify-macos-app-bundle.sh "${validation_args[@]}"
 
 # Refresh the icon cache so Finder shows the new icon immediately.
 touch "$APP"

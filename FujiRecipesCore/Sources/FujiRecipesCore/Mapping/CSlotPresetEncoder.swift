@@ -45,7 +45,14 @@ public enum CSlotPresetEncoder {
             color: recipe.color,
             sharpness: recipe.sharpness,
             highIsoNr: recipe.highIsoNr,
-            clarity: recipe.clarity
+            clarity: recipe.clarity,
+            imageQuality: nil,
+            imageSize: nil,
+            monoWarmCool: nil,
+            monoMagentaGreen: nil,
+            longExpNr: nil,
+            colorSpace: nil,
+            rawPreset: nil
         )
     }
 
@@ -56,19 +63,26 @@ public enum CSlotPresetEncoder {
             filmSimulation: loadout.filmSim,
             dynamicRange: loadout.dr,
             grainEffect: loadout.grain,
-            colorChrome: nil,
-            colorChromeFxBlue: nil,
-            smoothSkin: nil,
+            colorChrome: loadout.colorChrome,
+            colorChromeFxBlue: loadout.colorChromeFxBlue,
+            smoothSkin: loadout.smoothSkin,
             whiteBalance: loadout.wb,
-            wbShiftRed: nil,
-            wbShiftBlue: nil,
-            colorTemp: nil,
+            wbShiftRed: loadout.wbShiftRed,
+            wbShiftBlue: loadout.wbShiftBlue,
+            colorTemp: loadout.colorTempK,
             highlight: loadout.highlight,
             shadow: loadout.shadow,
             color: loadout.color,
             sharpness: loadout.sharpness,
-            highIsoNr: nil,
-            clarity: nil
+            highIsoNr: loadout.highIsoNr,
+            clarity: loadout.clarity,
+            imageQuality: loadout.imageQuality,
+            imageSize: loadout.imageSize,
+            monoWarmCool: loadout.monoWarmCool,
+            monoMagentaGreen: loadout.monoMagentaGreen,
+            longExpNr: loadout.longExpNr,
+            colorSpace: loadout.colorSpace,
+            rawPreset: loadout.rawPreset
         )
     }
 
@@ -90,17 +104,27 @@ public enum CSlotPresetEncoder {
         color: Int32?,
         sharpness: Int32?,
         highIsoNr: Int32?,
-        clarity: Int32?
+        clarity: Int32?,
+        imageQuality: UInt32?,
+        imageSize: UInt32?,
+        monoWarmCool: Int32?,
+        monoMagentaGreen: Int32?,
+        longExpNr: UInt32?,
+        colorSpace: UInt32?,
+        rawPreset: LoadoutRawPresetState?
     ) throws -> PTPClientPresetData {
         guard (1...7).contains(slot) else {
             throw CSlotPresetEncodingError.invalidSlot(slot)
         }
 
-        let isMonochrome = filmSimulation.map(isMonochrome) ?? false
-        let rawWB = whiteBalance.map { UInt32($0.actualPTPValue) }
+        let resolvedFilmSimulation = rawPreset?.filmSimulation ?? filmSimulation?.rawValue
+        let isMonochrome = resolvedFilmSimulation
+            .flatMap(FilmSimulation.init(rawValue:))
+            .map(isMonochrome) ?? false
+        let rawWB = rawPreset?.whiteBalance ?? whiteBalance.map { UInt32($0.actualPTPValue) }
         let rawColorTemp: UInt32?
-        if whiteBalance == .colorTemperature {
-            guard let colorTemp else {
+        if rawWB == WhiteBalanceMode.colorTemperature.actualPTPValue {
+            guard let colorTemp = rawPreset?.colorTemp ?? colorTemp else {
                 throw CSlotPresetEncodingError.missingColorTemperature
             }
             guard (2_500...10_000).contains(colorTemp) else {
@@ -111,25 +135,40 @@ public enum CSlotPresetEncoder {
             rawColorTemp = nil
         }
 
+        let rawWBShiftRed = try rawPreset?.wbShiftRed ?? wbShiftRed.map { try rawShift($0, property: 0xD19A) }
+        let rawWBShiftBlue = try rawPreset?.wbShiftBlue ?? wbShiftBlue.map { try rawShift($0, property: 0xD19B) }
+        let rawHighlight = try rawPreset?.highlight ?? highlight.map { try rawTenths($0, property: 0xD19D, range: -2...4) }
+        let rawShadow = try rawPreset?.shadow ?? shadow.map { try rawTenths($0, property: 0xD19E, range: -2...4) }
+        let rawColor = try rawPreset?.color ?? color.map { try rawTenths($0, property: 0xD19F, range: -4...4) }
+        let rawSharpness = try rawPreset?.sharpness ?? sharpness.map { try rawTenths($0, property: 0xD1A0, range: -4...4) }
+        let rawHighIsoNr = try rawPreset?.highIsoNr ?? highIsoNr.map(rawHighIsoNR)
+        let rawClarity = try rawPreset?.clarity ?? clarity.map { try rawTenths($0, property: 0xD1A2, range: -5...5) }
+
         return PTPClientPresetData(
             slot: slot,
             name: CameraPresetName.label(for: name),
-            dynamicRange: dynamicRange.map(rawDynamicRange),
-            filmSimulation: filmSimulation.map { $0.rawValue },
-            grainEffect: grainEffect.map(rawGrain),
-            colorChrome: colorChrome.map(rawEffect),
-            colorChromeFxBlue: colorChromeFxBlue.map(rawEffect),
-            smoothSkin: smoothSkin.map(rawEffect),
+            imageQuality: rawPreset?.imageQuality ?? imageQuality,
+            imageSize: rawPreset?.imageSize ?? imageSize,
+            dynamicRange: rawPreset?.dynamicRange ?? dynamicRange.map(rawDynamicRange),
+            filmSimulation: resolvedFilmSimulation,
+            monoWarmCool: rawPreset?.monoWarmCool ?? monoWarmCool,
+            monoMagentaGreen: rawPreset?.monoMagentaGreen ?? monoMagentaGreen,
+            grainEffect: rawPreset?.grainEffect ?? grainEffect.map(rawGrain),
+            colorChrome: rawPreset?.colorChrome ?? colorChrome.map(rawEffect),
+            colorChromeFxBlue: rawPreset?.colorChromeFxBlue ?? colorChromeFxBlue.map(rawEffect),
+            smoothSkin: rawPreset?.smoothSkin ?? smoothSkin.map(rawEffect),
             whiteBalance: rawWB,
-            wbShiftRed: try wbShiftRed.map { try rawShift($0, property: 0xD19A) },
-            wbShiftBlue: try wbShiftBlue.map { try rawShift($0, property: 0xD19B) },
+            wbShiftRed: rawWBShiftRed,
+            wbShiftBlue: rawWBShiftBlue,
             colorTemp: rawColorTemp,
-            highlight: try highlight.map { try rawTenths($0, property: 0xD19D, range: -2...4) },
-            shadow: try shadow.map { try rawTenths($0, property: 0xD19E, range: -2...4) },
-            color: isMonochrome ? nil : try color.map { try rawTenths($0, property: 0xD19F, range: -4...4) },
-            sharpness: try sharpness.map { try rawTenths($0, property: 0xD1A0, range: -4...4) },
-            highIsoNr: try highIsoNr.map(rawHighIsoNR),
-            clarity: try clarity.map { try rawTenths($0, property: 0xD1A2, range: -5...5) }
+            highlight: rawHighlight,
+            shadow: rawShadow,
+            color: isMonochrome ? nil : rawColor,
+            sharpness: rawSharpness,
+            highIsoNr: rawHighIsoNr,
+            clarity: rawClarity,
+            longExpNr: rawPreset?.longExpNr ?? longExpNr,
+            colorSpace: rawPreset?.colorSpace ?? colorSpace
         )
     }
 
@@ -142,7 +181,7 @@ public enum CSlotPresetEncoder {
         }
     }
 
-    private static func rawGrain(_ value: GrainEffect) -> UInt32 {
+    static func rawGrain(_ value: GrainEffect) -> UInt32 {
         switch value {
         case .off: return 1
         case .weakSmall: return 2

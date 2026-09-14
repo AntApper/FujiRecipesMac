@@ -3,11 +3,11 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-helper="$root/FujiRecipesMac/macos/Resources/x100vi_helper"
+helper="$root/macos/Resources/x100vi_helper"
 source_file="$root/poc-x100vi-reader/x100vi_helper.c"
-runtime="$root/FujiRecipesMac/macos/Resources/libusb-1.0.0.dylib"
-provenance="$root/FujiRecipesMac/macos/Resources/x100vi_helper.provenance.json"
-notice="$root/FujiRecipesMac/macos/Resources/ThirdPartyNotices/libusb-COPYING.txt"
+runtime="$root/macos/Resources/libusb-1.0.0.dylib"
+provenance="$root/macos/Resources/x100vi_helper.provenance.json"
+notice="$root/macos/Resources/ThirdPartyNotices/libusb-COPYING.txt"
 require_universal=false
 minimum_macos=""
 

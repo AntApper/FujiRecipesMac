@@ -12,17 +12,16 @@ require() {
   }
 }
 
-require "FujiRecipes.xcworkspace/contents.xcworkspacedata"
-require "FujiRecipesMac/macos/FujiRecipesMac.xcodeproj/project.pbxproj"
-require "FujiRecipesMac/macos/Source/Info.plist"
-require "FujiRecipesMac/macos/Resources/recipes-data.json"
-require "FujiRecipesMac/macos/Resources/x100vi_helper"
-require "FujiRecipesMac/macos/Resources/libusb-1.0.0.dylib"
-require "FujiRecipesMac/macos/Resources/x100vi_helper.provenance.json"
-require "FujiRecipesMac/macos/Resources/ThirdPartyNotices/libusb-COPYING.txt"
+require "macos/FujiRecipesMac.xcodeproj/project.pbxproj"
+require "macos/Source/Info.plist"
+require "macos/Resources/recipes-data.json"
+require "macos/Resources/x100vi_helper"
+require "macos/Resources/libusb-1.0.0.dylib"
+require "macos/Resources/x100vi_helper.provenance.json"
+require "macos/Resources/ThirdPartyNotices/libusb-COPYING.txt"
 
-xcodebuild -list -workspace "FujiRecipes.xcworkspace"
-plutil -lint "FujiRecipesMac/macos/Source/Info.plist"
+xcodebuild -list -project "macos/FujiRecipesMac.xcodeproj"
+plutil -lint "macos/Source/Info.plist"
 "$root/scripts/verify-helper-resource.sh" --require-universal --minimum-macos 14.0
 
 printf 'macOS release-foundation checks passed\n'

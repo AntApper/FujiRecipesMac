@@ -2,6 +2,7 @@
 // Triggered by 5-finger long-press on macOS or 3-finger long-press on iOS.
 // Shows: app info, log stream, copy diagnostics, clear logs, PTP status.
 
+#if canImport(SwiftUI)
 import SwiftUI
 
 // MARK: - DebugHUDView
@@ -439,3 +440,5 @@ func copyToClipboard(_ text: String) {
     UIPasteboard.general.string = text
     #endif
 }
+#endif
+

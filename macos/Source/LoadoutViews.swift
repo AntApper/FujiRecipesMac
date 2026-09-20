@@ -41,7 +41,13 @@ public struct LoadoutsView: View {
                             isDirty: loadouts.isDirty(slot),
                             onSelect: { selectedDialSlot = slot },
                             onClear: { slotPendingLocalClear = slot },
-                            onEdit: { slotToEdit = loadout }
+                            onEdit: { slotToEdit = loadout },
+                            onDropRecipe: { recipe in
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                    loadouts.applyRecipe(recipe, to: slot)
+                                    selectedDialSlot = slot
+                                }
+                            }
                         )
                     }
                 }
@@ -133,56 +139,95 @@ public struct LoadoutsView: View {
 
                 ForEach(1...7, id: \.self) { slot in
                     let loadout = loadouts.loadout(for: slot)
-                    let isFilled = loadout?.hasAnySettings ?? false
-                    let isSelected = selectedDialSlot == slot
-                    let accent = slotAccent(slot)
-
-                    Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
-                            selectedDialSlot = slot
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(isFilled ? accent : Color.white.opacity(0.15))
-                                .frame(width: 7, height: 7)
-                                .shadow(color: isFilled ? accent.opacity(0.8) : Color.clear, radius: 3)
-                                .scaleEffect(isSelected ? 1.25 : 1.0)
-
-                            Text("C\(slot)")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(isSelected ? Color.black : (isFilled ? Color.white : Theme.textTertiary))
-
-                            if let name = loadout?.recipeName, !name.isEmpty {
-                                Text(name)
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(isSelected ? Color.black.opacity(0.8) : Theme.textSecondary)
-                                    .lineLimit(1)
-                                    .frame(maxWidth: 80)
-                                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    RotaryDialStripItem(
+                        slot: slot,
+                        loadout: loadout,
+                        isSelected: selectedDialSlot == slot,
+                        onSelect: {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                                selectedDialSlot = slot
+                            }
+                        },
+                        onDropRecipe: { recipe in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                loadouts.applyRecipe(recipe, to: slot)
+                                selectedDialSlot = slot
                             }
                         }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? Theme.fujiAmber : (isFilled ? Color.white.opacity(0.08) : Color.white.opacity(0.03)))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(isSelected ? Theme.fujiAmber : (isFilled ? accent.opacity(0.4) : Theme.specularBorder), lineWidth: 0.8)
-                        )
-                        .shadow(color: isSelected ? Theme.fujiAmber.opacity(0.35) : Color.clear, radius: 8, y: 2)
-                        .scaleEffect(isSelected ? 1.03 : 1.0)
-                    }
-                    .buttonStyle(.plain)
-                    .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isSelected)
-                    .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isFilled)
+                    )
                 }
                 Spacer(minLength: 4)
             }
             .padding(.vertical, 2)
         }
+    }
+}
+
+// MARK: - Rotary Dial Strip Item (Drag & Drop Target)
+
+private struct RotaryDialStripItem: View {
+    let slot: Int
+    let loadout: Loadout?
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onDropRecipe: (Recipe) -> Void
+
+    @State private var isDropTargeted = false
+
+    private var isFilled: Bool { loadout?.hasAnySettings ?? false }
+    private var accent: Color { slotAccent(slot) }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(isDropTargeted ? Theme.fujiAmber : (isFilled ? accent : Color.white.opacity(0.15)))
+                    .frame(width: 7, height: 7)
+                    .shadow(color: (isDropTargeted || isFilled) ? (isDropTargeted ? Theme.fujiAmber : accent).opacity(0.8) : Color.clear, radius: 3)
+                    .scaleEffect(isSelected || isDropTargeted ? 1.25 : 1.0)
+
+                Text("C\(slot)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle((isSelected || isDropTargeted) ? Color.black : (isFilled ? Color.white : Theme.textTertiary))
+
+                if let name = loadout?.recipeName, !name.isEmpty {
+                    Text(name)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle((isSelected || isDropTargeted) ? Color.black.opacity(0.8) : Theme.textSecondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: 80)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isDropTargeted ? Theme.fujiAmber : (isSelected ? Theme.fujiAmber : (isFilled ? Color.white.opacity(0.08) : Color.white.opacity(0.03))))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isDropTargeted ? Color.white : (isSelected ? Theme.fujiAmber : (isFilled ? accent.opacity(0.4) : Theme.specularBorder)), lineWidth: isDropTargeted ? 1.8 : 0.8)
+            )
+            .shadow(color: (isSelected || isDropTargeted) ? Theme.fujiAmber.opacity(0.55) : Color.clear, radius: isDropTargeted ? 10 : 8, y: 2)
+            .scaleEffect(isDropTargeted ? 1.08 : (isSelected ? 1.03 : 1.0))
+        }
+        .buttonStyle(.plain)
+        .dropDestination(for: Recipe.self) { items, _ in
+            guard let recipe = items.first else { return false }
+            onDropRecipe(recipe)
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                isDropTargeted = targeted
+            }
+        }
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isSelected)
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isFilled)
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isDropTargeted)
+        .help(isDropTargeted ? "Drop recipe to apply to C\(slot)" : (loadout?.recipeName ?? "C\(slot)"))
+        .accessibilityLabel("Quick dial C\(slot), \(isFilled ? (loadout?.recipeName ?? "configured") : "empty")")
+        .accessibilityHint("Selects slot C\(slot), or drop a recipe here to stage it.")
     }
 }
 
@@ -211,8 +256,10 @@ public struct LoadoutCard: View {
     public var onSelect: () -> Void = {}
     public var onClear: () -> Void = {}
     public var onEdit: () -> Void = {}
+    public var onDropRecipe: ((Recipe) -> Void)? = nil
 
     @State private var isHovered = false
+    @State private var isDropTargeted = false
 
     private var accent: Color { slotAccent(slot) }
     private var isConfigured: Bool { loadout?.hasAnySettings ?? false }
@@ -224,7 +271,8 @@ public struct LoadoutCard: View {
         isDirty: Bool = false,
         onSelect: @escaping () -> Void = {},
         onClear: @escaping () -> Void = {},
-        onEdit: @escaping () -> Void = {}
+        onEdit: @escaping () -> Void = {},
+        onDropRecipe: ((Recipe) -> Void)? = nil
     ) {
         self.loadout = loadout
         self.slot = slot
@@ -233,6 +281,7 @@ public struct LoadoutCard: View {
         self.onSelect = onSelect
         self.onClear = onClear
         self.onEdit = onEdit
+        self.onDropRecipe = onDropRecipe
     }
 
     public var body: some View {
@@ -258,24 +307,89 @@ public struct LoadoutCard: View {
         .glassCard(
             padding: 0,
             radius: 14,
-            tint: isConfigured ? accent.opacity(0.06) : Theme.glassPanelBg,
-            borderColor: isSelected ? Theme.fujiAmber : (isConfigured ? accent.opacity(0.4) : nil)
+            tint: isDropTargeted ? Theme.fujiAmber.opacity(0.14) : (isConfigured ? accent.opacity(0.06) : Theme.glassPanelBg),
+            borderColor: isDropTargeted ? Theme.fujiAmber : (isSelected ? Theme.fujiAmber : (isConfigured ? accent.opacity(0.4) : nil))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isSelected ? Theme.fujiAmber : Color.clear, lineWidth: 1.5)
+                .stroke(isDropTargeted ? Theme.fujiAmber : (isSelected ? Theme.fujiAmber : Color.clear), lineWidth: isDropTargeted ? 2.0 : 1.5)
         )
-        .scaleEffect(isHovered ? 1.012 : (isSelected ? 1.008 : 1.0))
-        .shadow(color: isHovered ? accent.opacity(0.25) : (isSelected ? Theme.fujiAmber.opacity(0.2) : Color.clear), radius: 14, y: 5)
+        .overlay {
+            if isDropTargeted {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Theme.deepCharcoal.opacity(0.85))
+                        .background(.ultraThinMaterial)
+
+                    VStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(Theme.fujiAmber.opacity(0.2))
+                                .frame(width: 44, height: 44)
+
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundStyle(Theme.fujiAmber)
+                                .symbolEffect(.bounce, value: isDropTargeted)
+                        }
+
+                        VStack(spacing: 2) {
+                            Text("STAGE TO C\(slot)")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                                .foregroundStyle(Theme.fujiAmber)
+
+                            Text("Release to apply recipe")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Theme.fujiAmber, accent],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2
+                        )
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .scaleEffect(isDropTargeted ? 1.025 : (isHovered ? 1.012 : (isSelected ? 1.008 : 1.0)))
+        .shadow(
+            color: isDropTargeted
+                ? Theme.fujiAmber.opacity(0.55)
+                : (isHovered ? accent.opacity(0.25) : (isSelected ? Theme.fujiAmber.opacity(0.2) : Color.clear)),
+            radius: isDropTargeted ? 20 : 14,
+            y: isDropTargeted ? 2 : 5
+        )
         .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isHovered)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isConfigured)
+        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: isDropTargeted)
         .onHover { isHovered = $0 }
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture(perform: onSelect)
+        .dropDestination(for: Recipe.self) { items, _ in
+            guard let recipe = items.first else { return false }
+            if let onDropRecipe {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    onDropRecipe(recipe)
+                }
+            }
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) {
+                isDropTargeted = targeted
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Custom slot C\(slot), \(isConfigured ? "configured" : "empty"), \(syncStateLabel)")
-        .accessibilityHint(isSelected ? "Selected. Use the edit button to change this local draft." : "Selects this custom slot.")
+        .accessibilityHint(isSelected ? "Selected. Use the edit button to change this local draft, or drop a recipe here to stage it." : "Selects this custom slot, or drop a recipe here to stage it.")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Select slot C\(slot)") { onSelect() }
     }

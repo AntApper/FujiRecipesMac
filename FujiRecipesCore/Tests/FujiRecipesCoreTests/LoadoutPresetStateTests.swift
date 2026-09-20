@@ -1,11 +1,11 @@
 import XCTest
 @testable import FujiRecipesCore
 
-@MainActor
 final class LoadoutPresetStateTests: XCTestCase {
     private let loadoutsKey = "com.ant.fuji-recipes.loadouts"
 
-    func testCameraSyncRetainsEveryPresetFieldAndRoundTripsIt() throws {
+    @MainActor
+    func testCameraSyncRetainsEveryPresetFieldAndRoundTripsIt() async throws {
         let defaults = UserDefaults.standard
         let original = defaults.data(forKey: loadoutsKey)
         defer {
@@ -62,7 +62,8 @@ final class LoadoutPresetStateTests: XCTestCase {
         XCTAssertEqual(encoded, observed)
     }
 
-    func testApplyingRecipeKeepsItsExtendedPresetSettings() throws {
+    @MainActor
+    func testApplyingRecipeKeepsItsExtendedPresetSettings() async throws {
         let recipe = Recipe(
             id: "complete",
             name: "Complete",
@@ -111,7 +112,8 @@ final class LoadoutPresetStateTests: XCTestCase {
         XCTAssertEqual(encoded.clarity, -50)
     }
 
-    func testSavingDirectEditorChangesOverridesRawValuesAndPreservesUnknowns() throws {
+    @MainActor
+    func testSavingDirectEditorChangesOverridesRawValuesAndPreservesUnknowns() async throws {
         let defaults = UserDefaults.standard
         let original = defaults.data(forKey: loadoutsKey)
         defer {

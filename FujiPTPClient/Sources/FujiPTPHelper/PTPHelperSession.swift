@@ -13,7 +13,11 @@ final class PTPHelperSession {
     // MARK: - Connect
 
     func connect() -> String {
-        func debug(_ msg: String) { fputs("[HELPER] \(msg)\n", stderr) }
+        func debug(_ msg: String) {
+            if let data = "[HELPER] \(msg)\n".data(using: .utf8) {
+                FileHandle.standardError.write(data)
+            }
+        }
         
         debug("Starting connect...")
         
@@ -243,7 +247,9 @@ final class PTPHelperSession {
                     if line.lowercased().contains("x100vi") {
                         let parts = line.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                         if let usbPort = parts.last, usbPort.contains("usb:") {
-                            fputs("[HELPER] Found camera at port: \(usbPort)\n", stderr)
+                            if let data = "[HELPER] Found camera at port: \(usbPort)\n".data(using: .utf8) {
+                                FileHandle.standardError.write(data)
+                            }
                             return usbPort
                         }
                     }

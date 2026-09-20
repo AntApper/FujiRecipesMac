@@ -48,7 +48,7 @@ func cameraGetAbout(_ camera: UnsafeMutableRawPointer, _ context: UnsafeMutableR
 }
 
 func cameraGetAbilities(_ camera: UnsafeMutableRawPointer) -> String? {
-    var abilities = UnsafeMutableRawPointer.allocate(byteCount: 1024, alignment: 8)
+    let abilities = UnsafeMutableRawPointer.allocate(byteCount: 1024, alignment: 8)
     defer { abilities.deallocate() }
     let result = gphoto2_camera_get_abilities(camera, abilities)
     guard result == GP_OK else { return nil }
@@ -85,7 +85,6 @@ func configWidgetGetValue(_ widget: UnsafeMutableRawPointer) -> String? {
     guard result == GP_OK, let value = value else { return nil }
     let cStr = UnsafeMutableRawPointer(value).assumingMemoryBound(to: Int8.self)
     return String(cString: cStr)
-    return nil
 }
 
 func configWidgetGetType(_ widget: UnsafeMutableRawPointer) -> Int32 {

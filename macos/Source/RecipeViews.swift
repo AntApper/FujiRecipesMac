@@ -797,6 +797,9 @@ private struct RecipeCard: View {
         .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isHovered)
         .animation(.spring(response: 0.32, dampingFraction: 0.8), value: isExpanded)
         .onHover { isHovered = $0 }
+        .draggable(recipe) {
+            RecipeDragPreview(recipe: recipe)
+        }
     }
 
     private var headerWithActions: some View {
@@ -1182,6 +1185,59 @@ private struct RecipeCard: View {
         add("exposureCompensation", display: "Exp. Comp")
 
         return items
+    }
+}
+
+// MARK: - Drag Preview Badge
+
+private struct RecipeDragPreview: View {
+    let recipe: Recipe
+
+    private var simName: String {
+        recipe.filmSimulation?.displayName ?? recipe.settings?["filmSimulation"] ?? "Custom Sim"
+    }
+
+    private var accent: Color {
+        Theme.filmSimColor(for: simName)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            FilmSimBadge(name: simName, isCompact: true)
+
+            Text(recipe.name)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+
+            if let dr = recipe.dynamicRange {
+                Text("DR\(dr.rawValue)")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Theme.emeraldGreen)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Theme.emeraldGreen.opacity(0.18))
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Theme.deepCharcoal.opacity(0.95))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [accent, Theme.fujiAmber],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 1.2
+                )
+        )
+        .shadow(color: accent.opacity(0.4), radius: 8, y: 3)
     }
 }
 

@@ -114,7 +114,9 @@ public enum RecipeLoader {
         let filmSim = jsonRecipe.filmSimEnum.flatMap { FilmSimulation(rawValue: UInt32($0)) }
         let dr = jsonRecipe.presetSettings["dynamicRange"].flatMap { DynamicRange(rawValue: UInt32($0)) }
         let grain = jsonRecipe.presetSettings["grainEffect"].flatMap { GrainEffect(rawValue: UInt32($0)) }
-        let wb = jsonRecipe.ptpSettings["whiteBalance"].flatMap { WhiteBalanceMode(rawValue: UInt32($0)) }
+        let wb = (jsonRecipe.ptpSettings["whiteBalance"] ?? jsonRecipe.presetSettings["whiteBalance"])
+            .flatMap { WhiteBalanceMode(rawValue: UInt32($0)) }
+        let colorTemp = resolveColorTemperature(from: jsonRecipe, wb: wb)
 
         return Recipe(
             id: jsonRecipe.id,
@@ -134,7 +136,7 @@ public enum RecipeLoader {
             whiteBalanceMode: wb,
             wbShiftRed: jsonRecipe.presetSettings["wbShiftRed"]?.int32Value,
             wbShiftBlue: jsonRecipe.presetSettings["wbShiftBlue"]?.int32Value,
-            colorTempK: jsonRecipe.presetSettings["colorTemp"].flatMap { UInt32(exactly: $0) },
+            colorTempK: colorTemp,
             highlight: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["highlightTone"]?.int32Value),
             shadow: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["shadowTone"]?.int32Value),
             color: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["color"]?.int32Value),
@@ -171,6 +173,43 @@ public enum RecipeLoader {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "MMMM d, yyyy"
         return formatter.date(from: string)
+    }
+
+    /// Resolves the color temperature in Kelvin for a recipe:
+    /// 1. Checks `presetSettings["colorTemp"]`
+    /// 2. Checks `ptpSettings["colorTemp"]`
+    /// 3. Extracts Kelvin from `settings["whiteBalance"]` matching `(\d{4,5})\s*K`
+    /// 4. Defaults to 5500 if white balance is `.colorTemperature`
+    static func resolveColorTemperature(from jsonRecipe: RecipeJSON, wb: WhiteBalanceMode?) -> UInt32? {
+        if let temp = jsonRecipe.presetSettings["colorTemp"].flatMap({ UInt32(exactly: $0) ?? ($0 >= 0 ? UInt32($0) : nil) }) {
+            return temp
+        }
+        if let temp = jsonRecipe.ptpSettings["colorTemp"].flatMap({ UInt32(exactly: $0) ?? ($0 >= 0 ? UInt32($0) : nil) }) {
+            return temp
+        }
+        if let wbSetting = jsonRecipe.settings["whiteBalance"],
+           let parsed = extractKelvin(from: wbSetting) {
+            return parsed
+        }
+        if wb == .colorTemperature {
+            return 5500
+        }
+        return nil
+    }
+
+    /// Parses a 4-5 digit Kelvin value from a white balance description string (e.g. "10000K, +9 Red", "5600 K").
+    static func extractKelvin(from string: String) -> UInt32? {
+        let pattern = #"(\d{4,5})\s*K"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            return nil
+        }
+        let range = NSRange(string.startIndex..<string.endIndex, in: string)
+        guard let match = regex.firstMatch(in: string, options: [], range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: string) else {
+            return nil
+        }
+        return UInt32(String(string[captureRange]))
     }
 }
 

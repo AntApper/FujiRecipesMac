@@ -16,8 +16,10 @@ public enum CSlotPresetEncoder {
     /// Converts a signed raw C-slot tone payload back to its app/UI unit.
     /// `0x8000` is Fuji's unset sentinel and must not be treated as -3276.8.
     public static func uiTone(from raw: Int32?) -> Int32? {
-        guard let raw, raw != Int32(Int16.min) else { return nil }
-        return raw / 10
+        guard let raw else { return nil }
+        let signed16 = Int32(Int16(truncatingIfNeeded: raw))
+        guard signed16 != Int32(Int16.min) else { return nil }
+        return signed16 / 10
     }
 
     /// Converts Fuji's raw C-slot High ISO NR bit pattern to its UI value.
@@ -124,13 +126,11 @@ public enum CSlotPresetEncoder {
         let rawWB = rawPreset?.whiteBalance ?? whiteBalance.map { UInt32($0.actualPTPValue) }
         let rawColorTemp: UInt32?
         if rawWB == WhiteBalanceMode.colorTemperature.actualPTPValue {
-            guard let colorTemp = rawPreset?.colorTemp ?? colorTemp else {
-                throw CSlotPresetEncodingError.missingColorTemperature
+            let resolvedColorTemp = rawPreset?.colorTemp ?? colorTemp ?? 5_500
+            guard (2_500...10_000).contains(resolvedColorTemp) else {
+                throw CSlotPresetEncodingError.outOfRange(property: 0xD19C, value: Int64(resolvedColorTemp), valid: "2500...10000 K")
             }
-            guard (2_500...10_000).contains(colorTemp) else {
-                throw CSlotPresetEncodingError.outOfRange(property: 0xD19C, value: Int64(colorTemp), valid: "2500...10000 K")
-            }
-            rawColorTemp = colorTemp
+            rawColorTemp = resolvedColorTemp
         } else {
             rawColorTemp = nil
         }

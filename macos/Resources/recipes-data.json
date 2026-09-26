@@ -1998,6 +1998,7 @@
         "sharpness": -2.0,
         "highIsoNr": 0.0,
         "exposureCompensation": 333,
+        "colorTemp": 10000,
         "wbShiftRed": 9.0,
         "wbShiftBlue": -9.0,
         "whiteBalance": 32775
@@ -2014,6 +2015,7 @@
         "sharpness": -20.0,
         "clarity": -30.0,
         "highIsoNr": 32768,
+        "colorTemp": 10000,
         "wbShiftRed": 9.0,
         "wbShiftBlue": -9.0,
         "whiteBalance": 32775

@@ -84,16 +84,32 @@ struct FujiRecipesMacApp: App {
             }
             CommandGroup(after: .newItem) {
                 Divider()
-                ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, tab in
-                    Button(tab.title) {
-                        NotificationCenter.default.post(
-                            name: MacAppCommand.selectTab,
-                            object: nil,
-                            userInfo: [MacAppCommand.tabKey: tab.rawValue]
-                        )
-                    }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                Button("Recipes") {
+                    NotificationCenter.default.post(
+                        name: MacAppCommand.selectTab,
+                        object: nil,
+                        userInfo: [MacAppCommand.tabKey: AppTab.recipes.rawValue]
+                    )
                 }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button("Camera & Staging") {
+                    NotificationCenter.default.post(
+                        name: MacAppCommand.selectTab,
+                        object: nil,
+                        userInfo: [MacAppCommand.tabKey: AppTab.camera.rawValue]
+                    )
+                }
+                .keyboardShortcut("2", modifiers: .command)
+
+                Button("RAF Darkroom") {
+                    NotificationCenter.default.post(
+                        name: MacAppCommand.selectTab,
+                        object: nil,
+                        userInfo: [MacAppCommand.tabKey: AppTab.darkroom.rawValue]
+                    )
+                }
+                .keyboardShortcut("3", modifiers: .command)
             }
         }
     }
@@ -121,7 +137,8 @@ public struct FujiRecipesMacRoot: View {
                 SidebarView(
                     selection: $selectedTab,
                     recipeStore: recipeStore,
-                    cameraManager: cameraManager
+                    cameraManager: cameraManager,
+                    onToggleConnection: toggleCameraConnection
                 )
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
             } detail: {
@@ -130,10 +147,16 @@ public struct FujiRecipesMacRoot: View {
                     Group {
                         switch selectedTab {
                         case .recipes:
-                            RecipeListView(store: recipeStore, cameraManager: cameraManager)
-                        case .loadouts:
-                            LoadoutsView(loadouts: recipeStore.loadouts, cameraManager: cameraManager)
-                        case .camera:
+                            RecipeListView(
+                                store: recipeStore,
+                                cameraManager: cameraManager,
+                                onNavigateToCamera: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedTab = .camera
+                                    }
+                                }
+                            )
+                        case .loadouts, .camera:
                             CameraConnectionView(
                                 manager: cameraManager,
                                 loadouts: recipeStore.loadouts,
@@ -176,9 +199,20 @@ public struct FujiRecipesMacRoot: View {
             }
         }
         .accessibilityAction(named: "Show Recipes") { selectedTab = .recipes }
-        .accessibilityAction(named: "Show Custom Dial Matrix") { selectedTab = .loadouts }
-        .accessibilityAction(named: "Show Camera Hub") { selectedTab = .camera }
+        .accessibilityAction(named: "Show Camera & Staging") { selectedTab = .camera }
         .accessibilityAction(named: "Show RAF Darkroom") { selectedTab = .darkroom }
+    }
+
+    private func toggleCameraConnection() {
+        Task {
+            if cameraManager.status == .connected {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    cameraManager.disconnect()
+                }
+            } else {
+                await cameraManager.connect(using: cameraSessionFactory(), loadouts: recipeStore.loadouts)
+            }
+        }
     }
 }
 

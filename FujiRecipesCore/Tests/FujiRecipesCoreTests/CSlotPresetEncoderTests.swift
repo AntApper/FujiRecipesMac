@@ -150,7 +150,18 @@ final class CSlotPresetEncoderTests: XCTestCase {
             )
         }
         XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(highIsoNr: 5), slot: 1))
-        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(wb: .colorTemperature), slot: 1))
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(wb: .colorTemperature, colorTemp: 12_000), slot: 1)) {
+            XCTAssertEqual(
+                $0 as? CSlotPresetEncodingError,
+                .outOfRange(property: 0xD19C, value: 12_000, valid: "2500...10000 K")
+            )
+        }
+    }
+
+    func testColorTemperatureDefaultsTo5500WhenMissing() throws {
+        let preset = try CSlotPresetEncoder.encode(recipe: recipe(wb: .colorTemperature), slot: 1)
+        XCTAssertEqual(preset.whiteBalance, 0x8007)
+        XCTAssertEqual(preset.colorTemp, 5_500)
     }
 
     private func recipe(

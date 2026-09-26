@@ -5,13 +5,20 @@ import UniformTypeIdentifiers
 
 // MARK: - 2026 Sleek Recipe Gallery & Cards View
 
+private struct HUDToast: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let isError: Bool
+}
+
 public struct RecipeListView: View {
     @ObservedObject public var store: RecipeStore
     @ObservedObject public var cameraManager: CameraManager
     @State private var expandedRecipeIDs: Set<Recipe.ID> = []
     @State private var recipeToLoad: Recipe?
     @State private var selectedPhotoUrl: String? = nil
-    @State private var slotWriteMessage: String?
+    @State private var activeHUDToast: HUDToast?
     @State private var recipeToEdit: Recipe?
     @State private var recipeToDelete: Recipe?
     @State private var customRecipeMessage: String?
@@ -23,9 +30,16 @@ public struct RecipeListView: View {
         GridItem(.adaptive(minimum: 280, maximum: 540), spacing: 14, alignment: .top)
     ]
 
-    public init(store: RecipeStore, cameraManager: CameraManager) {
+    public var onNavigateToCamera: (() -> Void)? = nil
+
+    public init(
+        store: RecipeStore,
+        cameraManager: CameraManager,
+        onNavigateToCamera: (() -> Void)? = nil
+    ) {
         self.store = store
         self.cameraManager = cameraManager
+        self.onNavigateToCamera = onNavigateToCamera
     }
 
     public var body: some View {
@@ -37,6 +51,9 @@ public struct RecipeListView: View {
                 // Filter & Sort Pills
                 filterAndSortBar
 
+                // Quick Dial Strip for 1-click drag & drop
+                quickDialBar
+
                 if store.loadingState == .loading {
                     recipeLoadingState
                 } else {
@@ -47,6 +64,7 @@ public struct RecipeListView: View {
                                 recipe: recipe,
                                 isExpanded: expandedRecipeIDs.contains(recipe.id),
                                 favorites: store.favorites,
+                                loadouts: store.loadouts,
                                 isCustomRecipe: store.isCustomRecipe(recipe),
                                 onToggleExpand: {
                                     withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
@@ -55,6 +73,11 @@ public struct RecipeListView: View {
                                         } else {
                                             expandedRecipeIDs.insert(recipe.id)
                                         }
+                                    }
+                                },
+                                onQuickLoadToSlot: { slot in
+                                    Task {
+                                        await load(recipe, into: slot)
                                     }
                                 },
                                 onLoadToSlot: {
@@ -113,13 +136,56 @@ public struct RecipeListView: View {
                 }
             }
         }
-        .alert("C-slot Load", isPresented: Binding(
-            get: { slotWriteMessage != nil },
-            set: { if !$0 { slotWriteMessage = nil } }
-        )) {
-            Button("OK") { slotWriteMessage = nil }
-        } message: {
-            Text(slotWriteMessage ?? "")
+        .overlay(alignment: .bottom) {
+            if let toast = activeHUDToast {
+                HStack(spacing: 12) {
+                    Image(systemName: toast.isError ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(toast.isError ? Theme.fujiAmber : Theme.emeraldGreen)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(toast.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.white)
+                        Text(toast.message)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            activeHUDToast = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(6)
+                            .background(Circle().fill(Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(toast.isError ? Theme.fujiAmber.opacity(0.5) : Theme.emeraldGreen.opacity(0.4), lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(0.45), radius: 18, y: 6)
+                )
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
+            }
         }
         .alert("Custom Recipe Library", isPresented: Binding(
             get: { customRecipeMessage != nil },
@@ -177,18 +243,27 @@ public struct RecipeListView: View {
     @MainActor
     private func load(_ recipe: Recipe, into slot: Int) async {
         if cameraManager.status == .connected {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                activeHUDToast = HUDToast(
+                    title: "Syncing to C\(slot)…",
+                    message: "Writing \"\(recipe.name)\" to camera…",
+                    isError: false
+                )
+            }
             do {
                 let result = try await cameraManager.importRecipeToCState(recipe, slot: slot)
                 guard let observedSnapshot = result.observedSnapshot,
                       observedSnapshot.slot == slot else {
-                    slotWriteMessage = "\"\(recipe.name)\" was sent to camera slot C\(slot), but the post-write camera readback was unavailable. The local slot was left unchanged and is not marked verified."
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        activeHUDToast = HUDToast(
+                            title: "C\(slot) Sync Incomplete",
+                            message: "\"\(recipe.name)\" was sent, but post-write readback was unavailable.",
+                            isError: true
+                        )
+                    }
                     return
                 }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                    // Preserve recipe attribution before importing the camera's
-                    // observed values. `syncFromCameraPresetData` replaces the
-                    // editable settings with the readback rather than assuming
-                    // the requested recipe is the camera's authoritative state.
                     store.loadouts.applyRecipe(recipe, to: slot)
                     store.loadouts.syncFromCameraPresetData(
                         [observedSnapshot],
@@ -198,19 +273,79 @@ public struct RecipeListView: View {
                 }
                 let warningSuffix = result.warnings.isEmpty
                     ? ""
-                    : "\n\nCamera skipped inapplicable settings: \(result.warnings.joined(separator: ", "))."
-                let action = result.createdFromEmpty ? "created and verified" : "updated and verified"
-                slotWriteMessage = "\"\(recipe.name)\" \(action) camera slot C\(slot).\(warningSuffix)"
+                    : " (skipped inapplicable: \(result.warnings.joined(separator: ", ")))"
+                let action = result.createdFromEmpty ? "created & verified" : "updated & verified"
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    activeHUDToast = HUDToast(
+                        title: "✓ Synced to C\(slot)",
+                        message: "\"\(recipe.name)\" \(action) on camera.\(warningSuffix)",
+                        isError: false
+                    )
+                }
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    if activeHUDToast?.title.contains("C\(slot)") == true {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            activeHUDToast = nil
+                        }
+                    }
+                }
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
-                slotWriteMessage = cSlotWriteFailureMessage(recoveryError)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    activeHUDToast = HUDToast(
+                        title: "C\(slot) Write Error",
+                        message: cSlotWriteFailureMessage(recoveryError),
+                        isError: true
+                    )
+                }
             } catch {
-                slotWriteMessage = "Camera slot C\(slot) was not changed: \(error.localizedDescription)"
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    activeHUDToast = HUDToast(
+                        title: "C\(slot) Error",
+                        message: error.localizedDescription,
+                        isError: true
+                    )
+                }
             }
         } else {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                 store.loadouts.applyRecipe(recipe, to: slot)
+                activeHUDToast = HUDToast(
+                    title: "Saved to Local C\(slot)",
+                    message: "\"\(recipe.name)\" saved as local draft. Connect camera to sync.",
+                    isError: false
+                )
             }
-            slotWriteMessage = "\"\(recipe.name)\" was saved locally to C\(slot). Connect a camera to write it to the physical slot."
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                if activeHUDToast?.title.contains("Saved to Local") == true {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        activeHUDToast = nil
+                    }
+                }
+            }
+        }
+    }
+
+    private func stageTop7ToDial() {
+        let recipes = Array(store.filteredRecipes.prefix(7))
+        guard !recipes.isEmpty else { return }
+        store.loadouts.stageAll(recipes: recipes)
+        let count = recipes.count
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            activeHUDToast = HUDToast(
+                title: "✓ Staged Top \(count) to Dial",
+                message: "Assigned recipes to slots C1–C\(count). Ready to write in Camera & Staging.",
+                isError: false
+            )
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if activeHUDToast?.title.contains("Staged Top") == true {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    activeHUDToast = nil
+                }
+            }
         }
     }
 
@@ -242,17 +377,83 @@ public struct RecipeListView: View {
             HStack(alignment: .center, spacing: 14) {
                 headerTextCluster
                 Spacer(minLength: 12)
+                topActionButtons
                 customRecipeLibraryMenu
                 headerFilterToggle
             }
             // Vertical stacked layout for compact windows
             VStack(alignment: .leading, spacing: 10) {
                 headerTextCluster
-                customRecipeLibraryMenu
-                headerFilterToggle
+                topActionButtons
+                HStack {
+                    customRecipeLibraryMenu
+                    Spacer()
+                    headerFilterToggle
+                }
             }
         }
         .glassPanel(padding: 14, radius: Glass.panelRadius, accentColor: Theme.fujiAmber)
+    }
+
+    private var topActionButtons: some View {
+        HStack(spacing: 8) {
+            // Batch button: Stage Top 7 to Dial
+            Button {
+                stageTop7ToDial()
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "dial.low.fill")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Stage Top 7 to Dial")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Theme.fujiAmber.opacity(0.18))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(Theme.fujiAmber.opacity(0.55), lineWidth: 1)
+                )
+                .foregroundStyle(Theme.fujiAmber)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.filteredRecipes.isEmpty)
+            .help("Auto-fills dial slots C1–C7 with the top filtered recipes in 1 click")
+            .accessibilityIdentifier("stage-top-7-button")
+
+            // View Camera & Staging button
+            if let onNavigateToCamera {
+                Button {
+                    onNavigateToCamera()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("View Camera & Staging")
+                            .font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                    )
+                    .foregroundStyle(Color.white)
+                }
+                .buttonStyle(.plain)
+                .help("Jump directly to Camera & Staging")
+                .accessibilityIdentifier("view-camera-staging-button")
+            }
+        }
     }
 
     private var customRecipeLibraryMenu: some View {
@@ -520,6 +721,69 @@ public struct RecipeListView: View {
         .overlay(Capsule().stroke(Theme.specularBorder, lineWidth: 0.8))
     }
 
+    private var quickDialBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: "dial.low.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.fujiAmber)
+                Text("CAMERA DIAL")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.leading, 2)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(1...7, id: \.self) { slot in
+                        let loadout = store.loadouts.loadout(for: slot)
+                        GallerySlotPill(
+                            slot: slot,
+                            loadout: loadout,
+                            isCameraConnected: cameraManager.status == .connected,
+                            onDropRecipe: { recipe in
+                                Task {
+                                    await load(recipe, into: slot)
+                                }
+                            }
+                        )
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            if let onNavigateToCamera {
+                Button {
+                    onNavigateToCamera()
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("Manage")
+                            .font(.system(size: 9, weight: .bold))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(Capsule())
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Manage camera staging and sync")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
+        )
+    }
+
     private var emptyState: some View {
         VStack(spacing: 14) {
             ZStack {
@@ -732,14 +996,75 @@ private struct CSlotPickerSheet: View {
     }
 }
 
+// MARK: - Quick Dial Bar Slot Pill
+
+private struct GallerySlotPill: View {
+    let slot: Int
+    let loadout: Loadout?
+    let isCameraConnected: Bool
+    let onDropRecipe: (Recipe) -> Void
+
+    @State private var isTargeted = false
+
+    private var accent: Color { slotAccent(slot) }
+    private var isFilled: Bool { loadout?.hasAnySettings ?? false }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(isTargeted ? Theme.fujiAmber : (isFilled ? accent : Color.white.opacity(0.2)))
+                .frame(width: 7, height: 7)
+                .shadow(color: (isTargeted || isFilled) ? (isTargeted ? Theme.fujiAmber : accent).opacity(0.7) : Color.clear, radius: 3)
+
+            Text("C\(slot)")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(isTargeted ? Theme.fujiAmber : (isFilled ? Color.white : Theme.textTertiary))
+
+            if let name = loadout?.name, !name.isEmpty {
+                Text(name)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 85)
+            } else {
+                Text("Empty")
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundStyle(Theme.textTertiary.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(isTargeted ? Theme.fujiAmber.opacity(0.2) : (isFilled ? Color.white.opacity(0.06) : Color.white.opacity(0.02)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(isTargeted ? Theme.fujiAmber : (isFilled ? accent.opacity(0.4) : Color.white.opacity(0.06)), lineWidth: 1)
+                )
+        )
+        .scaleEffect(isTargeted ? 1.06 : 1.0)
+        .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isTargeted)
+        .dropDestination(for: Recipe.self) { items, _ in
+            guard let recipe = items.first else { return false }
+            onDropRecipe(recipe)
+            return true
+        } isTargeted: { targeted in
+            isTargeted = targeted
+        }
+        .help("Drag a recipe here to load into C\(slot)")
+    }
+}
+
 // MARK: - Ultra-Sleek Recipe Card
 
 private struct RecipeCard: View {
     let recipe: Recipe
     let isExpanded: Bool
     @ObservedObject var favorites: FavoritesStore
+    let loadouts: LoadoutStore
     let isCustomRecipe: Bool
     let onToggleExpand: () -> Void
+    let onQuickLoadToSlot: (Int) -> Void
     let onLoadToSlot: () -> Void
     let onSelectPhoto: (String) -> Void
     let onEdit: () -> Void
@@ -800,80 +1125,44 @@ private struct RecipeCard: View {
         .draggable(recipe) {
             RecipeDragPreview(recipe: recipe)
         }
+        .contextMenu {
+            Section("Stage to Camera Dial Slot") {
+                ForEach(1...7, id: \.self) { slot in
+                    let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
+                        ? "Empty"
+                        : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                    Button {
+                        onQuickLoadToSlot(slot)
+                    } label: {
+                        Label("Stage to C\(slot) (\(slotName))", systemImage: "dial.low.fill")
+                    }
+                }
+            }
+            Divider()
+            Button(isFavorite ? "Remove from Favorites" : "Add to Favorites") {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    favorites.toggleFavorite(for: recipe.id)
+                }
+            }
+            if isCustomRecipe {
+                Divider()
+                Button("Edit Recipe…", action: onEdit)
+                Button("Delete Recipe", role: .destructive, action: onDelete)
+            }
+        }
     }
 
     private var headerWithActions: some View {
-        ZStack {
-            Button(action: onToggleExpand) {
-                cardHeaderContent
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Floating Quick Action Cluster (Load to Slot + Favorite Star + Expand Chevron)
-            HStack(spacing: 6) {
-                Spacer(minLength: 0)
-                
-                VStack(spacing: 6) {
-                    // Send to C1-C7 button
-                    Button(action: onLoadToSlot) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(width: 28, height: 28)
-                            Image(systemName: "dial.low.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Theme.fujiAmber)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .help("Load recipe into C1–C7 preset slot")
-                    .accessibilityLabel("Load recipe into a custom slot")
-                    .accessibilityHint("Opens a slot picker for \(recipe.name).")
-                    .accessibilityIdentifier("send-to-dial-\(recipe.id)")
-
-                    // Star Favorite Button
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            favorites.toggleFavorite(for: recipe.id)
-                        }
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(isFavorite ? Theme.warmGold.opacity(0.2) : Color.white.opacity(0.08))
-                                .frame(width: 28, height: 28)
-                            Image(systemName: isFavorite ? "star.fill" : "star")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(isFavorite ? Theme.warmGold : Theme.textSecondary)
-                                .symbolEffect(.bounce, value: isFavorite)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .help(isFavorite ? "Remove favorite" : "Add to favorites")
-                    .accessibilityLabel(isFavorite ? "Remove \(recipe.name) from favorites" : "Add \(recipe.name) to favorites")
+        HStack(alignment: .top, spacing: 12) {
+            // Recipe Thumbnail (clean, completely unobstructed)
+            previewThumbnail
+                .onTapGesture {
+                    onToggleExpand()
                 }
 
-                // Expand Chevron
-                Image(systemName: "chevron.right.circle.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(isHovered || isExpanded ? Theme.textPrimary : Theme.textTertiary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isExpanded)
-                    .padding(.leading, 1)
-            }
-            .padding(.trailing, 10)
-            .padding(.vertical, 10)
-        }
-        .frame(minHeight: 110)
-    }
-
-    private var cardHeaderContent: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Recipe Thumbnail with Film Simulation Overlay
-            previewThumbnail
-
+            // Recipe Details (Tappable to expand formula)
             VStack(alignment: .leading, spacing: 4) {
-                // Film Sim Badge + Dynamic Range Chip
+                // Film Sim Badge + Dynamic Range Chip + Custom Recipe Tag
                 HStack(spacing: 5) {
                     FilmSimBadge(name: simName, isCompact: true)
 
@@ -904,7 +1193,7 @@ private struct RecipeCard: View {
                     .glassPrimary()
                     .lineLimit(2)
 
-                // Tone Curve Radar & Kelvin Swatch (adaptive horizontal wrapping)
+                // Tone Curve Radar & Kelvin Swatch
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) {
                         ToneCurveRadar(
@@ -937,10 +1226,91 @@ private struct RecipeCard: View {
                 }
                 .padding(.top, 2)
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onToggleExpand()
+            }
 
-            Spacer(minLength: 72)
+            Spacer(minLength: 4)
+
+            // Dedicated Card Actions Column (Clean, never collides with thumbnail or text!)
+            VStack(alignment: .trailing, spacing: 8) {
+                // "Stage to C1–C7 ▾" Clean Menu Button
+                Menu {
+                    Section("Stage to Camera Dial Slot") {
+                        ForEach(1...7, id: \.self) { slot in
+                            let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
+                                ? "Empty"
+                                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                            Button {
+                                onQuickLoadToSlot(slot)
+                            } label: {
+                                Label("Stage to C\(slot): \(slotName)", systemImage: "dial.low.fill")
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("Slot Matrix / Options…") {
+                        onLoadToSlot()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "dial.low.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("Stage ▾")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(isHovered ? Theme.fujiAmber.opacity(0.24) : Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(isHovered ? Theme.fujiAmber.opacity(0.55) : Color.white.opacity(0.14), lineWidth: 1)
+                    )
+                    .foregroundStyle(isHovered ? Theme.fujiAmber : Color.white)
+                }
+                .menuStyle(.borderlessButton)
+                .help("Stage \"\(recipe.name)\" to custom dial slot (C1–C7)")
+                .accessibilityIdentifier("send-to-dial-\(recipe.id)")
+
+                HStack(spacing: 8) {
+                    // Favorite star button
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            favorites.toggleFavorite(for: recipe.id)
+                        }
+                    }) {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(isFavorite ? Theme.warmGold : Theme.textTertiary)
+                            .padding(6)
+                            .background(
+                                Circle()
+                                    .fill(isFavorite ? Theme.warmGold.opacity(0.18) : Color.white.opacity(0.06))
+                            )
+                            .symbolEffect(.bounce, value: isFavorite)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isFavorite ? "Remove favorite" : "Add to favorites")
+                    .accessibilityLabel(isFavorite ? "Remove \(recipe.name) from favorites" : "Add \(recipe.name) to favorites")
+
+                    // Expand / Collapse Chevron Button
+                    Button(action: onToggleExpand) {
+                        Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.right.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(isExpanded ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
+                            .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isExpanded)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isExpanded ? "Collapse recipe formula" : "Expand recipe formula")
+                }
+            }
         }
         .padding(12)
+        .frame(minHeight: 104)
     }
 
     private var previewThumbnail: some View {

@@ -11,15 +11,18 @@ public struct SidebarView: View {
     @Binding public var selection: AppTab
     @ObservedObject public var recipeStore: RecipeStore
     @ObservedObject public var cameraManager: CameraManager
+    public var onToggleConnection: (() -> Void)? = nil
 
     public init(
         selection: Binding<AppTab>,
         recipeStore: RecipeStore,
-        cameraManager: CameraManager
+        cameraManager: CameraManager,
+        onToggleConnection: (() -> Void)? = nil
     ) {
         self._selection = selection
         self.recipeStore = recipeStore
         self.cameraManager = cameraManager
+        self.onToggleConnection = onToggleConnection
     }
 
     public var body: some View {
@@ -27,13 +30,13 @@ public struct SidebarView: View {
             brandHeader
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Main Navigation
+                VStack(alignment: .leading, spacing: 18) {
+                    // Main Navigation: 2 Primary Core Tabs
                     VStack(spacing: 3) {
-                        ForEach(AppTab.allCases) { tab in
+                        ForEach(AppTab.primaryTabs) { tab in
                             SidebarRow(
                                 tab: tab,
-                                isSelected: selection == tab,
+                                isSelected: selection == tab || (tab == .camera && selection == .loadouts),
                                 badge: tabBadge(for: tab)
                             ) {
                                 withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
@@ -60,20 +63,28 @@ public struct SidebarView: View {
                         }
                     }
 
-                    // Custom Bank Quick Status
+                    // Dial Staging Quick Rack
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("CUSTOM DIAL BANK")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Theme.textTertiary)
-                            Spacer()
-                            Text("\(recipeStore.loadouts.loadoutCountWithSettings())/7")
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(Theme.fujiAmber)
+                        Button {
+                            withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                                selection = .camera
+                            }
+                        } label: {
+                            HStack {
+                                Text("DIAL STAGING RACK")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Theme.textTertiary)
+                                Spacer()
+                                Text("\(recipeStore.loadouts.loadoutCountWithSettings())/7")
+                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(Theme.fujiAmber)
+                            }
+                            .padding(.horizontal, 10)
                         }
-                        .padding(.horizontal, 10)
+                        .buttonStyle(.plain)
+                        .help("Click to open Camera & Staging")
 
-                        // Mini dial slots visualizer
+                        // Mini dial slots visualizer (drag and drop target)
                         HStack(spacing: 3) {
                             ForEach(1...7, id: \.self) { slot in
                                 let loadout = recipeStore.loadouts.loadout(for: slot)
@@ -82,7 +93,7 @@ public struct SidebarView: View {
                                     loadout: loadout,
                                     onSelect: {
                                         withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
-                                            selection = .loadouts
+                                            selection = .camera
                                         }
                                     },
                                     onDropRecipe: { recipe in
@@ -94,6 +105,24 @@ public struct SidebarView: View {
                             }
                         }
                         .padding(.horizontal, 8)
+                    }
+
+                    // Secondary Utilities
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("UTILITIES")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(.horizontal, 10)
+
+                        SidebarRow(
+                            tab: .darkroom,
+                            isSelected: selection == .darkroom,
+                            badge: nil
+                        ) {
+                            withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                                selection = .darkroom
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -125,11 +154,12 @@ public struct SidebarView: View {
         case .recipes:
             let favs = recipeStore.favorites.favoriteIDs.count
             return favs > 0 ? "\(favs) ★" : nil
-        case .loadouts:
+        case .camera, .loadouts:
+            if cameraManager.status == .connected {
+                return "ONLINE"
+            }
             let count = recipeStore.loadouts.loadoutCountWithSettings()
             return count > 0 ? "\(count)/7" : nil
-        case .camera:
-            return cameraManager.status == .connected ? "ONLINE" : nil
         case .darkroom:
             return nil
         }
@@ -231,61 +261,96 @@ public struct SidebarView: View {
     }
 
     private var statusFooter: some View {
-        HStack(spacing: 8) {
-            // Live pulsing beacon
-            ZStack {
-                Circle()
-                    .fill(cameraManager.status.tint)
-                    .frame(width: 7, height: 7)
-
-                if cameraManager.status == .connected || cameraManager.status == .connecting {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                selection = .camera
+            }
+        } label: {
+            HStack(spacing: 8) {
+                // Live pulsing beacon
+                ZStack {
                     Circle()
-                        .stroke(cameraManager.status.tint.opacity(0.6), lineWidth: 1.2)
-                        .frame(width: 14, height: 14)
-                        .scaleEffect(cameraManager.status == .connecting ? 1.4 : 1.1)
-                        .opacity(cameraManager.status == .connecting ? 0.4 : 0.8)
-                        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: cameraManager.status)
+                        .fill(cameraManager.status.tint)
+                        .frame(width: 7, height: 7)
+
+                    if cameraManager.status == .connected || cameraManager.status == .connecting {
+                        Circle()
+                            .stroke(cameraManager.status.tint.opacity(0.6), lineWidth: 1.2)
+                            .frame(width: 14, height: 14)
+                            .scaleEffect(cameraManager.status == .connecting ? 1.4 : 1.1)
+                            .opacity(cameraManager.status == .connecting ? 0.4 : 0.8)
+                            .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: cameraManager.status)
+                    }
+                }
+                .shadow(color: cameraManager.status.tint.opacity(0.8), radius: 3)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(cameraManager.status.formattedLabel)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(1)
+
+                    Text(cameraManager.status.detailLabel)
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                // 1-Click Connect Button or Chevron
+                if let onToggleConnection {
+                    Button {
+                        onToggleConnection()
+                    } label: {
+                        HStack(spacing: 3) {
+                            if cameraManager.status == .connecting {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Image(systemName: cameraManager.status == .connected ? "checkmark.circle.fill" : "cable.connector")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            Text(cameraManager.status == .connected ? "Disconnect" : "Connect")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(cameraManager.status == .connected ? Color.white.opacity(0.08) : Theme.emeraldGreen.opacity(0.18))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(cameraManager.status == .connected ? Color.white.opacity(0.16) : Theme.emeraldGreen.opacity(0.5), lineWidth: 0.8)
+                        )
+                        .foregroundStyle(cameraManager.status == .connected ? Theme.textSecondary : Theme.emeraldGreen)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(cameraManager.status == .connecting)
+                    .help(cameraManager.status == .connected ? "Disconnect Camera" : "1-Click Connect to Fujifilm X100VI")
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(5)
+                        .background(Circle().fill(Color.white.opacity(0.06)))
                 }
             }
-            .shadow(color: cameraManager.status.tint.opacity(0.8), radius: 3)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(cameraManager.status.formattedLabel)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1)
-
-                Text(cameraManager.status.detailLabel)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Theme.textTertiary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            // Quick Connect / Switcher
-            Button {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    selection = .camera
-                }
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .padding(5)
-                    .background(Circle().fill(Color.white.opacity(0.06)))
-            }
-            .buttonStyle(.plain)
-            .help("Open Camera Settings")
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(cameraManager.status.tint.opacity(cameraManager.status == .connected ? 0.35 : 0.08), lineWidth: 0.8)
+                    )
+            )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .padding(.horizontal, 6)
-                .padding(.bottom, 6)
-        )
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
     }
 }
 
@@ -415,15 +480,22 @@ private struct SidebarMiniDialSlot: View {
 // MARK: - App Tabs
 
 public enum AppTab: String, CaseIterable, Identifiable {
-    case recipes, loadouts, camera, darkroom
+    case recipes
+    case camera
+    case darkroom
+    case loadouts
+
+    /// The two primary core workflows of FujiRecipes
+    public static var primaryTabs: [AppTab] {
+        [.recipes, .camera]
+    }
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
         case .recipes: return "Recipes"
-        case .loadouts: return "C1–C7 Matrix"
-        case .camera: return "Camera Hub"
+        case .camera, .loadouts: return "Camera & Staging"
         case .darkroom: return "RAF Darkroom"
         }
     }
@@ -431,17 +503,16 @@ public enum AppTab: String, CaseIterable, Identifiable {
     public var icon: String {
         switch self {
         case .recipes: return "photo.stack.fill"
-        case .loadouts: return "dial.low.fill"
         case .camera: return "camera.fill"
         case .darkroom: return "moon.stars.fill"
+        case .loadouts: return "dial.low.fill"
         }
     }
 
     public var accentColor: Color {
         switch self {
         case .recipes: return Theme.fujiAmber
-        case .loadouts: return Theme.warmGold
-        case .camera: return Theme.emeraldGreen
+        case .camera, .loadouts: return Theme.emeraldGreen
         case .darkroom: return Theme.cyanAccent
         }
     }

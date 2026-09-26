@@ -19,6 +19,13 @@ public struct CameraConnectionView: View {
     @State private var showTroubleshooting = false
     @State private var slotRefreshMessage: String?
     @State private var confirmOverwriteDrafts = false
+    @State private var confirmClearAllStaged = false
+    @State private var slotPendingLocalClear: Int?
+    @State private var slotToEdit: Loadout?
+    @State private var selectedDialSlot: Int = 1
+    @State private var isWritingAll = false
+    @State private var writeAllProgress: String?
+    @State private var writeStatusFeedback: String?
     private let cameraSessionFactory: CameraSessionFactory
 
     private var isConnectionInFlight: Bool {
@@ -40,15 +47,15 @@ public struct CameraConnectionView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Section Header
                 SectionHeader(
-                    title: "Camera Preset Sync",
-                    subtitle: "Direct USB-C PTP link to your Fujifilm X100VI for C1–C7 preset sync and in-camera RAW processing.",
+                    title: "Camera & Staging",
+                    subtitle: "Unified hardware control & C1–C7 preset dial staging for Fujifilm X100VI. Stage offline, verify live, and write over USB-C.",
                     icon: "camera.fill",
                     trailingValue: manager.status.formattedLabel,
                     trailingLabel: "STATUS",
                     accentColor: manager.status.tint
                 )
 
-                // Hero Hardware Card
+                // Top Hero Hardware Card
                 hardwareStatusCard
 
                 // Error / Warning Diagnostic HUD
@@ -60,31 +67,80 @@ public struct CameraConnectionView: View {
                         ))
                 }
 
-                // C1-C7 Hardware Dial Bank Status
-                if manager.status == .connected {
-                    connectedDialBankHUD
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                } else {
+                // Disconnected Connection Guide
+                if manager.status != .connected {
                     connectionGuideCard
                         .transition(.opacity)
                 }
+
+                // Primary Action Banner (Write All / Refresh / Clear)
+                primaryActionBanner
+
+                // Dial Rack (Slots C1 through C7)
+                dialRackGrid
             }
             .padding(16)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.status)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.lastError)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isWritingAll)
         }
-        .navigationTitle("Camera Hardware Hub")
+        .navigationTitle("Camera & Staging")
         .sheet(isPresented: $showLimitationsAlert) {
             LimitationsView(isPresented: $showLimitationsAlert)
         }
         .sheet(isPresented: $showTroubleshooting) {
             TroubleshootingView(isPresented: $showTroubleshooting)
         }
+        .sheet(item: $slotToEdit) { loadout in
+            SlotEditorSheet(
+                loadout: loadout,
+                store: loadouts,
+                cameraManager: manager,
+                isPresented: Binding(
+                    get: { slotToEdit != nil },
+                    set: { if !$0 { slotToEdit = nil } }
+                )
+            )
+        }
         .confirmationDialog("Replace local drafts with camera data?", isPresented: $confirmOverwriteDrafts) {
             Button("Replace Local Drafts", role: .destructive) { refreshSlots(overwriteDrafts: true) }
             Button("Keep Local Drafts", role: .cancel) { refreshSlots(overwriteDrafts: false) }
         } message: {
             Text("Only successfully read slots are updated. Replacing a local draft discards it in favor of the camera read; clearing a local draft elsewhere never clears the camera slot.")
+        }
+        .confirmationDialog(
+            "Clear All Staged Slots?",
+            isPresented: $confirmClearAllStaged,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All 7 Drafts", role: .destructive) {
+                clearAllStagedSlots()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This clears all 7 local recipe drafts in FujiRecipes. It does not modify or clear the camera's physical slots.")
+        }
+        .confirmationDialog(
+            "Clear Local Draft?",
+            isPresented: Binding(
+                get: { slotPendingLocalClear != nil },
+                set: { if !$0 { slotPendingLocalClear = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Clear Local Draft", role: .destructive) {
+                if let slot = slotPendingLocalClear {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                        loadouts.clearLoadout(for: slot)
+                    }
+                }
+                slotPendingLocalClear = nil
+            }
+            Button("Cancel", role: .cancel) { slotPendingLocalClear = nil }
+        } message: {
+            if let slot = slotPendingLocalClear {
+                Text("This removes only FujiRecipes’ local draft for C\(slot). It does not clear, reset, or otherwise change the physical camera slot.")
+            }
         }
     }
 
@@ -303,70 +359,327 @@ public struct CameraConnectionView: View {
         .accessibilityLabel("Connection diagnostic: \(error)")
     }
 
-    private var connectedDialBankHUD: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("ON-CAMERA C1–C7 PRESET MATRIX")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Button("Refresh") {
-                    if loadouts.dirtySlots.isEmpty { refreshSlots(overwriteDrafts: false) }
-                    else { confirmOverwriteDrafts = true }
+    // MARK: - Primary Action Banner & Controls
+
+    private var primaryActionBanner: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                // Horizontal layout
+                HStack(spacing: 12) {
+                    writeAllButton
+                    Spacer(minLength: 8)
+                    refreshButton
+                    clearAllButton
                 }
-                .disabled(manager.operation == .readingSlots)
-                .accessibilityHint("Reads C1 through C7 from the connected camera.")
-                if manager.operation == .readingSlots { ProgressView().controlSize(.small) }
+                // Compact vertical layout
+                VStack(alignment: .leading, spacing: 10) {
+                    writeAllButton
+                    HStack {
+                        refreshButton
+                        Spacer()
+                        clearAllButton
+                    }
+                }
             }
-            if let slotRefreshMessage {
+
+            if manager.status == .connected, let writeStatusFeedback {
+                HStack(spacing: 6) {
+                    Image(systemName: writeStatusFeedback.hasPrefix("✓") ? "checkmark.circle.fill" : "info.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(writeStatusFeedback.hasPrefix("✓") ? Theme.emeraldGreen : Theme.fujiAmber)
+                    Text(writeStatusFeedback)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(writeStatusFeedback.hasPrefix("✓") ? Theme.emeraldGreen : Theme.textSecondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(Color.white.opacity(0.04))
+                )
+                .transition(.opacity)
+            } else if let slotRefreshMessage {
                 Text(slotRefreshMessage)
                     .font(.caption2)
                     .foregroundStyle(Theme.textSecondary)
+                    .transition(.opacity)
             }
+        }
+        .padding(14)
+        .glassPanel(padding: 0, radius: 14)
+    }
 
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 120, maximum: 200), spacing: 8)
-            ], spacing: 8) {
+    private var writeAllButton: some View {
+        let count = loadouts.loadoutCountWithSettings()
+        let isConnected = manager.status == .connected
+        let canWrite = isConnected && count > 0 && !isWritingAll
+
+        return Button {
+            writeAllStagedSlotsToCamera()
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(canWrite ? Color.black.opacity(0.2) : Color.white.opacity(0.06))
+                        .frame(width: 32, height: 32)
+
+                    if isWritingAll {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(canWrite ? Color.black : Theme.textTertiary)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isWritingAll ? (writeAllProgress ?? "Writing to Camera…") : "Write All Staged Slots to Camera")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(canWrite ? Color.black : Theme.textTertiary)
+
+                    Text(!isConnected
+                        ? "Connect camera via USB to sync"
+                        : (count == 0 ? "No recipes staged to write" : "\(count) of 7 slots armed & ready to write"))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textMuted)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(canWrite ? Color.black.opacity(0.6) : Theme.textMuted)
+                    .padding(.trailing, 4)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(canWrite ? Theme.emeraldGreen : Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(canWrite ? Color.white.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: canWrite ? Theme.emeraldGreen.opacity(0.4) : Color.clear, radius: 10, y: 3)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canWrite)
+        .accessibilityIdentifier("write-all-staged-slots-button")
+    }
+
+    private var refreshButton: some View {
+        Button {
+            if loadouts.dirtySlots.isEmpty {
+                refreshSlots(overwriteDrafts: false)
+            } else {
+                confirmOverwriteDrafts = true
+            }
+        } label: {
+            HStack(spacing: 5) {
+                if manager.operation == .readingSlots {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                Text("Refresh from Camera")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+            .foregroundStyle(Color.white)
+        }
+        .buttonStyle(.plain)
+        .disabled(manager.status != .connected || manager.operation == .readingSlots || isWritingAll)
+        .help("Reads physical slots C1–C7 from the connected camera")
+    }
+
+    private var clearAllButton: some View {
+        Button {
+            confirmClearAllStaged = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "trash")
+                    .font(.system(size: 10, weight: .medium))
+                Text("Clear All Staged")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(Color.white.opacity(0.04)))
+            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
+            .foregroundStyle(Theme.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(loadouts.loadoutCountWithSettings() == 0 || isWritingAll)
+        .help("Clears all 7 local recipe drafts")
+    }
+
+    // MARK: - Rotary Dial Strip
+
+    private var rotaryDialStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
                 ForEach(1...7, id: \.self) { slot in
                     let loadout = loadouts.loadout(for: slot)
-                    let isConfigured = loadout?.hasAnySettings ?? false
-                    let isNeverConfigured = loadouts.isCameraSlotEmpty(slot)
+                    let isSelected = selectedDialSlot == slot
                     let accent = slotAccent(slot)
+                    let isConfigured = loadout?.hasAnySettings ?? false
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("C\(slot)")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(isConfigured ? accent : Theme.textTertiary)
-                            Spacer()
-                            Circle()
-                                .fill(isConfigured ? accent : Color.white.opacity(0.1))
-                                .frame(width: 6, height: 6)
-                                .shadow(color: isConfigured ? accent.opacity(0.8) : Color.clear, radius: 3)
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            selectedDialSlot = slot
                         }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(isConfigured ? accent : Color.white.opacity(0.2))
+                                .frame(width: 7, height: 7)
 
-                        Text(slotLabel(loadout, isNeverConfigured: isNeverConfigured))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(isConfigured ? Theme.textPrimary : Theme.textMuted)
-                            .lineLimit(1)
+                            Text("C\(slot)")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+
+                            if let name = loadout?.name, !name.isEmpty {
+                                Text(name)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 80)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(isSelected ? accent.opacity(0.25) : Color.white.opacity(0.04))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(isSelected ? accent : Color.white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.8)
+                        )
+                        .foregroundStyle(isSelected ? Color.white : Theme.textSecondary)
                     }
-                    .padding(8)
-                    .glassCard(padding: 0, radius: 8, tint: isConfigured ? accent.opacity(0.08) : Color.white.opacity(0.02))
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    // MARK: - Dial Rack (C1 to C7)
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 280, maximum: 420), spacing: 14)
+    ]
+
+    private var dialRackGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                HStack(spacing: 5) {
+                    Image(systemName: "dial.low.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.fujiAmber)
+                    Text("DIAL RACK (SLOTS C1–C7)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
+                Spacer()
+
+                Text("DRAG & DROP RECIPES TO STAGE")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            LazyVGrid(columns: columns, spacing: 14) {
+                ForEach(1...7, id: \.self) { slot in
+                    let loadout = loadouts.loadout(for: slot)
+                    LoadoutCard(
+                        loadout: loadout,
+                        slot: slot,
+                        isSelected: selectedDialSlot == slot,
+                        isDirty: loadouts.isDirty(slot),
+                        isCameraConnected: manager.status == .connected,
+                        isCameraSlotEmpty: loadouts.isCameraSlotEmpty(slot),
+                        isWriting: manager.operation == .writingSlot(slot),
+                        onSelect: { selectedDialSlot = slot },
+                        onClear: { slotPendingLocalClear = slot },
+                        onEdit: { slotToEdit = loadout },
+                        onWriteToCamera: { writeSingleSlot(slot) },
+                        onDropRecipe: { recipe in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                loadouts.applyRecipe(recipe, to: slot)
+                                selectedDialSlot = slot
+                            }
+                        }
+                    )
                 }
             }
         }
-        .glassPanel(padding: 14)
     }
 
-    private func slotLabel(_ loadout: Loadout?, isNeverConfigured: Bool) -> String {
-        if let loadout, loadouts.isDirty(loadout.slot) {
-            return loadout.hasAnySettings
-                ? "Local draft (not written)"
-                : "Local draft cleared (camera unchanged)"
+    // MARK: - Slot Sync Actions
+
+    private func writeAllStagedSlotsToCamera() {
+        guard manager.status == .connected else { return }
+        let armedCount = loadouts.loadoutCountWithSettings()
+        guard armedCount > 0 else { return }
+
+        Task {
+            isWritingAll = true
+            writeStatusFeedback = nil
+            writeAllProgress = "Writing staged slots to camera…"
+
+            let results = await manager.writeAllStagedSlots(from: loadouts)
+
+            isWritingAll = false
+            writeAllProgress = nil
+
+            let successes = results.filter {
+                if case .success = $0.result { return true }
+                return false
+            }
+            let failures = results.filter {
+                if case .failure = $0.result { return true }
+                return false
+            }
+
+            if results.isEmpty {
+                writeStatusFeedback = "No staged slots were eligible to write, or camera disconnected."
+            } else if failures.isEmpty {
+                writeStatusFeedback = "✓ Successfully wrote & verified all \(successes.count) staged slots on camera!"
+            } else {
+                let failedSlots = failures.map { "C\($0.slot)" }.joined(separator: ", ")
+                writeStatusFeedback = "Wrote \(successes.count) slots. Failed: \(failedSlots)."
+            }
         }
-        if isNeverConfigured { return "Camera reports empty" }
-        guard let loadout else { return "Not read" }
-        return loadout.provenance == .cameraSynced ? "Camera-verified" : "Local only"
+    }
+
+    private func writeSingleSlot(_ slot: Int) {
+        guard manager.status == .connected, let loadout = loadouts.loadout(for: slot) else { return }
+        Task {
+            do {
+                writeStatusFeedback = "Writing C\(slot) to camera…"
+                let result = try await manager.writeLoadout(loadout, to: slot)
+                if let observed = result.observedSnapshot, observed.slot == slot {
+                    loadouts.syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
+                    loadouts.markCameraWriteVerified(slot: slot)
+                }
+                let action = result.createdFromEmpty ? "Created & verified" : "Updated & verified"
+                let warnSuffix = result.warnings.isEmpty ? "" : " (warnings: \(result.warnings.joined(separator: ", ")))"
+                writeStatusFeedback = "✓ \(action) camera slot C\(slot)\(warnSuffix)."
+            } catch {
+                writeStatusFeedback = "Failed to write C\(slot): \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func clearAllStagedSlots() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            loadouts.clearAllStaged()
+            writeStatusFeedback = "Cleared all 7 local staged slots."
+        }
     }
 
     private func refreshSlots(overwriteDrafts: Bool) {

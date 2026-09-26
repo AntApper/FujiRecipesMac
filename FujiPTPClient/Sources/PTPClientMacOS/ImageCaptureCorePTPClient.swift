@@ -110,47 +110,114 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             throw PTPError.invalidResponse("Preset slot must be 1–7")
         }
 
+        // 1. Select target slot on camera
         try await writeProperty(0xD18C, value: Int32(index))
+        let initial = try await readPresetSlot(index)
+        let wasEmpty = initial.isEmptySlot
+
+        // 2. Write slot name if provided
         if !data.name.isEmpty {
             try await writeRawProperty(0xD18D, payload: Self.ptpString(data.name))
         }
 
-        let fields: [(UInt16, Int32?)] = [
-            (0xD18E, data.imageSize.map(Int32.init)),
-            (0xD18F, data.imageQuality.map(Int32.init)),
-            (0xD190, data.dynamicRange.map(Int32.init)),
-            (0xD192, data.filmSimulation.map(Int32.init)),
-            (0xD193, data.monoWarmCool),
-            (0xD194, data.monoMagentaGreen),
-            (0xD195, data.grainEffect.map(Int32.init)),
-            (0xD196, data.colorChrome.map(Int32.init)),
-            (0xD197, data.colorChromeFxBlue.map(Int32.init)),
-            (0xD198, data.smoothSkin.map(Int32.init)),
-            (0xD199, data.whiteBalance.map(Int32.init)),
-            (0xD19A, data.wbShiftRed),
-            (0xD19B, data.wbShiftBlue),
-            (0xD19C, data.colorTemp.map(Int32.init)),
-            (0xD19D, data.highlight),
-            (0xD19E, data.shadow),
-            (0xD19F, data.color),
-            (0xD1A0, data.sharpness),
-            (0xD1A1, data.highIsoNr.map(Int32.init)),
-            (0xD1A2, data.clarity),
-            (0xD1A3, data.longExpNr.map(Int32.init)),
-            (0xD1A4, data.colorSpace.map(Int32.init))
+        // 3. Resolve effective modes for conditional field gating
+        let effectiveFilmSim = data.filmSimulation ?? initial.filmSimulation
+        let effectiveWB = data.whiteBalance ?? initial.whiteBalance
+        let isMono = Self.isMonochromeFilmSim(effectiveFilmSim)
+        let isColorTempWB = effectiveWB == 0x8007
+
+        var warnings: [String] = []
+
+        // 4. Write film simulation first so camera mode updates before tone/color settings
+        if let sim = data.filmSimulation {
+            try await writeProperty(0xD192, value: Int32(sim))
+        }
+
+        // 5. Write white balance mode next
+        if let wb = data.whiteBalance {
+            try await writeProperty(0xD199, value: Int32(wb))
+        }
+
+        // 6. Write color temperature only when in Color Temperature WB mode (0x8007)
+        if isColorTempWB, let colorTemp = data.colorTemp, colorTemp != 0 {
+            await writeConditionalProperty(0xD19C, value: Int32(colorTemp), warnings: &warnings)
+        }
+
+        // 7. Write white balance shifts
+        if let shiftR = data.wbShiftRed {
+            try await writeProperty(0xD19A, value: shiftR)
+        }
+        if let shiftB = data.wbShiftBlue {
+            try await writeProperty(0xD19B, value: shiftB)
+        }
+
+        // 8. Write tone and saturation settings respecting monochrome eligibility
+        if isMono {
+            if let warmCool = data.monoWarmCool, warmCool != 0 {
+                await writeConditionalProperty(0xD193, value: warmCool, warnings: &warnings)
+            }
+            if let magentaGreen = data.monoMagentaGreen, magentaGreen != 0 {
+                await writeConditionalProperty(0xD194, value: magentaGreen, warnings: &warnings)
+            }
+        } else {
+            if let color = data.color {
+                await writeConditionalProperty(0xD19F, value: color, warnings: &warnings)
+            }
+        }
+
+        // 9. Write remaining preset properties
+        let otherProperties: [(UInt16, Int32?, Bool)] = [
+            (0xD18E, data.imageSize.map(Int32.init), false),
+            (0xD18F, data.imageQuality.map(Int32.init), false),
+            (0xD190, data.dynamicRange.map(Int32.init), false),
+            (0xD195, data.grainEffect.map(Int32.init), false),
+            (0xD196, data.colorChrome.map(Int32.init), false),
+            (0xD197, data.colorChromeFxBlue.map(Int32.init), true),
+            (0xD198, data.smoothSkin.map(Int32.init), true),
+            (0xD19D, data.highlight, false),
+            (0xD19E, data.shadow, false),
+            (0xD1A0, data.sharpness, false),
+            (0xD1A1, data.highIsoNr.map(Int32.init), false),
+            (0xD1A2, data.clarity, false),
+            (0xD1A3, data.longExpNr.map(Int32.init), false),
+            (0xD1A4, data.colorSpace.map(Int32.init), false)
         ]
-        for (code, value) in fields {
-            if let value {
-                try await writeProperty(code, value: value)
+
+        for (code, value, conditional) in otherProperties {
+            guard let value else { continue }
+            if conditional {
+                await writeConditionalProperty(code, value: value, warnings: &warnings)
+            } else {
+                do {
+                    try await writeProperty(code, value: value)
+                } catch PTPError.unknown(0x201C) {
+                    warnings.append(String(format: "0x%04X: 0x201C", code))
+                }
             }
         }
 
         let observed = try await readPresetSlot(index)
         return PTPPresetSlotWriteResult(
             slot: index,
-            warnings: [],
+            createdFromEmpty: wasEmpty,
+            warnings: warnings,
             observedSnapshot: observed
         )
+    }
+
+    private func writeConditionalProperty(_ code: UInt16, value: Int32, warnings: inout [String]) async {
+        do {
+            try await writeProperty(code, value: value)
+        } catch PTPError.unknown(0x201C) {
+            warnings.append(String(format: "0x%04X: 0x201C", code))
+        } catch {
+            warnings.append(String(format: "0x%04X: %@", code, error.localizedDescription))
+        }
+    }
+
+    public static func isMonochromeFilmSim(_ raw: UInt32?) -> Bool {
+        guard let raw else { return false }
+        return (raw >= 6 && raw <= 10) || (raw >= 12 && raw <= 15)
     }
 
     public func readNativeProfile() async throws -> Data {
@@ -250,9 +317,18 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
 
     private static func intValue(_ response: PTPPropertyResponse?) -> Int32? {
         switch response {
-        case .uint32(let value): return Int32(bitPattern: value)
-        case .int32(let value): return value
-        default: return nil
+        case .uint32(let value):
+            // Fuji camera tone/shift properties are signed 16-bit values.
+            // If the raw response was a 16-bit payload zero-extended to uint32,
+            // sign-extend it so e.g. 0xFFF6 (65526) becomes -10 rather than +65526.
+            if value > 0x7FFF && value <= 0xFFFF {
+                return Int32(Int16(bitPattern: UInt16(value)))
+            }
+            return Int32(bitPattern: value)
+        case .int32(let value):
+            return value
+        default:
+            return nil
         }
     }
 

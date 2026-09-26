@@ -163,6 +163,21 @@ public final class LoadoutStore: ObservableObject {
             loadout.rawPreset = nil
         }
     }
+
+    /// Takes up to 7 recipes and stages them sequentially into C1...C7.
+    public func stageAll(recipes: [Recipe]) {
+        for (index, recipe) in recipes.prefix(7).enumerated() {
+            let slot = index + 1
+            applyRecipe(recipe, to: slot)
+        }
+    }
+
+    /// Clears local drafts for all 7 slots.
+    public func clearAllStaged() {
+        for slot in 1...7 {
+            clearLoadout(for: slot)
+        }
+    }
     
     public func loadoutCountWithSettings() -> Int {
         loadouts.filter { $0.hasAnySettings }.count

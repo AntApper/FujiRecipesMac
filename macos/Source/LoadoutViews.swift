@@ -39,9 +39,13 @@ public struct LoadoutsView: View {
                             slot: slot,
                             isSelected: selectedDialSlot == slot,
                             isDirty: loadouts.isDirty(slot),
+                            isCameraConnected: cameraManager.status == .connected,
+                            isCameraSlotEmpty: loadouts.isCameraSlotEmpty(slot),
+                            isWriting: cameraManager.operation == .writingSlot(slot),
                             onSelect: { selectedDialSlot = slot },
                             onClear: { slotPendingLocalClear = slot },
                             onEdit: { slotToEdit = loadout },
+                            onWriteToCamera: { writeSlot(slot) },
                             onDropRecipe: { recipe in
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                                     loadouts.applyRecipe(recipe, to: slot)
@@ -126,6 +130,22 @@ public struct LoadoutsView: View {
             refreshMessage = result.isComplete
                 ? "Read all 7 camera slots."
                 : "Read \(result.presets.count)/7 slots. Failed: \(result.failures.map { "C\($0.slot)" }.joined(separator: ", "))."
+        }
+    }
+
+    private func writeSlot(_ slot: Int) {
+        guard cameraManager.status == .connected, let loadout = loadouts.loadout(for: slot) else { return }
+        Task {
+            do {
+                let result = try await cameraManager.writeLoadout(loadout, to: slot)
+                if let observed = result.observedSnapshot, observed.slot == slot {
+                    loadouts.syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
+                    loadouts.markCameraWriteVerified(slot: slot)
+                }
+                refreshMessage = "✓ Verified C\(slot) on camera."
+            } catch {
+                refreshMessage = "Write failed for C\(slot): \(error.localizedDescription)"
+            }
         }
     }
 
@@ -253,9 +273,13 @@ public struct LoadoutCard: View {
     public let slot: Int
     public var isSelected: Bool = false
     public var isDirty: Bool = false
+    public var isCameraConnected: Bool = false
+    public var isCameraSlotEmpty: Bool = false
+    public var isWriting: Bool = false
     public var onSelect: () -> Void = {}
     public var onClear: () -> Void = {}
     public var onEdit: () -> Void = {}
+    public var onWriteToCamera: (() -> Void)? = nil
     public var onDropRecipe: ((Recipe) -> Void)? = nil
 
     @State private var isHovered = false
@@ -263,47 +287,67 @@ public struct LoadoutCard: View {
 
     private var accent: Color { slotAccent(slot) }
     private var isConfigured: Bool { loadout?.hasAnySettings ?? false }
+    private var isCameraVerified: Bool {
+        isCameraConnected && loadout?.provenance == .cameraSynced && !isDirty
+    }
 
     public init(
         loadout: Loadout?,
         slot: Int,
         isSelected: Bool = false,
         isDirty: Bool = false,
+        isCameraConnected: Bool = false,
+        isCameraSlotEmpty: Bool = false,
+        isWriting: Bool = false,
         onSelect: @escaping () -> Void = {},
         onClear: @escaping () -> Void = {},
         onEdit: @escaping () -> Void = {},
+        onWriteToCamera: (() -> Void)? = nil,
         onDropRecipe: ((Recipe) -> Void)? = nil
     ) {
         self.loadout = loadout
         self.slot = slot
         self.isSelected = isSelected
         self.isDirty = isDirty
+        self.isCameraConnected = isCameraConnected
+        self.isCameraSlotEmpty = isCameraSlotEmpty
+        self.isWriting = isWriting
         self.onSelect = onSelect
         self.onClear = onClear
         self.onEdit = onEdit
+        self.onWriteToCamera = onWriteToCamera
         self.onDropRecipe = onDropRecipe
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header: Slot Indicator & Actions
+            // Header: Slot Indicator & Status Badge
             slotHeader
 
             Divider()
                 .overlay(Theme.specularBorder)
                 .padding(.horizontal, 12)
 
-            // Body
-            if isConfigured, let loadout {
-                configuredBody(loadout)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else {
-                emptyBody
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            // Content Body
+            VStack(alignment: .leading, spacing: 8) {
+                if isConfigured, let loadout {
+                    configuredBody(loadout)
+                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                } else {
+                    emptyBody
+                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                }
+
+                // Camera vs Staged Comparison Box
+                cameraVsStagedComparison
+
+                // Direct Slot Action Bar
+                slotActionBar
             }
+            .padding(12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(minHeight: 160)
+        .frame(minHeight: 185)
         .glassCard(
             padding: 0,
             radius: 14,
@@ -415,64 +459,204 @@ public struct LoadoutCard: View {
 
             Spacer()
 
-            if isConfigured {
-                HStack(spacing: 5) {
-                    Button(action: onEdit) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.textSecondary)
-                            .padding(5)
-                            .background(Circle().fill(Color.white.opacity(0.08)))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Edit parameters for C\(slot)")
-                    .accessibilityLabel("Edit slot C\(slot)")
-                    .accessibilityHint("Opens the editor for this local slot draft.")
-
-                    Button(action: onClear) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.textTertiary)
-                            .padding(3)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear local draft for C\(slot)")
-                    .accessibilityLabel("Clear local draft for C\(slot)")
-                    .accessibilityHint("Removes only the local recipe draft; it does not change the camera slot.")
-                    .accessibilityIdentifier("clear-local-draft-slot-\(slot)")
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else {
-                Text("EMPTY SLOT")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Theme.textMuted)
-                    .transition(.opacity)
-            }
+            // Status Badge
+            statusBadge
         }
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
     }
 
+    private var statusBadge: some View {
+        Group {
+            if !isConfigured {
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(Theme.textTertiary.opacity(0.4))
+                        .frame(width: 5, height: 5)
+                    Text("EMPTY")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.white.opacity(0.04), in: Capsule())
+            } else if isCameraVerified {
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("CAMERA-VERIFIED")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                }
+                .foregroundStyle(Theme.emeraldGreen)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Theme.emeraldGreen.opacity(0.14), in: Capsule())
+            } else {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("STAGED · READY TO SYNC")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                }
+                .foregroundStyle(Theme.fujiAmber)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Theme.fujiAmber.opacity(0.14), in: Capsule())
+            }
+        }
+    }
+
+    private var cameraVsStagedComparison: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Local Staged Row
+            HStack(spacing: 5) {
+                Image(systemName: "square.and.arrow.down.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(isConfigured ? Theme.fujiAmber : Theme.textTertiary)
+                Text("STAGED:")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
+                Text(isConfigured ? (loadout?.recipeName ?? loadout?.name ?? "C\(slot)") : "Unassigned")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(isConfigured ? Color.white : Theme.textTertiary)
+                    .lineLimit(1)
+            }
+
+            // Physical Camera Row
+            HStack(spacing: 5) {
+                Image(systemName: isCameraConnected ? "camera.fill" : "camera")
+                    .font(.system(size: 8))
+                    .foregroundStyle(isCameraVerified ? Theme.emeraldGreen : Theme.textTertiary)
+                Text("CAMERA:")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
+                Text(cameraStateDescription)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(isCameraVerified ? Theme.emeraldGreen : Theme.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 0.8)
+                )
+        )
+    }
+
+    private var cameraStateDescription: String {
+        guard isCameraConnected else {
+            return "Camera offline"
+        }
+        if isCameraSlotEmpty {
+            return "Empty on camera"
+        }
+        if isCameraVerified {
+            return "Verified: \(loadout?.name ?? "C\(slot)")"
+        }
+        if isDirty {
+            return "Unsynced local edits"
+        }
+        return "Not read"
+    }
+
+    private var slotActionBar: some View {
+        HStack(spacing: 6) {
+            // Write C{x} to Camera button
+            if let onWriteToCamera {
+                Button {
+                    onWriteToCamera()
+                } label: {
+                    HStack(spacing: 3) {
+                        if isWriting {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        Text("Write C\(slot)")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(canWriteToCamera ? Theme.emeraldGreen.opacity(0.2) : Color.white.opacity(0.05))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(canWriteToCamera ? Theme.emeraldGreen.opacity(0.55) : Color.white.opacity(0.08), lineWidth: 0.8)
+                    )
+                    .foregroundStyle(canWriteToCamera ? Theme.emeraldGreen : Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canWriteToCamera || isWriting)
+                .help("Write C\(slot) directly to camera")
+            }
+
+            // Edit Settings button
+            Button(action: onEdit) {
+                HStack(spacing: 3) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 8, weight: .semibold))
+                    Text("Edit")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                )
+                .foregroundStyle(Theme.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("Edit parameters for C\(slot)")
+
+            // Clear button
+            if isConfigured {
+                Button(action: onClear) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Clear local draft for C\(slot)")
+                .accessibilityIdentifier("clear-local-draft-slot-\(slot)")
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private var canWriteToCamera: Bool {
+        isCameraConnected && isConfigured
+    }
+
     private func configuredBody(_ loadout: Loadout) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             // Recipe Title
             Text(loadout.recipeName ?? loadout.name)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .glassPrimary()
                 .lineLimit(1)
 
-            Text(syncStateLabel)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundStyle(isDirty ? Theme.fujiAmber : Theme.emeraldGreen)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background((isDirty ? Theme.fujiAmber : Theme.emeraldGreen).opacity(0.14))
-                .clipShape(Capsule())
-                .accessibilityIdentifier("slot-sync-state-\(slot)")
-
-            // Film Sim Badge + Dynamic Range
-            HStack(spacing: 5) {
+            // Film Sim Badge + Dynamic Range + White Balance
+            HStack(spacing: 4) {
                 if let fs = loadout.filmSim {
                     FilmSimBadge(name: fs.displayName, isCompact: true)
                 }
@@ -481,17 +665,17 @@ public struct LoadoutCard: View {
                     Text("DR\(dr.rawValue)")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .foregroundStyle(Theme.emeraldGreen)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(Theme.emeraldGreen.opacity(0.15))
                         .clipShape(Capsule())
                 }
 
                 if let wb = loadout.wb {
-                    Text(wb.displayName)
-                        .font(.system(size: 8, weight: .medium))
+                    Text(wb == .colorTemperature && loadout.colorTempK != nil ? "\(loadout.colorTempK!)K" : wb.displayName)
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
                         .foregroundStyle(Theme.cyanAccent)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, 4)
                         .padding(.vertical, 2)
                         .background(Theme.cyanAccent.opacity(0.12))
                         .clipShape(Capsule())
@@ -507,17 +691,11 @@ public struct LoadoutCard: View {
                 sharpness: loadout.sharpness,
                 accentColor: accent
             )
-
-            Spacer(minLength: 2)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
     }
 
     private var emptyBody: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Spacer()
             HStack(spacing: 6) {
                 Image(systemName: "dial.low")
                     .font(.body)
@@ -526,16 +704,12 @@ public struct LoadoutCard: View {
                     .font(.caption.weight(.semibold))
                     .glassSecondary()
             }
-            Text(isDirty
-                ? "Local draft cleared. The physical camera slot was not changed."
-                : "Choose any recipe from the Recipes tab and click “Send to Dial”.")
+            Text("Drag a recipe here or click Edit to stage a formula.")
                 .font(.caption2)
                 .glassTertiary()
                 .lineLimit(2)
-            Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
 
     private var syncStateLabel: String {
@@ -557,6 +731,7 @@ public struct SlotEditorSheet: View {
     @State private var selectedDR: DynamicRange?
     @State private var selectedGrain: GrainEffect?
     @State private var selectedWB: WhiteBalanceMode?
+    @State private var colorTemperature: Int
     @State private var draftName: String
     @State private var writeMessage: String?
     @State private var highlight: Int32 = 0
@@ -578,6 +753,7 @@ public struct SlotEditorSheet: View {
         self._selectedDR = State(initialValue: loadout.dr)
         self._selectedGrain = State(initialValue: loadout.grain)
         self._selectedWB = State(initialValue: loadout.wb)
+        self._colorTemperature = State(initialValue: Int(loadout.colorTempK ?? 5600))
         self._draftName = State(initialValue: loadout.name)
         self._highlight = State(initialValue: loadout.highlight ?? 0)
         self._shadow = State(initialValue: loadout.shadow ?? 0)
@@ -626,6 +802,47 @@ public struct SlotEditorSheet: View {
                         pickerSection("DYNAMIC RANGE", selection: $selectedDR, values: [.auto, .dr100, .dr200, .dr400]) { $0.displayName }
                         pickerSection("GRAIN EFFECT", selection: $selectedGrain, values: [.off, .weakSmall, .strongSmall, .weakLarge, .strongLarge]) { $0.displayName }
                         pickerSection("WHITE BALANCE", selection: $selectedWB, values: [.asShot, .auto, .daylight, .cloudy, .tungsten, .fluorescent1, .fluorescent2, .fluorescent3, .shade, .colorTemperature, .ambiencePriority, .underwater]) { $0.displayName }
+
+                        // Kelvin Temperature Slider & Stepper (when White Balance is Color Temperature)
+                        if selectedWB == .colorTemperature {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("COLOR TEMPERATURE (KELVIN)")
+                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(Theme.textTertiary)
+                                    Spacer()
+                                    Text("\(colorTemperature) K")
+                                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(Theme.fujiAmber)
+                                }
+
+                                Slider(
+                                    value: Binding(
+                                        get: { Double(colorTemperature) },
+                                        set: { colorTemperature = Int((($0 / 100).rounded()) * 100) }
+                                    ),
+                                    in: 2500...10000,
+                                    step: 100
+                                )
+                                .tint(Theme.fujiAmber)
+
+                                HStack {
+                                    Text("2500K (Warm Incandescent)")
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundStyle(Theme.textTertiary)
+                                    Spacer()
+                                    Stepper("", value: $colorTemperature, in: 2500...10000, step: 100)
+                                        .labelsHidden()
+                                    Spacer()
+                                    Text("10000K (Cool Shade)")
+                                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                        .foregroundStyle(Theme.textTertiary)
+                                }
+                            }
+                            .padding(10)
+                            .glassCard(padding: 0, radius: 10)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
 
                         // Tone Offset Sliders
                         VStack(alignment: .leading, spacing: 12) {
@@ -725,6 +942,7 @@ public struct SlotEditorSheet: View {
         loadout.dr = selectedDR
         loadout.grain = selectedGrain
         loadout.wb = selectedWB
+        loadout.colorTempK = selectedWB == .colorTemperature ? UInt32(colorTemperature) : nil
         loadout.highlight = includesHighlight ? highlight : nil
         loadout.shadow = includesShadow ? shadow : nil
         loadout.color = includesColor ? color : nil

@@ -46,20 +46,17 @@ public final class CameraManager: ObservableObject {
                 model: info.model,
                 vendorExtensionId: info.vendorExtensionId
             )
-            status = .connected
-            operation = .idle
-
             // Active settings can fail for properties not supported in the current
             // USB mode; don't let that fail the whole connection.
             await readActiveSettings()
 
-            // C-slot reads select and inspect seven camera slots, so run that
-            // best-effort sync after reporting the verified PTP connection.
-            // The Hub stays interactive even if a camera-side slot read stalls.
-            Task { [weak self, weak loadouts] in
-                guard let self, self.status == .connected else { return }
-                _ = await self.refreshCameraSlots(into: loadouts)
+            // Inspect and sync camera slots so state is verified before reporting connected.
+            if let loadouts {
+                _ = await refreshCameraSlots(into: loadouts)
             }
+
+            status = .connected
+            operation = .idle
         } catch {
             status = .error
             operation = .failed("Connection failed")
@@ -183,6 +180,37 @@ public final class CameraManager: ObservableObject {
             lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
             throw error
         }
+    }
+
+    // MARK: - Batch Write Staged Slots
+
+    /// Writes all staged/configured loadout slots (1...7) sequentially to the camera.
+    ///
+    /// For each slot where `loadouts.loadout(for: slot).hasAnySettings` (or dirty/staged),
+    /// this writes the loadout to the slot, syncs the observed snapshot back to the store,
+    /// marks the write verified, and collects the result.
+    public func writeAllStagedSlots(from loadouts: LoadoutStore) async -> [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] {
+        var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
+
+        for slot in 1...7 {
+            guard let loadout = loadouts.loadout(for: slot),
+                  loadout.hasAnySettings || loadouts.isDirty(slot) else {
+                continue
+            }
+
+            do {
+                let writeResult = try await writeLoadout(loadout, to: slot)
+                if let snapshot = writeResult.observedSnapshot {
+                    loadouts.syncFromCameraPresetData([snapshot], overwriteDirtyDrafts: true)
+                }
+                loadouts.markCameraWriteVerified(slot: slot)
+                results.append((slot: slot, result: .success(writeResult)))
+            } catch {
+                results.append((slot: slot, result: .failure(error)))
+            }
+        }
+
+        return results
     }
 
     // MARK: - RAF Conversion

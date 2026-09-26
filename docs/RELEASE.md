@@ -10,9 +10,11 @@ Before overwriting a slot:
 
 1. Put the X100VI in **USB RAW CONV./BACKUP RESTORE** mode and use a USB-C data
    cable.
-2. Close Photos, Image Capture, Preview, and other camera clients. macOS's
-   `ptpcamerad` can claim the interface; reconnect the camera and retry if the
-   app cannot open a PTP session.
+2. The default ImageCaptureCore transport lets macOS's PTP service
+   (`ptpcamerad`) own the USB session, so competing camera applications should
+   not need to be stopped. If the legacy helper is explicitly selected with
+   `FUJI_RECIPES_TRANSPORT=helper`, close other camera clients and reconnect
+   before retrying if the app cannot open a PTP session.
 3. Read and retain a complete baseline of the target slot. Empty raw-zero
    sentinel values are not a usable rollback fixture; use a documented,
    camera-accepted replacement baseline for an empty slot.
@@ -35,11 +37,12 @@ This evidence applies only to the tested X100VI/helper combination.
   and hardware notes are experimental validation material. Do not advertise,
   package, or support conversion as a released macOS capability.
 - **iOS is separate.** Its transport and device validation are independent of
-  this macOS raw-libusb helper and do not receive C1–C7 support from this
-  release evidence.
+  the macOS transport and do not receive C1–C7 support from this release
+  evidence.
 - **Mac App Store distribution is unsupported.** The app bundles and launches
-  a raw-libusb helper, while `ptpcamerad` can contend for the same PTP
-  interface. That model has not been demonstrated to work under App Sandbox
+  an ImageCaptureCore transport by default, but the explicit legacy
+  `FUJI_RECIPES_TRANSPORT=helper` path launches a raw-libusb helper. Neither
+  distribution path has been demonstrated to work under App Sandbox
   restrictions.
 
 ## Reproducible local checks
@@ -70,7 +73,7 @@ test, not a distributable build.
 
 ## Universal helper-runtime requirement
 
-The checked-in helper resources are currently universal. The default libusb
+The checked-in helper resources are currently universal. The legacy libusb
 runtime from an Apple-silicon Homebrew installation is commonly arm64-only
 (including the current `/opt/homebrew/opt/libusb` runtime), so it cannot
 rebuild those release resources. This is an intentional release blocker:

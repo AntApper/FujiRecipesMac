@@ -2,20 +2,16 @@
 
 This repository can build a Developer ID signing candidate and validate its
 local bundle evidence. It cannot prove notarization, distribute a release, or
-make raw USB camera access reliable without the external Apple account,
-certificate, and hardware steps described below.
+make camera behavior reliable without the external Apple account, certificate,
+and hardware steps described below.
 
 ## Current development boundary
 
-- The macOS app launches a bundled `x100vi_helper` executable that uses raw
-  libusb access to communicate with an X100VI. Release builds accept only
-  `Fuji Recipes.app/Contents/Resources/x100vi_helper`, alongside its bundled
-  libusb dylib. They cannot silently substitute a helper from `PATH`, a
-  Homebrew prefix, or a developer checkout. Debug builds retain explicit
-  development discovery; `FUJI_RECIPES_X100VI_HELPER` selects a local helper
-  path when a non-bundled SwiftPM/Xcode run needs one.
-- `ptpcamerad` may claim the USB PTP interface. Development testing currently
-  requires stopping that service before the helper can claim the device.
+- The macOS app now defaults to `ImageCaptureCorePTPClient`, which lets
+  ImageCaptureCore/`ptpcamerad` own the USB PTP session. The bundled
+  `x100vi_helper` and libusb runtime remain an explicit fallback selected with
+  `FUJI_RECIPES_TRANSPORT=helper`; that path retains the interface-ownership
+  caveat described below.
 - The helper now loads a bundled `libusb-1.0.0.dylib` through
   `@rpath/libusb-1.0.0.dylib` with an `@loader_path` rpath. Its source,
   helper, and runtime SHA-256 values are recorded in the app resource
@@ -104,15 +100,13 @@ Enabling `ENABLE_HARDENED_RUNTIME` in the Release target only configures the
 build requirement. It does not sign the application, grant USB access, or
 establish notarization acceptance.
 
-## Raw libusb / PTP platform caveat
+## Raw libusb / PTP fallback caveat
 
-The current camera transport claims the USB PTP interface directly through
-libusb. On macOS, `ptpcamerad` can automatically claim that same interface;
-development testing has sometimes required manually stopping it. This is an
-operational limitation, not a shipping solution. The behavior has not been
-validated under App Sandbox restrictions and may require a different transport
-or privileged/system integration for dependable distribution. No camera-access
-claim is made by the credential-free packaging checks.
+The explicit legacy helper claims the USB PTP interface directly through
+libusb. On macOS, `ptpcamerad` can automatically claim that same interface.
+The default ImageCaptureCore path is intended to avoid that conflict, but it
+still requires physical X100VI validation before release confidence. The
+behavior of either path has not been validated under App Sandbox restrictions.
 
 ## Required evidence before a public macOS release
 

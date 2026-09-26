@@ -4,6 +4,14 @@
 **Status:** Accepted  
 **Context:** Session 4 hardware probe results
 
+> **Current status (2026-09-17):** The original macOS ImageCaptureCore
+> conclusion below is historical and is being revisited. The repository now
+> contains an opt-in `ImageCaptureCorePTPClient` for the X100VI, specifically
+> intended to avoid direct USB interface ownership conflicts with
+> `ptpcamerad`. It remains pending physical-camera validation before becoming
+> the macOS default. Do not remove that implementation based solely on the
+> earlier probe result.
+
 ## Problem
 
 We need a Fujifilm recipe manager that:

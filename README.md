@@ -31,9 +31,10 @@ and the [release guide](docs/RELEASE.md) for the exact scope and test process.
   the supported macOS release promise.
 - **iOS is a separate workstream.** It does not inherit the macOS libusb
   transport, release status, or C-slot hardware validation.
-- **Mac App Store distribution is not supported.** The app directly launches a
-  libusb helper and competes with macOS's `ptpcamerad` service for the USB PTP
-  interface; this design has not been validated for the App Sandbox.
+- **Mac App Store distribution is not supported.** The default app transport
+  uses ImageCaptureCore, but the legacy raw-libusb helper remains available
+  through `FUJI_RECIPES_TRANSPORT=helper` and has not been validated for the
+  App Sandbox.
 - A direct macOS build is only a Developer ID candidate after it has been
   signed, timestamped, notarized, and hardware-tested. Credential-free builds
   are ad-hoc signed structural checks, not distributable releases.

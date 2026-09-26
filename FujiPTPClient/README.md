@@ -48,6 +48,16 @@ Uses **libgphoto2** for PTP communication. libgphoto2 provides built-in Fuji X10
 - Wire up `gp_camera_init()`, `gp_camera_set_config()`, `gp_camera_get_config()`
 - Map PTP property codes to libgphoto2 config keys
 
+### macOS native transport (ImageCaptureCorePTPClient)
+
+Uses **ImageCaptureCore** (`requestSendPTPCommand`) for the X100VI's native
+USB PTP session. This is the macOS app's default transport. The legacy helper
+can be selected explicitly with `FUJI_RECIPES_TRANSPORT=helper`.
+
+It is designed to avoid direct libusb interface ownership and therefore does
+not depend on stopping or coordinating with `ptpcamerad`. Hardware validation
+must still cover repeated reconnects, reads, writes, and unplug recovery.
+
 ### iOS (IOSSession)
 
 Uses **ImageCaptureCore** (`requestSendPTPCommand`). Untested on actual hardware.
@@ -94,6 +104,7 @@ session.disconnect()
 
 ## Known Issues
 
-- macOS ImageCaptureCore **cannot** send raw PTP to Fuji cameras (Session 4 probe confirmed)
+- macOS native ImageCaptureCore transport still requires physical X100VI
+  validation for release confidence.
 - iOS ImageCaptureCore PTP support **untested** — must be validated on hardware
 - libgphoto2 bundling requires static library builds for both arm64 and x86_64

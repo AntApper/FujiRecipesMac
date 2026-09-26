@@ -1,6 +1,7 @@
 import SwiftUI
 import FujiRecipesCore
 import X100VIHelper
+import PTPClientMacOS
 
 private enum MacAppCommand {
     static let refreshRecipes = Notification.Name("com.ant.fuji-recipes.refresh-recipes")
@@ -16,6 +17,10 @@ public typealias CameraSessionFactory = @Sendable () -> any PTPClientProtocol
 private enum MacAppLaunchConfiguration {
     static var isUITesting: Bool {
         ProcessInfo.processInfo.environment["FUJI_RECIPES_CUSTOM_LIBRARY_PATH"] != nil
+    }
+
+    static var usesImageCaptureCoreTransport: Bool {
+        ProcessInfo.processInfo.environment["FUJI_RECIPES_TRANSPORT"] != "helper"
     }
 
     /// UI tests supply a unique path so their custom-library fixture cannot
@@ -58,7 +63,12 @@ struct FujiRecipesMacApp: App {
         WindowGroup {
             FujiRecipesMacRoot(
                 recipeStore: MacAppLaunchConfiguration.recipeStore(),
-                cameraSessionFactory: { X100VIHelperClient() }
+                cameraSessionFactory: {
+                    if MacAppLaunchConfiguration.usesImageCaptureCoreTransport {
+                        return ImageCaptureCorePTPClient()
+                    }
+                    return X100VIHelperClient()
+                }
             )
         }
         .windowStyle(.hiddenTitleBar)

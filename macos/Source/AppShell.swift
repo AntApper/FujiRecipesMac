@@ -77,30 +77,20 @@ public struct SidebarView: View {
                         HStack(spacing: 3) {
                             ForEach(1...7, id: \.self) { slot in
                                 let loadout = recipeStore.loadouts.loadout(for: slot)
-                                let hasSetting = loadout?.hasAnySettings ?? false
-                                Button {
-                                    withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
-                                        selection = .loadouts
+                                SidebarMiniDialSlot(
+                                    slot: slot,
+                                    loadout: loadout,
+                                    onSelect: {
+                                        withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                                            selection = .loadouts
+                                        }
+                                    },
+                                    onDropRecipe: { recipe in
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                            recipeStore.loadouts.applyRecipe(recipe, to: slot)
+                                        }
                                     }
-                                } label: {
-                                    VStack(spacing: 1) {
-                                        Text("C\(slot)")
-                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(hasSetting ? Color.black : Theme.textTertiary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                            .fill(hasSetting ? Theme.fujiAmber : Color.white.opacity(0.05))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                            .stroke(hasSetting ? Theme.fujiAmber.opacity(0.6) : Color.white.opacity(0.08), lineWidth: 0.8)
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .help(loadout?.recipeName ?? "C\(slot): Empty")
+                                )
                             }
                         }
                         .padding(.horizontal, 8)
@@ -364,6 +354,61 @@ private struct SidebarRow: View {
         if isSelected { return Color.white.opacity(0.12) }
         if isHovered { return Color.white.opacity(0.05) }
         return Color.clear
+    }
+}
+
+// MARK: - Sidebar Mini Dial Slot (Drag & Drop Target)
+
+private struct SidebarMiniDialSlot: View {
+    let slot: Int
+    let loadout: Loadout?
+    let onSelect: () -> Void
+    let onDropRecipe: (Recipe) -> Void
+
+    @State private var isDropTargeted = false
+
+    private var hasSetting: Bool { loadout?.hasAnySettings ?? false }
+    private var accent: Color { slotAccent(slot) }
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(spacing: 1) {
+                Text("C\(slot)")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(isDropTargeted ? Color.black : (hasSetting ? Color.black : Theme.textTertiary))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isDropTargeted ? Theme.fujiAmber : (hasSetting ? Theme.fujiAmber : Color.white.opacity(0.05)))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(
+                        isDropTargeted
+                            ? Color.white
+                            : (hasSetting ? Theme.fujiAmber.opacity(0.6) : Color.white.opacity(0.08)),
+                        lineWidth: isDropTargeted ? 1.5 : 0.8
+                    )
+            )
+            .shadow(color: isDropTargeted ? Theme.fujiAmber.opacity(0.9) : Color.clear, radius: isDropTargeted ? 8 : 0)
+            .scaleEffect(isDropTargeted ? 1.18 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .dropDestination(for: Recipe.self) { items, _ in
+            guard let recipe = items.first else { return false }
+            onDropRecipe(recipe)
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.75)) {
+                isDropTargeted = targeted
+            }
+        }
+        .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isDropTargeted)
+        .help(isDropTargeted ? "Drop recipe to stage into C\(slot)" : (loadout?.recipeName ?? "C\(slot): Empty"))
+        .accessibilityLabel("Slot C\(slot), \(hasSetting ? (loadout?.recipeName ?? "configured") : "empty")")
+        .accessibilityHint("Click to view C1–C7 matrix, or drop a recipe here to stage it.")
     }
 }
 

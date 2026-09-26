@@ -1,8 +1,8 @@
 import XCTest
 @testable import FujiRecipesCore
 
-@MainActor
 final class CameraWriteVerificationTests: XCTestCase {
+    @MainActor
     func testSuccessfulWriteReturnsObservedPostWriteSnapshot() async throws {
         let baseline = PTPClientPresetData(slot: 2, name: "Before", filmSimulation: 3)
         let observed = PTPClientPresetData(slot: 2, name: "Camera Truth", filmSimulation: 7)
@@ -24,6 +24,7 @@ final class CameraWriteVerificationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(client.postWriteReadCount, 1)
     }
 
+    @MainActor
     func testPostWriteReadFailureRestoresConfiguredBaselineAndReportsVerificationPhase() async {
         let baseline = PTPClientPresetData(slot: 5, name: "Before", filmSimulation: 3)
         let client = WriteVerificationPTPClient(

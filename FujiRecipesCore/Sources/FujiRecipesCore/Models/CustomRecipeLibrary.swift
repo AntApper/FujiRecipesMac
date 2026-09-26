@@ -1,4 +1,6 @@
+#if canImport(Combine)
 import Combine
+#endif
 import Foundation
 
 /// The portable, versioned format used for a user's locally authored recipes.

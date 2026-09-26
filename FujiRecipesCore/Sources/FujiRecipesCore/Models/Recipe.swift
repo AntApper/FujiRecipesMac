@@ -139,3 +139,25 @@ public struct Recipe: Identifiable, Codable, Sendable {
         clarity != nil
     }
 }
+
+#if canImport(CoreTransferable) && canImport(UniformTypeIdentifiers)
+import CoreTransferable
+import UniformTypeIdentifiers
+
+@available(macOS 13.0, iOS 16.0, *)
+public extension UTType {
+    static var fujiRecipe: UTType {
+        UTType(exportedAs: "com.ant.fuji-recipes.recipe", conformingTo: .json)
+    }
+}
+
+@available(macOS 13.0, iOS 16.0, *)
+extension Recipe: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .fujiRecipe)
+        CodableRepresentation(contentType: .json)
+        ProxyRepresentation(exporting: \.id)
+    }
+}
+#endif
+

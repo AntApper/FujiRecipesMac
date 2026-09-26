@@ -4,7 +4,87 @@
 
 import Foundation
 
+#if !canImport(Darwin)
+extension FileHandle {
+    struct LinuxAsyncBytes: AsyncSequence {
+        typealias Element = UInt8
+        let handle: FileHandle
+
+        struct AsyncIterator: AsyncIteratorProtocol {
+            let handle: FileHandle
+            var buffer = Data()
+            var index = 0
+
+            mutating func next() async throws -> UInt8? {
+                if index < buffer.count {
+                    let byte = buffer[index]
+                    index += 1
+                    return byte
+                }
+                buffer = handle.readData(ofLength: 4096)
+                index = 0
+                if buffer.isEmpty { return nil }
+                let byte = buffer[index]
+                index += 1
+                return byte
+            }
+        }
+
+        func makeAsyncIterator() -> AsyncIterator {
+            AsyncIterator(handle: handle)
+        }
+
+        var lines: LinuxAsyncLineSequence<LinuxAsyncBytes> {
+            LinuxAsyncLineSequence(self)
+        }
+    }
+
+    var bytes: LinuxAsyncBytes {
+        LinuxAsyncBytes(handle: self)
+    }
+}
+
+struct LinuxAsyncLineSequence<Base: AsyncSequence>: AsyncSequence where Base.Element == UInt8 {
+    typealias Element = String
+    let base: Base
+
+    init(_ base: Base) {
+        self.base = base
+    }
+
+    struct AsyncIterator: AsyncIteratorProtocol {
+        var baseIterator: Base.AsyncIterator
+
+        mutating func next() async throws -> String? {
+            var lineBytes: [UInt8] = []
+            while let byte = try await baseIterator.next() {
+                if byte == UInt8(ascii: "\n") {
+                    return String(decoding: lineBytes, as: UTF8.self)
+                }
+                if byte != UInt8(ascii: "\r") {
+                    lineBytes.append(byte)
+                }
+            }
+            if !lineBytes.isEmpty {
+                return String(decoding: lineBytes, as: UTF8.self)
+            }
+            return nil
+        }
+    }
+
+    func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(baseIterator: base.makeAsyncIterator())
+    }
+}
+#endif
+
 // MARK: - Helpers
+
+func writeStderr(_ string: String) {
+    if let data = string.data(using: .utf8) {
+        FileHandle.standardError.write(data)
+    }
+}
 
 func writeStdout(_ string: String) {
     guard let data = (string + "\n").data(using: .utf8) else { return }
@@ -42,7 +122,7 @@ let session = PTPHelperSession()
 
 @MainActor
 func handleCommand(_ request: [String: Any]) -> PTPHelperResponse {
-    fputs("[HELPER] handleCommand called\n", stderr)
+    writeStderr("[HELPER] handleCommand called\n")
     guard let id = request["id"] as? String else {
         return PTPHelperResponse(id: "error", success: false, result: nil, error: "missing_id")
     }
@@ -210,18 +290,18 @@ func executeCommand(_ name: String, params: [String: Any], requestID: String) ->
 
 // MARK: - Main Loop
 
-fputs("[HELPER] Starting main loop...\n", stderr)
+writeStderr("[HELPER] Starting main loop...\n")
 
 // Read stdin line-by-line so the helper stays alive and can process many
 // commands.  The previous `readDataToEndOfFile()` blocked forever while the
 // parent kept the pipe open.
 do {
     for try await rawLine in FileHandle.standardInput.bytes.lines {
-        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        let line = rawLine.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         guard !line.isEmpty else { continue }
-        fputs("[HELPER] Line: \(line)\n", stderr)
+        writeStderr("[HELPER] Line: \(line)\n")
 
-        guard let requestData = line.data(using: .utf8),
+        guard let requestData = line.data(using: String.Encoding.utf8),
               let request = try? JSONSerialization.jsonObject(with: requestData) as? [String: Any] else {
             let errorResponse = PTPHelperResponse(id: "error", success: false, result: nil, error: "invalid_json")
             if let json = try? JSONEncoder().encode(errorResponse),
@@ -247,7 +327,7 @@ do {
         }
     }
 } catch {
-    fputs("[HELPER] stdin read error: \(error)\n", stderr)
+    writeStderr("[HELPER] stdin read error: \(error)\n")
 }
 
 exit(0)

@@ -1,9 +1,9 @@
 import XCTest
 @testable import FujiRecipesCore
 
-@MainActor
 final class CustomRecipeLibraryTests: XCTestCase {
-    func testSavePersistsAndReloadsRecipe() throws {
+    @MainActor
+    func testSavePersistsAndReloadsRecipe() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("custom-recipes-v1.json")
@@ -15,7 +15,8 @@ final class CustomRecipeLibraryTests: XCTestCase {
         XCTAssertEqual(reloaded.recipes.map(\.name), ["Night Walk"])
     }
 
-    func testExportAndImportMergeByStableID() throws {
+    @MainActor
+    func testExportAndImportMergeByStableID() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let first = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("first.json"), loadOnInit: false)
@@ -29,7 +30,8 @@ final class CustomRecipeLibraryTests: XCTestCase {
         XCTAssertEqual(second.recipes.map(\.name), ["Original"])
     }
 
-    func testImportRejectsUnsupportedAndDuplicateRecords() throws {
+    @MainActor
+    func testImportRejectsUnsupportedAndDuplicateRecords() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let library = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("library.json"), loadOnInit: false)

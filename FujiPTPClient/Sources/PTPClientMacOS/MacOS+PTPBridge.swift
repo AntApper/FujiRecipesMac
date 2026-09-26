@@ -73,7 +73,8 @@ final class PTPHelperBridge: @unchecked Sendable {
     }
 
     func sendCommand(_ command: String, parameters: [String: Any] = [:], timeout: TimeInterval = 15.0) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
+        nonisolated(unsafe) let params = parameters
+        return try await withCheckedThrowingContinuation { continuation in
             queue.async { [weak self] in
                 guard let self = self else {
                     continuation.resume(throwing: PTPError.platformError("Bridge destroyed"))
@@ -94,7 +95,7 @@ final class PTPHelperBridge: @unchecked Sendable {
 
                 let request: [String: Any] = [
                     "id": id,
-                    "command": [command: parameters]
+                    "command": [command: params]
                 ]
 
                 guard let json = try? JSONSerialization.data(withJSONObject: request),

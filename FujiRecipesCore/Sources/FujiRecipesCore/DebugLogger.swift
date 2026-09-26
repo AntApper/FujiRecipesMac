@@ -104,6 +104,7 @@ public final class DebugLogger: @unchecked Sendable {
         let msg = message()
         let formatted = "[\(timestamp)] \(level.rawValue) \(category.emoji)[\(category.rawValue)] \(shortFile):\(line) \(msg)"
 
+        #if canImport(os)
         // Send to Apple's unified logging system
         let logger = Logger(subsystem: subsystem, category: category.rawValue)
         switch level {
@@ -114,6 +115,7 @@ public final class DebugLogger: @unchecked Sendable {
         case .error:   logger.error("\(msg)")
         case .fault:   logger.fault("\(msg)")
         }
+        #endif
 
         // Notify subscribers without holding the lock, and dispatch to the
         // main actor so listeners can safely mutate @Published SwiftUI state.

@@ -23,6 +23,7 @@ public final class CrashReportHelper: @unchecked Sendable {
     
     /// Set up crash monitoring. Call once at app launch.
     public static func setup() {
+        #if canImport(Darwin)
         // Install uncaught exception handler for Objective-C exceptions.
         // Note: Swift fatal errors (e.g. force unwraps, precondition failures)
         // terminate via abort(), which is a signal context.  Handling signals
@@ -31,8 +32,10 @@ public final class CrashReportHelper: @unchecked Sendable {
         // so we intentionally do NOT install SIGSEGV/SIGABRT handlers here.
         // The OS crash reporter captures those; we only capture NSExceptions.
         NSSetUncaughtExceptionHandler(FujiRecipes_uncaughtExceptionHandler)
+        #endif
     }
     
+    #if canImport(Darwin)
     /// Capture diagnostic data from an uncaught exception.
     public static func captureException(_ exception: NSException, favorites: Set<String> = [], loadoutSummary: String = "") -> CrashReport {
         let callStack = exception.callStackSymbols ?? []
@@ -48,6 +51,7 @@ public final class CrashReportHelper: @unchecked Sendable {
             favoritesCount: favorites.count
         )
     }
+    #endif
     
     /// Capture diagnostic data from a POSIX signal.
     public static func captureSignalReport(_ signal: Int32, favorites: Set<String> = [], loadoutSummary: String = "") -> CrashReport {
@@ -192,8 +196,10 @@ func FujiRecipes_ABORT_handler_void(_ sig: Int32) {
     FujiRecipes_ABORT_handler(sig)
 }
 
+#if canImport(Darwin)
 // Global uncaught exception handler (no context capture for C function pointer)
 func FujiRecipes_uncaughtExceptionHandler(_ exception: NSException) {
     let report = CrashReportHelper.captureException(exception)
     CrashReportHelper.saveCrashReport(report)
 }
+#endif

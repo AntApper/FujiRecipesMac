@@ -1,6 +1,7 @@
 import SwiftUI
 import FujiRecipesCore
 import X100VIHelper
+import PTPClientMacOS
 import UniformTypeIdentifiers
 
 public extension UTType {
@@ -27,7 +28,7 @@ public struct CameraConnectionView: View {
     public init(
         manager: CameraManager,
         loadouts: LoadoutStore,
-        cameraSessionFactory: @escaping CameraSessionFactory = { X100VIHelperClient() }
+        cameraSessionFactory: @escaping CameraSessionFactory = { ImageCaptureCorePTPClient() }
     ) {
         self.manager = manager
         self.loadouts = loadouts

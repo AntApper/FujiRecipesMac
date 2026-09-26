@@ -17,6 +17,7 @@ let package = Package(
             dependencies: [
                 "FujiRecipesCore",
                 .product(name: "X100VIHelper", package: "FujiPTPClient"),
+                .product(name: "PTPClientMacOS", package: "FujiPTPClient"),
                 .product(name: "GPhoto2CLI", package: "FujiPTPClient"),
             ],
             path: "Source",

@@ -140,6 +140,61 @@ The C1–C7 workflow is hardware-validated only for the Fujifilm X100VI
 Fujifilm bodies. See [RELEASE.md](RELEASE.md) for the supported scope and
 release boundary.
 
+### Native ImageCaptureCore transport validation
+
+The repository includes a macOS transport that lets
+ImageCaptureCore/`ptpcamerad` own the USB session instead of the raw-libusb
+helper. This is now the application default and is the intended path for
+eliminating direct USB interface competition. Set
+`FUJI_RECIPES_TRANSPORT=helper` only when deliberately falling back to the
+legacy raw-libusb helper.
+
+The native setting is already the default. It may also be selected explicitly
+in the Xcode scheme environment:
+
+```bash
+FUJI_RECIPES_TRANSPORT=image-capture-core
+```
+
+Then build/run the `FujiRecipesMac` macOS target from Xcode. The normal app
+bundle launch path should be used so ImageCaptureCore receives the app's
+normal macOS process and permission context.
+
+For a focused read-only probe, use the diagnostic executable:
+
+```bash
+swift run --package-path FujiPTPClient ImageCaptureCoreProbe 4
+```
+
+The probe opens a managed ImageCaptureCore session, reads C4, prints the
+decoded values, and closes the session. It does not write camera state.
+For a reconnect soak test, pass a repeat count:
+
+```bash
+swift run --package-path FujiPTPClient ImageCaptureCoreProbe 4 20
+```
+
+The guarded repository command is equivalent and first verifies that the
+camera is actually enumerated:
+
+```bash
+scripts/validate-image-capture-core.sh 4 20
+```
+
+With the X100VI connected, validate in this order:
+
+1. Connect and disconnect repeatedly without stopping `ptpcamerad`.
+2. Read C4 and confirm all available properties are populated.
+3. Capture the C4 baseline before any mutation.
+4. Write one distinctive recipe to C4 and require complete readback.
+5. Switch to another camera slot, return to C4, disconnect, reconnect, and
+   read C4 again.
+6. Restore the documented baseline and verify it after another reconnect.
+
+Do not consider this transport fully validated based on a successful build
+alone. Promote it for release confidence only after the physical C1–C7
+regression passes.
+
 ### Technical Details
 
 The macOS connection flow:

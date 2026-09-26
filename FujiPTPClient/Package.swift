@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "GPhoto2CLI", targets: ["GPhoto2CLI"]),
         .library(name: "GPhoto2Wrapper", targets: ["GPhoto2Wrapper"]),
         .library(name: "X100VIHelper", targets: ["X100VIHelper"]),
+        .executable(name: "ImageCaptureCoreProbe", targets: ["ImageCaptureCoreProbe"]),
         .executable(name: "GPhoto2CLITest", targets: ["GPhoto2CLITest"]),
     ],
     dependencies: [
@@ -48,6 +49,11 @@ let package = Package(
             dependencies: ["GPhoto2CLI"],
             path: "Tests/GPhoto2CLITest"
         ),
+        .executableTarget(
+            name: "ImageCaptureCoreProbe",
+            dependencies: ["PTPClientMacOS"],
+            path: "Tools/ImageCaptureCoreProbe"
+        ),
         .target(
             name: "GPhoto2Wrapper",
             path: "Sources/GPhoto2Wrapper",
@@ -81,6 +87,11 @@ let package = Package(
             name: "X100VIHelperTests",
             dependencies: ["X100VIHelper", "FujiRecipesCore"],
             path: "Tests/X100VIHelperTests"
+        ),
+        .testTarget(
+            name: "PTPClientMacOSTests",
+            dependencies: ["PTPClientMacOS"],
+            path: "Tests/PTPClientMacOSTests"
         ),
     ]
 )

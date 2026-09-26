@@ -4,6 +4,14 @@
 **Status:** Accepted  
 **Context:** Session 4 hardware probe results
 
+> **Current status (2026-09-26):** Validated on physical Fujifilm X100VI
+> hardware. The original Session 4 conclusion was caused by a completion block
+> parameter ordering issue (`responseData` payload vs `ptpResponseData` 12-byte
+> container). With `ImageCaptureCorePTPClient` and `DeviceCoordinator`, macOS
+> ImageCaptureCore successfully reads, writes, and restores C1–C7 preset slots
+> and survives reconnect soak tests without competing with `ptpcamerad`.
+> `ImageCaptureCorePTPClient` is verified and ready for production use.
+
 ## Problem
 
 We need a Fujifilm recipe manager that:

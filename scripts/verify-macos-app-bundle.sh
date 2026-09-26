@@ -5,6 +5,7 @@ set -euo pipefail
 app=""
 require_universal=false
 require_developer_id=false
+allow_developer_rpaths=false
 minimum_macos="14.0"
 expected_version=""
 expected_build=""
@@ -22,6 +23,7 @@ Options:
   --require-universal        Require arm64 and x86_64 in executable code
   --require-developer-id     Require Developer ID Application signatures and
                              hardened runtime (external release signing only)
+  --allow-developer-rpaths   Allow developer-machine runtime search paths (debug only)
   --minimum-macos VERSION    Reject code built for a newer macOS (default 14.0)
   --expected-version VALUE   Require CFBundleShortVersionString to match
   --expected-build VALUE     Require CFBundleVersion to match
@@ -38,6 +40,7 @@ while [[ $# -gt 0 ]]; do
     --app) app="${2:-}"; shift 2 ;;
     --require-universal) require_universal=true; shift ;;
     --require-developer-id) require_developer_id=true; shift ;;
+    --allow-developer-rpaths) allow_developer_rpaths=true; shift ;;
     --minimum-macos) minimum_macos="${2:-}"; shift 2 ;;
     --expected-version) expected_version="${2:-}"; shift 2 ;;
     --expected-build) expected_build="${2:-}"; shift 2 ;;
@@ -112,8 +115,10 @@ for code in "$main_executable" "$helper" "$runtime"; do
   if otool -L "$code" | grep -E '(/Users/|/opt/homebrew/|/usr/local/)' >/dev/null; then
     fail "$(basename "$code") contains a developer-machine library dependency"
   fi
-  if otool -l "$code" | grep -A2 'LC_RPATH' | grep -E '(/Users/|/opt/homebrew/|/usr/local/)' >/dev/null; then
-    fail "$(basename "$code") contains a developer-machine runtime search path"
+  if ! "$allow_developer_rpaths"; then
+    if otool -l "$code" | grep -A2 'LC_RPATH' | grep -E '(/Users/|/opt/homebrew/|/usr/local/)' >/dev/null; then
+      fail "$(basename "$code") contains a developer-machine runtime search path"
+    fi
   fi
 done
 

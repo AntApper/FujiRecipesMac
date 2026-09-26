@@ -134,6 +134,9 @@ validation_args=(
 if [[ "$CONFIG" == "release" ]]; then
   validation_args+=(--require-universal)
 fi
+if [[ "$CONFIG" == "debug" ]]; then
+  validation_args+=(--allow-developer-rpaths)
+fi
 if [[ -n "$SIGNING_IDENTITY" ]]; then
   validation_args+=(--require-developer-id)
 fi

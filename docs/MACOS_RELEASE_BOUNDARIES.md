@@ -104,9 +104,10 @@ establish notarization acceptance.
 
 The explicit legacy helper claims the USB PTP interface directly through
 libusb. On macOS, `ptpcamerad` can automatically claim that same interface.
-The default ImageCaptureCore path is intended to avoid that conflict, but it
-still requires physical X100VI validation before release confidence. The
-behavior of either path has not been validated under App Sandbox restrictions.
+The default ImageCaptureCore path avoids that conflict and has been
+validated on physical X100VI hardware (reads, writes, restores, and 10-cycle
+soak tests). The behavior of either path has not been validated under App
+Sandbox restrictions.
 
 ## Required evidence before a public macOS release
 
@@ -123,4 +124,4 @@ behavior of either path has not been validated under App Sandbox restrictions.
 5. Define and test a signed, sandbox-compatible distribution design, or
    explicitly limit distribution to a non-App-Store channel.
 6. Validate camera behavior without relying on manually killing
-   `ptpcamerad`.
+   `ptpcamerad` (completed and verified using ImageCaptureCore).

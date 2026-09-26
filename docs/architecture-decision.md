@@ -4,13 +4,13 @@
 **Status:** Accepted  
 **Context:** Session 4 hardware probe results
 
-> **Current status (2026-09-17):** The original macOS ImageCaptureCore
-> conclusion below is historical and is being revisited. The repository now
-> contains an opt-in `ImageCaptureCorePTPClient` for the X100VI, specifically
-> intended to avoid direct USB interface ownership conflicts with
-> `ptpcamerad`. It remains pending physical-camera validation before becoming
-> the macOS default. Do not remove that implementation based solely on the
-> earlier probe result.
+> **Current status (2026-09-26):** Validated on physical Fujifilm X100VI
+> hardware. The original Session 4 conclusion was caused by a completion block
+> parameter ordering issue (`responseData` payload vs `ptpResponseData` 12-byte
+> container). With `ImageCaptureCorePTPClient` and `DeviceCoordinator`, macOS
+> ImageCaptureCore successfully reads, writes, and restores C1–C7 preset slots
+> and survives reconnect soak tests without competing with `ptpcamerad`.
+> `ImageCaptureCorePTPClient` is verified and ready for production use.
 
 ## Problem
 

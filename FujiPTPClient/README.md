@@ -104,7 +104,7 @@ session.disconnect()
 
 ## Known Issues
 
-- macOS native ImageCaptureCore transport still requires physical X100VI
-  validation for release confidence.
+- macOS native ImageCaptureCore transport is **validated on physical X100VI hardware**
+  (reads, writes, restores, and 10-cycle soak tests verified).
 - iOS ImageCaptureCore PTP support **untested** — must be validated on hardware
 - libgphoto2 bundling requires static library builds for both arm64 and x86_64

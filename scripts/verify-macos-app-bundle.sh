@@ -62,7 +62,9 @@ runtime="$resources/libusb-1.0.0.dylib"
 provenance="$resources/x100vi_helper.provenance.json"
 notice="$resources/ThirdPartyNotices/libusb-COPYING.txt"
 
-for required in "$plist" "$main_executable" "$helper" "$runtime" "$provenance" "$notice"; do
+recipes="$resources/recipes-data.json"
+
+for required in "$plist" "$main_executable" "$helper" "$runtime" "$provenance" "$notice" "$recipes"; do
   [[ -e "$required" ]] || fail "required bundle content is missing: $required"
 done
 [[ -x "$main_executable" ]] || fail "main executable is not executable"

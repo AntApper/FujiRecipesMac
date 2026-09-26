@@ -106,12 +106,15 @@ public final class RecipeStore: ObservableObject {
     /// The loader is injectable so previews and macOS UI tests can exercise
     /// loaded, empty, and failure states without relying on the app bundle.
     public init(
-        recipeLoading: @escaping RecipeLoading = {
-            try RecipeLoader.loadRecipes(from: .main)
-        },
+        recipeLoading: RecipeLoading? = nil,
         customRecipes: CustomRecipeLibrary = CustomRecipeLibrary()
     ) {
-        self.recipeLoading = recipeLoading
+        self.recipeLoading = recipeLoading ?? {
+            if let recipes = try? RecipeLoader.loadRecipes(from: .main) {
+                return recipes
+            }
+            return try RecipeLoader.loadRecipes(from: .module)
+        }
         self.customRecipes = customRecipes
         customRecipeSubscription = customRecipes.$recipes.dropFirst().sink { [weak self] _ in
             self?.rebuildGallery()

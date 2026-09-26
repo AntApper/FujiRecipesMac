@@ -81,6 +81,7 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # The helper discovers its libusb runtime through @loader_path, so both must
 # remain adjacent in the application's top-level Resources directory.
+cp Resources/recipes-data.json "$APP/Contents/Resources/recipes-data.json"
 cp Resources/x100vi_helper "$APP/Contents/Resources/x100vi_helper"
 cp Resources/libusb-1.0.0.dylib "$APP/Contents/Resources/libusb-1.0.0.dylib"
 cp Resources/x100vi_helper.provenance.json "$APP/Contents/Resources/"

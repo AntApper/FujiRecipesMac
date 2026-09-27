@@ -432,8 +432,6 @@ public struct Loadout: Identifiable, Codable, Sendable {
     public var recipeName: String?
     /// ID of the recipe that was loaded into this slot, if any.
     public var recipeID: String?
-    /// Optional for backwards-compatible decoding of drafts persisted before
-    /// provenance was tracked; `nil` is treated as a local draft.
     public var provenance: LoadoutProvenance?
     
     // Convenience: whether this loadout has at least one setting configured

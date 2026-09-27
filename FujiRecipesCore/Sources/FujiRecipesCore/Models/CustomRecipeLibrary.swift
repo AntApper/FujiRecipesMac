@@ -22,6 +22,7 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
     case duplicateID(String)
     case invalidFile(String)
     case persistenceBlocked
+    case backupUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
             return "Couldn’t import this recipe library: \(message)"
         case .persistenceBlocked:
             return "My Recipes didn’t load cleanly. Dismiss the notice about it before saving changes."
+        case .backupUnavailable:
+            return "FujiRecipes still can’t make a copy of the original My Recipes file, so it won’t replace that file. Your change wasn’t saved."
         }
     }
 }
@@ -80,12 +83,14 @@ public struct CustomRecipeLibraryLoadIssue: Equatable, Sendable {
 @MainActor
 public final class CustomRecipeLibrary: ObservableObject {
     @Published public private(set) var recipes: [Recipe] = []
-    /// While set, every change is refused so the next save can't replace a
-    /// file that still holds recipes this library couldn't read.
+    /// While set, every change is refused so nothing replaces the stored file
+    /// before the person has read what the next save leaves out. After it is
+    /// dismissed, saves stay refused until that file has been copied aside.
     @Published public private(set) var loadIssue: CustomRecipeLibraryLoadIssue?
 
     public let storageURL: URL
     private let fileManager: FileManager
+    private var storedFileNeedsBackup = false
 
     public init(
         storageURL: URL = CustomRecipeLibrary.defaultStorageURL(),
@@ -103,6 +108,7 @@ public final class CustomRecipeLibrary: ObservableObject {
         guard fileManager.fileExists(atPath: storageURL.path) else {
             recipes = []
             loadIssue = nil
+            storedFileNeedsBackup = false
             return
         }
         let problem: CustomRecipeLibraryLoadIssue.Problem?
@@ -114,7 +120,9 @@ public final class CustomRecipeLibrary: ObservableObject {
             recipes = []
             problem = .unreadableFile(reason: storedDataFailureReason(error))
         }
-        loadIssue = problem.map { CustomRecipeLibraryLoadIssue(problem: $0, backupURL: backUpStoredFile()) }
+        let backupURL = problem == nil ? nil : backUpStoredFile()
+        storedFileNeedsBackup = problem != nil && backupURL == nil
+        loadIssue = problem.map { CustomRecipeLibraryLoadIssue(problem: $0, backupURL: backupURL) }
     }
 
     public func acknowledgeLoadIssue() {
@@ -200,6 +208,12 @@ public final class CustomRecipeLibrary: ObservableObject {
     private func ensurePersistenceAllowed() throws {
         if loadIssue != nil {
             throw CustomRecipeLibraryError.persistenceBlocked
+        }
+        if storedFileNeedsBackup {
+            guard backUpStoredFile() != nil else {
+                throw CustomRecipeLibraryError.backupUnavailable
+            }
+            storedFileNeedsBackup = false
         }
     }
 

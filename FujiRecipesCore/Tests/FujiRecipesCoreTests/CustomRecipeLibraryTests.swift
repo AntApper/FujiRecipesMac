@@ -57,6 +57,43 @@ final class CustomRecipeLibraryTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testFailedSaveOrImportLeavesTheLibraryAsItWas() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("custom-recipes-v1.json"), loadOnInit: false)
+        try library.save(recipe(id: "custom-night", name: "Night Walk"))
+        let exported = try JSONEncoder().encode(CustomRecipeLibraryExport(recipes: [recipe(id: "custom-alpine", name: "Alpine")]))
+        try setPermissions(0o555, of: directory)
+        defer { try? setPermissions(0o755, of: directory) }
+
+        XCTAssertThrowsError(try library.save(recipe(id: "custom-alpine", name: "Alpine"))) {
+            XCTAssertEqual(($0 as? CocoaError)?.code, .fileWriteNoPermission)
+        }
+        XCTAssertThrowsError(try library.save(recipe(id: "custom-night", name: "Renamed")))
+        XCTAssertThrowsError(try library.import(exported))
+
+        XCTAssertEqual(library.recipes.map(\.id), ["custom-night"])
+        XCTAssertEqual(library.recipes.map(\.name), ["Night Walk"])
+    }
+
+    @MainActor
+    func testFailedDeleteKeepsTheRecipe() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("custom-recipes-v1.json"), loadOnInit: false)
+        try library.save(recipe(id: "custom-night", name: "Night Walk"))
+        try library.save(recipe(id: "custom-alpine", name: "Alpine"))
+        try setPermissions(0o555, of: directory)
+        defer { try? setPermissions(0o755, of: directory) }
+
+        XCTAssertThrowsError(try library.delete(id: "custom-night")) {
+            XCTAssertEqual(($0 as? CocoaError)?.code, .fileWriteNoPermission)
+        }
+
+        XCTAssertEqual(library.recipes.map(\.name), ["Alpine", "Night Walk"])
+    }
+
     // MARK: - Objective 3: Stress and Boundary Tests
 
     @MainActor
@@ -557,6 +594,10 @@ final class CustomRecipeLibraryTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private func setPermissions(_ permissions: Int, of directory: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: directory.path)
     }
 
     private func recipe(id: String, name: String) -> Recipe {

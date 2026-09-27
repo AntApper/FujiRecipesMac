@@ -152,7 +152,8 @@ public struct CameraConnectionView: View {
         }
         .confirmationDialog("Replace local drafts with camera data?", isPresented: $confirmOverwriteDrafts) {
             Button("Replace Local Drafts", role: .destructive) { refreshSlots(overwriteDrafts: true) }
-            Button("Keep Local Drafts", role: .cancel) { refreshSlots(overwriteDrafts: false) }
+            Button("Keep Drafts and Refresh") { refreshSlots(overwriteDrafts: false) }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("Only successfully read slots are updated. Replacing a local draft discards it in favor of the camera read; clearing a local draft elsewhere never clears the camera slot.")
         }

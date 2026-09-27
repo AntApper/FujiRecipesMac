@@ -21,7 +21,7 @@ public enum SnapshotRenderer {
             }
         }
 
-        let store = RecipeStore()
+        let store = RecipeStore(recipeLoading: loadBundledRecipes)
         store.loadRecipesSynchronously()
         let camera = CameraManager()
 

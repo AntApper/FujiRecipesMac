@@ -39,12 +39,15 @@ final class X100VIHelperRequestTests: XCTestCase {
         XCTAssertEqual(request["high_iso_nr"] as? Int, 32_768, "D1A1")
     }
 
-    func testHelperRequestKeepsNamesWithinTheHelpersFifteenCharacters() {
-        let preset = PTPClientPresetData(slot: 3, name: "Kodak T-Max 100 Hard Tone")
+    func testHelperRequestSendsTheSameCameraLabelAsImageCaptureCore() {
+        let longName = PTPClientPresetData(slot: 3, name: "Kodak T-Max 100 Hard Tone")
+        let accentedName = PTPClientPresetData(slot: 3, name: "Café Noir")
 
-        let params = X100VIHelperClient.presetWriteParameters(index: 3, data: preset)
+        let longParams = X100VIHelperClient.presetWriteParameters(index: 3, data: longName)
+        let accentedParams = X100VIHelperClient.presetWriteParameters(index: 3, data: accentedName)
 
-        XCTAssertEqual(params["name"] as? String, "Kodak T-Max 100")
+        XCTAssertEqual(longParams["name"] as? String, "Kodak T-Max 100 Hard Tone")
+        XCTAssertEqual(accentedParams["name"] as? String, "Cafe Noir")
     }
 
     func testBusySlotSelectionIsEligibleForOneSafeReconnectRetry() {

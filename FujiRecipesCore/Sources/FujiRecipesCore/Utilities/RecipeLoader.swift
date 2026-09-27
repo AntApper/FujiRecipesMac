@@ -132,7 +132,7 @@ public enum RecipeLoader {
             dateString: jsonRecipe.date,
             filmSimulation: filmSim,
             dynamicRange: unsigned("dynamicRange").flatMap(DynamicRange.init(rawValue:)),
-            grainEffect: unsigned("grainEffect").flatMap(GrainEffect.init(rawValue:)),
+            grainEffect: unsigned("grainEffect").flatMap(GrainEffect.init(cameraValue:)),
             colorChrome: unsigned("colorChromeEffect").flatMap(EffectIntensity.init(rawValue:)),
             colorChromeFxBlue: unsigned("colorChromeFxBlue").flatMap(EffectIntensity.init(rawValue:)),
             smoothSkin: unsigned("smoothSkin").flatMap(EffectIntensity.init(rawValue:)),

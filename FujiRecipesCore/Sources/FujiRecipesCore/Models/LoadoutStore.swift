@@ -295,7 +295,7 @@ public final class LoadoutStore: ObservableObject {
             loadout.dr = data.dynamicRange.flatMap(DynamicRange.init(rawValue:))
             loadout.monoWarmCool = data.monoWarmCool
             loadout.monoMagentaGreen = data.monoMagentaGreen
-            loadout.grain = data.grainEffect.flatMap(GrainEffect.init(rawValue:))
+            loadout.grain = data.grainEffect.flatMap(GrainEffect.init(cameraValue:))
             loadout.colorChrome = data.colorChrome.flatMap(EffectIntensity.init(rawValue:))
             loadout.colorChromeFxBlue = data.colorChromeFxBlue.flatMap(EffectIntensity.init(rawValue:))
             loadout.smoothSkin = data.smoothSkin.flatMap(EffectIntensity.init(rawValue:))

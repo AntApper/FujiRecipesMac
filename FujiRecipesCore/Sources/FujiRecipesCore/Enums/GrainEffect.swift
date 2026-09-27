@@ -6,6 +6,15 @@ public enum GrainEffect: UInt32, Codable, Sendable {
     case weakLarge = 4
     case strongLarge = 5
 
+    /// The camera also stores 6 (Off, Small) and 7 (Off, Large) when grain is
+    /// turned off in its own menu, and rejects both in a write with 0x201C.
+    public init?(cameraValue: UInt32) {
+        switch cameraValue {
+        case 6, 7: self = .off
+        default: self.init(rawValue: cameraValue)
+        }
+    }
+
     public var displayName: String {
         switch self {
         case .off: return "Off"

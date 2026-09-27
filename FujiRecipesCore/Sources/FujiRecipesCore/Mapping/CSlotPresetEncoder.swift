@@ -153,6 +153,8 @@ public enum CSlotPresetEncoder {
         let rawSharpness = try rawPreset?.sharpness ?? sharpness.map { try rawTenths($0, property: 0xD1A0, range: colorSharpnessRange) }
         let rawHighIsoNr = try rawPreset?.highIsoNr ?? highIsoNr.map(rawHighIsoNR)
         let rawClarity = try rawPreset?.clarity ?? clarity.map { try rawTenths($0, property: 0xD1A2, range: -5...5) }
+        let rawGrainEffect = rawPreset?.grainEffect.map { GrainEffect(cameraValue: $0) == .off ? rawGrain(.off) : $0 }
+            ?? grainEffect.map(rawGrain)
 
         return PTPClientPresetData(
             slot: slot,
@@ -163,7 +165,7 @@ public enum CSlotPresetEncoder {
             filmSimulation: resolvedFilmSimulation,
             monoWarmCool: rawPreset?.monoWarmCool ?? monoWarmCool,
             monoMagentaGreen: rawPreset?.monoMagentaGreen ?? monoMagentaGreen,
-            grainEffect: rawPreset?.grainEffect ?? grainEffect.map(rawGrain),
+            grainEffect: rawGrainEffect,
             colorChrome: rawPreset?.colorChrome ?? colorChrome.map(rawEffect),
             colorChromeFxBlue: rawPreset?.colorChromeFxBlue ?? colorChromeFxBlue.map(rawEffect),
             smoothSkin: rawPreset?.smoothSkin ?? smoothSkin.map(rawEffect),

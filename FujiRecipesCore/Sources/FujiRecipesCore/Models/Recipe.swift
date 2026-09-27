@@ -38,7 +38,7 @@ public struct Recipe: Identifiable, Codable, Sendable {
     public let exposureCompensation: String?  // "0 to +2/3" etc.
 
     /// Raw scraped settings as key/value pairs (e.g. ["filmSimulation": "Reala Ace"]).
-    public let settings: [String: String]?
+    public internal(set) var settings: [String: String]?
 
     // Metadata
     public let sensorGeneration: String?

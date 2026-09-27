@@ -287,7 +287,7 @@ public final class CustomRecipeLibrary: ObservableObject {
         var ids = Set<String>()
         for (index, stored) in archive.recipes.enumerated() {
             do {
-                let recipe = try stored.recipe.get()
+                let recipe = renamingRetiredWhiteBalance(try stored.recipe.get())
                 try validate(recipe)
                 guard ids.insert(recipe.id).inserted else {
                     throw CustomRecipeLibraryError.duplicateID(recipe.id)
@@ -333,7 +333,19 @@ public final class CustomRecipeLibrary: ObservableObject {
                 throw CustomRecipeLibraryError.duplicateID(recipe.id)
             }
         }
-        return archive.recipes
+        return archive.recipes.map(renamingRetiredWhiteBalance)
+    }
+
+    /// Older builds saved “Cloudy” and “Tungsten”. Both decode as
+    /// Incandescent, which is what the camera applied.
+    private static func renamingRetiredWhiteBalance(_ recipe: Recipe) -> Recipe {
+        guard let mode = recipe.whiteBalanceMode,
+              let text = recipe.settings?["whiteBalance"],
+              ["Cloudy", "Tungsten"].contains(text)
+        else { return recipe }
+        var renamed = recipe
+        renamed.settings?["whiteBalance"] = mode.displayName
+        return renamed
     }
 
     private static func validate(_ recipe: Recipe) throws {

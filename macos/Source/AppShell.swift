@@ -64,7 +64,12 @@ public struct SidebarView: View {
                                 icon: "star.fill",
                                 accentColor: Theme.fujiAmber,
                                 isSelected: selection == .recipes && recipeStore.selectedFilterCategory == .favorites,
-                                count: recipeStore.favorites.favoriteIDs.count
+                                count: recipeStore.favorites.favoriteIDs.count,
+                                onDropRecipe: { recipe in
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                        recipeStore.favorites.addFavorite(recipe.id)
+                                    }
+                                }
                             ) {
                                 withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
                                     selection = .recipes
@@ -78,7 +83,12 @@ public struct SidebarView: View {
                                 icon: "folder.badge.gearshape",
                                 accentColor: Theme.emeraldGreen,
                                 isSelected: selection == .recipes && recipeStore.selectedFilterCategory == .myRecipes,
-                                count: recipeStore.customRecipes.recipes.count
+                                count: recipeStore.customRecipes.recipes.count,
+                                onDropRecipe: { recipe in
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                        try? recipeStore.customRecipes.save(recipe.duplicated())
+                                    }
+                                }
                             ) {
                                 withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
                                     selection = .recipes
@@ -522,57 +532,71 @@ private struct SidebarLibraryRow: View {
     let accentColor: Color
     let isSelected: Bool
     let count: Int
+    var onDropRecipe: ((Recipe) -> Void)? = nil
     let action: () -> Void
 
     @State private var isHovered = false
+    @State private var isDropTargeted = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 9) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isSelected ? accentColor : (isHovered ? Color.white.opacity(0.1) : Color.white.opacity(0.04)))
+                        .fill(isDropTargeted ? accentColor : (isSelected ? accentColor : (isHovered ? Color.white.opacity(0.1) : Color.white.opacity(0.04))))
                         .frame(width: 24, height: 24)
 
                     Image(systemName: icon)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isSelected ? (accentColor == Theme.fujiAmber ? Color.black : Color.white) : (isHovered ? Color.white : Theme.textSecondary))
+                        .foregroundStyle((isSelected || isDropTargeted) ? (accentColor == Theme.fujiAmber ? Color.black : Color.white) : (isHovered ? Color.white : Theme.textSecondary))
                 }
 
                 Text(title)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color.white : Theme.textSecondary)
+                    .font(.system(size: 12, weight: (isSelected || isDropTargeted) ? .semibold : .regular))
+                    .foregroundStyle((isSelected || isDropTargeted) ? Color.white : Theme.textSecondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
                 Text("\(count)")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(isSelected ? Color.black : Theme.fujiAmber)
+                    .foregroundStyle((isSelected || isDropTargeted) ? Color.black : Theme.fujiAmber)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(isSelected ? Color.white : Theme.fujiAmber.opacity(0.18))
+                            .fill((isSelected || isDropTargeted) ? Color.white : Theme.fujiAmber.opacity(0.18))
                     )
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.12) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+                    .fill(isDropTargeted ? accentColor.opacity(0.2) : (isSelected ? Color.white.opacity(0.12) : (isHovered ? Color.white.opacity(0.05) : Color.clear)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? Theme.specularGlowBorder : Color.clear, lineWidth: 0.8)
-                    .blendMode(.plusLighter)
+                    .stroke(isDropTargeted ? accentColor : (isSelected ? Theme.specularGlowBorder : Color.clear), lineWidth: isDropTargeted ? 1.5 : 0.8)
+                    .blendMode(isDropTargeted ? .normal : .plusLighter)
             )
-            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected || isHovered)
+            .scaleEffect(isDropTargeted ? 1.02 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected || isHovered || isDropTargeted)
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(title), \(count) recipes")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .dropDestination(for: Recipe.self) { items, _ in
+            guard let onDropRecipe, let recipe = items.first else { return false }
+            onDropRecipe(recipe)
+            return true
+        } isTargeted: { targeted in
+            if onDropRecipe != nil {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                    isDropTargeted = targeted
+                }
+            }
+        }
     }
 }
 

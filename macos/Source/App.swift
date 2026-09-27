@@ -8,6 +8,7 @@ enum MacAppCommand {
     static let selectTab = Notification.Name("com.ant.fuji-recipes.select-tab")
     static let selectDialSlot = Notification.Name("com.ant.fuji-recipes.select-dial-slot")
     static let focusSearch = Notification.Name("com.ant.fuji-recipes.focus-search")
+    static let toggleDebugHUD = Notification.Name("com.ant.fuji-recipes.toggle-debug-hud")
     static let tabKey = "tab"
     static let slotKey = "slot"
 }
@@ -137,6 +138,13 @@ struct FujiRecipesMacApp: App {
                     .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
                 }
             }
+            CommandGroup(after: .help) {
+                Divider()
+                Button("Diagnostics & Debug HUD") {
+                    NotificationCenter.default.post(name: MacAppCommand.toggleDebugHUD, object: nil)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .option])
+            }
         }
     }
 }
@@ -214,6 +222,9 @@ public struct FujiRecipesMacRoot: View {
             .scrollContentBackground(.hidden)
         }
         .preferredColorScheme(.dark)
+        .environmentObject(recipeStore)
+        .environmentObject(cameraManager)
+        .environment(\.cameraManager, cameraManager)
         .debugHUD(enabled: !MacAppLaunchConfiguration.isUITesting)
         .task {
             DebugLogger.log(.info, category: .app, "App appeared — Tab: \(selectedTab.rawValue)")

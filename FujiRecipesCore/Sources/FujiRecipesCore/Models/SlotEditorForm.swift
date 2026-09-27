@@ -57,11 +57,47 @@ public struct SlotEditorForm: Equatable, Sendable {
     }
 }
 
+public struct SlotEditorSession: Sendable {
+    public let slot: Int
+    /// The store's values as of the last load or save. Edits and conflicts
+    /// are measured against it.
+    public private(set) var baseline: SlotEditorForm
+    public var form: SlotEditorForm
+
+    public init(_ loadout: Loadout) {
+        slot = loadout.slot
+        baseline = SlotEditorForm(loadout)
+        form = baseline
+    }
+
+    public var isEdited: Bool { form != baseline }
+
+    public mutating func reload(from loadout: Loadout) {
+        baseline = SlotEditorForm(loadout)
+        form = baseline
+    }
+
+    /// The store's slot changed. An untouched form shows the new values; an
+    /// edited form keeps its edits.
+    public mutating func follow(_ loadout: Loadout) {
+        guard !isEdited else { return }
+        reload(from: loadout)
+    }
+
+    /// Saving now would overwrite a change the user never saw.
+    public func conflicts(with loadout: Loadout) -> Bool {
+        isEdited && SlotEditorForm(loadout) != baseline
+    }
+}
+
 extension LoadoutStore {
-    /// An unedited form saves nothing: `saveLocalDraft` always marks the slot
-    /// dirty, which would restage a camera-synced slot the user only viewed.
-    public func saveEditorForm(_ form: SlotEditorForm, slot: Int) {
-        guard let current = loadout(for: slot), form != SlotEditorForm(current) else { return }
-        saveLocalDraft(form.draft(updating: current))
+    /// An unedited session saves nothing: `saveLocalDraft` always marks the
+    /// slot dirty, which would restage a camera-synced slot the user only viewed.
+    public func save(_ session: inout SlotEditorSession) {
+        guard session.isEdited, let current = loadout(for: session.slot) else { return }
+        saveLocalDraft(session.form.draft(updating: current))
+        if let saved = loadout(for: session.slot) {
+            session.reload(from: saved)
+        }
     }
 }

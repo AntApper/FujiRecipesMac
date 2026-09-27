@@ -11,9 +11,23 @@ public enum SnapshotRenderer {
     private static let titleBarHeight: CGFloat = 40
 
     public static func renderSnapshots() {
+        let loadoutsKey = "com.ant.fuji-recipes.loadouts"
+        let previousData = UserDefaults.standard.data(forKey: loadoutsKey)
+        defer {
+            if let previousData {
+                UserDefaults.standard.set(previousData, forKey: loadoutsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: loadoutsKey)
+            }
+        }
+
         let store = RecipeStore()
         store.loadRecipesSynchronously()
         let camera = CameraManager()
+
+        // Stage 7 diverse recipes across C1–C7 so every slot showcases a distinct formulation
+        let topRecipes = Array(store.recipes.prefix(7))
+        store.loadouts.stageAll(recipes: topRecipes)
 
         let outputDir = snapshotOutputDirectory()
         try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
@@ -29,12 +43,12 @@ public enum SnapshotRenderer {
                 RecipeListView(store: store, cameraManager: camera)
                     .environment(\.snapshotMode, true)
             )),
-            ("custom_dial_matrix_\(tag).png", .loadouts, AnyView(
-                LoadoutsView(loadouts: store.loadouts, cameraManager: camera)
-                    .environment(\.snapshotMode, true)
-            )),
             ("camera_hub_\(tag).png", .camera, AnyView(
                 CameraConnectionView(manager: camera, loadouts: store.loadouts)
+                    .environment(\.snapshotMode, true)
+            )),
+            ("custom_dial_matrix_\(tag).png", .camera, AnyView(
+                LoadoutsView(loadouts: store.loadouts, cameraManager: camera)
                     .environment(\.snapshotMode, true)
             )),
             ("darkroom_\(tag).png", .darkroom, AnyView(
@@ -384,11 +398,12 @@ private struct SnapshotSidebar: View {
         case .recipes:
             let n = recipeStore.favorites.favoriteIDs.count
             return n > 0 ? "\(n)" : nil
-        case .loadouts:
+        case .camera:
+            if cameraManager.status == .connected {
+                return "ON"
+            }
             let n = recipeStore.loadouts.loadoutCountWithSettings()
             return n > 0 ? "\(n)/7" : nil
-        case .camera:
-            return cameraManager.status == .connected ? "ON" : nil
         case .darkroom:
             return nil
         }

@@ -55,8 +55,23 @@ public struct CameraConnectionView: View {
                     accentColor: manager.status.tint
                 )
 
-                // Top Hero Hardware Card
-                hardwareStatusCard
+                // Top Hero Hardware & Connection Cards
+                if manager.status != .connected {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 14) {
+                            hardwareStatusCard
+                                .frame(maxWidth: .infinity)
+                            connectionGuideCard
+                                .frame(maxWidth: 480)
+                        }
+                        VStack(spacing: 14) {
+                            hardwareStatusCard
+                            connectionGuideCard
+                        }
+                    }
+                } else {
+                    hardwareStatusCard
+                }
 
                 // Error / Warning Diagnostic HUD
                 if let error = manager.lastError {
@@ -65,12 +80,6 @@ public struct CameraConnectionView: View {
                             insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -6)),
                             removal: .opacity.combined(with: .scale(scale: 0.95))
                         ))
-                }
-
-                // Disconnected Connection Guide
-                if manager.status != .connected {
-                    connectionGuideCard
-                        .transition(.opacity)
                 }
 
                 // Primary Action Banner (Write All / Refresh / Clear)
@@ -409,9 +418,9 @@ public struct CameraConnectionView: View {
     }
 
     private var writeAllButton: some View {
-        let count = loadouts.loadoutCountWithSettings()
+        let dirtyDraftsCount = loadouts.loadouts.filter { $0.hasAnySettings && ($0.provenance != .cameraSynced || loadouts.isDirty($0.slot)) }.count
         let isConnected = manager.status == .connected
-        let canWrite = isConnected && count > 0 && !isWritingAll
+        let canWrite = isConnected && dirtyDraftsCount > 0 && !isWritingAll
 
         return Button {
             writeAllStagedSlotsToCamera()
@@ -424,6 +433,10 @@ public struct CameraConnectionView: View {
 
                     if isWritingAll {
                         ProgressView().controlSize(.small)
+                    } else if isConnected && dirtyDraftsCount == 0 {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Theme.emeraldGreen)
                     } else {
                         Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                             .font(.system(size: 16, weight: .bold))
@@ -432,23 +445,31 @@ public struct CameraConnectionView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isWritingAll ? (writeAllProgress ?? "Writing to Camera…") : "Write All Staged Slots to Camera")
+                    Text(isWritingAll
+                        ? (writeAllProgress ?? "Writing to Camera…")
+                        : (isConnected && dirtyDraftsCount == 0
+                            ? "All 7 Slots Synced with Camera"
+                            : "Write \(dirtyDraftsCount) Staged Slot\(dirtyDraftsCount == 1 ? "" : "s") to Camera"))
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(canWrite ? Color.black : Theme.textTertiary)
+                        .foregroundStyle(canWrite ? Color.black : (isConnected && dirtyDraftsCount == 0 ? Theme.emeraldGreen : Theme.textTertiary))
 
                     Text(!isConnected
                         ? "Connect camera via USB to sync"
-                        : (count == 0 ? "No recipes staged to write" : "\(count) of 7 slots armed & ready to write"))
+                        : (dirtyDraftsCount == 0
+                            ? "Camera presets match local library"
+                            : "\(dirtyDraftsCount) unsynced draft\(dirtyDraftsCount == 1 ? "" : "s") ready to upload over USB-C"))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textMuted)
                 }
 
                 Spacer(minLength: 4)
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(canWrite ? Color.black.opacity(0.6) : Theme.textMuted)
-                    .padding(.trailing, 4)
+                if canWrite {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.black.opacity(0.6))
+                        .padding(.trailing, 4)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -458,7 +479,7 @@ public struct CameraConnectionView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(canWrite ? Color.white.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(canWrite ? Color.white.opacity(0.3) : (isConnected && dirtyDraftsCount == 0 ? Theme.emeraldGreen.opacity(0.3) : Color.white.opacity(0.08)), lineWidth: 1)
             )
             .shadow(color: canWrite ? Theme.emeraldGreen.opacity(0.4) : Color.clear, radius: 10, y: 3)
         }
@@ -469,11 +490,7 @@ public struct CameraConnectionView: View {
 
     private var refreshButton: some View {
         Button {
-            if loadouts.dirtySlots.isEmpty {
-                refreshSlots(overwriteDrafts: false)
-            } else {
-                confirmOverwriteDrafts = true
-            }
+            refreshSlots(overwriteDrafts: true)
         } label: {
             HStack(spacing: 5) {
                 if manager.operation == .readingSlots {

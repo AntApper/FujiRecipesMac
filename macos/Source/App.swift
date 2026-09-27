@@ -156,7 +156,7 @@ public struct FujiRecipesMacRoot: View {
                                     }
                                 }
                             )
-                        case .loadouts, .camera:
+                        case .camera:
                             CameraConnectionView(
                                 manager: cameraManager,
                                 loadouts: recipeStore.loadouts,

@@ -39,6 +39,10 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
         _ = semaphore.wait(timeout: .now() + 5)
     }
 
+    public func setDisconnectHandler(_ handler: (@Sendable () -> Void)?) {
+        state.onDisconnect = handler
+    }
+
     public func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
         let result = try await state.send(
             command: PTPPacket.command(operation: 0x1015, parameters: [UInt32(code)]),
@@ -46,6 +50,9 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
         )
         guard let payload = result.data else {
             throw PTPError.readFailed(code, "Camera returned no property data.")
+        }
+        if code == 0xD18D {
+            return .data(payload)
         }
         switch payload.count {
         case 1:
@@ -72,6 +79,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             throw PTPError.invalidResponse("Preset slot must be 1–7")
         }
         try await writeProperty(0xD18C, value: Int32(index))
+        try? await Task.sleep(nanoseconds: 120_000_000)
 
         let values = try await Self.readPresetValues(using: self)
         return PTPClientPresetData(
@@ -333,17 +341,20 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
     }
 
     private static func stringValue(_ response: PTPPropertyResponse?) -> String {
-        guard case .data(let data) = response, data.count >= 1 else { return "" }
-        let characterCount = max(0, min(Int(data[0]) - 1, (data.count - 1) / 2))
+        guard case .data(let data) = response, !data.isEmpty else { return "" }
+        let numChars = Int(data[0])
+        guard numChars > 1 else { return "" }
+        let characterCount = min(numChars - 1, (data.count - 1) / 2)
         var scalars = String.UnicodeScalarView()
         for index in 0..<characterCount {
             let offset = 1 + index * 2
+            guard offset + 1 < data.count else { break }
             let scalar = UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
-            if let unicode = UnicodeScalar(scalar) {
+            if scalar != 0, let unicode = UnicodeScalar(scalar) {
                 scalars.append(unicode)
             }
         }
-        return String(scalars)
+        return String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func ptpString(_ value: String) -> Data {
@@ -457,7 +468,7 @@ private final class DeviceCoordinator: NSObject, ICDeviceBrowserDelegate, @unche
 
     func deviceBrowser(_ browser: ICDeviceBrowser, didRemove device: ICDevice, moreGoing: Bool) {
         queue.async {
-            if self.matchingCamera === device {
+            if self.matchingCamera === device || (device as? ICCameraDevice).map(self.isTargetCamera) == true {
                 self.matchingCamera = nil
             }
             for handler in self.removalHandlers.values {
@@ -484,7 +495,7 @@ private final class DeviceCoordinator: NSObject, ICDeviceBrowserDelegate, @unche
     }
 }
 
-private final class State: NSObject, @unchecked Sendable {
+private final class State: NSObject, ICDeviceDelegate, @unchecked Sendable {
     let queue = DispatchQueue(label: "com.ant.fuji-recipes.image-capture-core")
     var camera: ICCameraDevice?
     var connected = false
@@ -496,9 +507,39 @@ private final class State: NSObject, @unchecked Sendable {
     var activeCommandFailure: (() -> Void)?
     var activeCommandTimeout: DispatchWorkItem?
     var removalHandlerID: UUID?
+    var onDisconnect: (@Sendable () -> Void)?
+
+    func didRemove(_ device: ICDevice) {
+        queue.async {
+            guard self.connected else { return }
+            self.invalidateSessionOnQueue()
+            self.onDisconnect?()
+        }
+    }
+
+    func deviceDidBecomeReady(_ device: ICDevice) {}
+
+    func device(_ device: ICDevice, didOpenSessionWithError error: (any Error)?) {}
+
+    func device(_ device: ICDevice, didCloseSessionWithError error: (any Error)?) {
+        queue.async {
+            guard self.connected, !self.closing else { return }
+            self.invalidateSessionOnQueue()
+            self.onDisconnect?()
+        }
+    }
+
+    func device(_ device: ICDevice, didEncounterError error: (any Error)?) {
+        queue.async {
+            guard self.connected, !self.closing else { return }
+            self.invalidateSessionOnQueue()
+            self.onDisconnect?()
+        }
+    }
 
     func connect() async throws {
         let camera = try await DeviceCoordinator.shared.acquireCamera(timeout: 15)
+        camera.delegate = self
         guard camera.capabilities.contains(
             ICDeviceCapability.cameraDeviceCanAcceptPTPCommands.rawValue
         ) else {
@@ -626,6 +667,7 @@ private final class State: NSObject, @unchecked Sendable {
                         if let error {
                             self.clearActiveCommand()
                             self.invalidateSessionOnQueue()
+                            self.onDisconnect?()
                             if gate.finishThrowing(PTPError.commandFailed(
                                 operationCode,
                                 error.localizedDescription
@@ -724,8 +766,9 @@ private final class State: NSObject, @unchecked Sendable {
                         ))
                         return
                     }
-                    guard self.connected, let camera = self.camera, camera === device else { return }
+                    guard self.connected else { return }
                     self.invalidateSessionOnQueue()
+                    self.onDisconnect?()
                 }
             }
             removalHandlerID = id

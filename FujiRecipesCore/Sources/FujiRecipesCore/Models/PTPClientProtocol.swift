@@ -45,6 +45,13 @@ public protocol PTPClientProtocol: Sendable {
     
     /// Capture a preview image from the camera.
     func capturePreview() async throws -> JPEGFile?
+
+    /// Register an optional callback invoked when the hardware camera disconnects.
+    func setDisconnectHandler(_ handler: (@Sendable () -> Void)?)
+}
+
+public extension PTPClientProtocol {
+    func setDisconnectHandler(_ handler: (@Sendable () -> Void)?) {}
 }
 
 // MARK: - PTP Camera Info

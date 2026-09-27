@@ -677,35 +677,35 @@ public struct ToneCurveRadar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             toneBar(label: "H", value: highlight ?? 0)
             toneBar(label: "S", value: shadow ?? 0)
             toneBar(label: "C", value: color ?? 0)
             toneBar(label: "Sh", value: sharpness ?? 0)
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.black.opacity(0.28))
+                .fill(Color.black.opacity(0.32))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.6)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         )
     }
 
     private func toneBar(label: String, value: Int32) -> some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 1.5) {
             Text(label)
-                .font(.system(size: 7, weight: .bold))
-                .foregroundStyle(Theme.textTertiary)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(Theme.textSecondary)
             
             Text(value == 0 ? "0" : (value > 0 ? "+\(value)" : "\(value)"))
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 .foregroundStyle(value == 0 ? Theme.textTertiary : (value > 0 ? accentColor : Theme.cyanAccent))
         }
-        .frame(minWidth: 15)
+        .frame(minWidth: 17)
     }
 }
 
@@ -797,6 +797,7 @@ public struct FilmSimBadge: View {
                 .font(isCompact ? .system(size: 9, weight: .semibold) : .caption2.weight(.bold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, isCompact ? 6 : 8)
         .padding(.vertical, isCompact ? 2 : 4)

@@ -24,6 +24,7 @@ public final class CameraManager: ObservableObject {
     @Published public private(set) var lastSlotRefresh: SlotRefreshResult?
 
     private var client: PTPClientProtocol?
+    private var connectionMonitorTask: Task<Void, Never>?
 
     // MARK: - Connection
 
@@ -35,6 +36,16 @@ public final class CameraManager: ObservableObject {
         operation = .connecting
         lastError = nil
         client = session
+
+        session.setDisconnectHandler { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.status == .connected || self.status == .connecting {
+                    DebugLogger.info("Camera USB physical disconnection detected", category: .camera)
+                    self.disconnect()
+                }
+            }
+        }
 
         do {
             try await withTimeout(timeout: 15.0) {
@@ -52,11 +63,12 @@ public final class CameraManager: ObservableObject {
 
             // Inspect and sync camera slots so state is verified before reporting connected.
             if let loadouts {
-                _ = await refreshCameraSlots(into: loadouts)
+                _ = await refreshCameraSlots(into: loadouts, overwriteDirtyDrafts: true)
             }
 
             status = .connected
             operation = .idle
+            startConnectionMonitor()
         } catch {
             status = .error
             operation = .failed("Connection failed")
@@ -67,6 +79,9 @@ public final class CameraManager: ObservableObject {
     }
 
     public func disconnect() {
+        connectionMonitorTask?.cancel()
+        connectionMonitorTask = nil
+        client?.setDisconnectHandler(nil)
         client?.disconnect()
         client = nil
         status = .disconnected
@@ -75,6 +90,22 @@ public final class CameraManager: ObservableObject {
         lastError = nil
         operation = .idle
         lastSlotRefresh = nil
+    }
+
+    private func startConnectionMonitor() {
+        connectionMonitorTask?.cancel()
+        connectionMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled else { break }
+                guard let self = self, self.status == .connected else { break }
+                if let client = self.client, !client.isConnected {
+                    DebugLogger.info("Camera client reported isConnected == false; setting status to disconnected", category: .camera)
+                    self.disconnect()
+                    break
+                }
+            }
+        }
     }
 
     // MARK: - Active Settings

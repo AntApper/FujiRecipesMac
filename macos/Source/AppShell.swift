@@ -260,6 +260,79 @@ public struct SidebarView: View {
         .padding(.bottom, 12)
     }
 
+    private var statusBeacon: some View {
+        ZStack {
+            Circle()
+                .fill(cameraManager.status.tint)
+                .frame(width: 7, height: 7)
+
+            if cameraManager.status == .connected || cameraManager.status == .connecting {
+                Circle()
+                    .stroke(cameraManager.status.tint.opacity(0.6), lineWidth: 1.2)
+                    .frame(width: 14, height: 14)
+                    .scaleEffect(cameraManager.status == .connecting ? 1.4 : 1.1)
+                    .opacity(cameraManager.status == .connecting ? 0.4 : 0.8)
+                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: cameraManager.status)
+            }
+        }
+        .shadow(color: cameraManager.status.tint.opacity(0.8), radius: 3)
+    }
+
+    private var statusLabels: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(cameraManager.status.formattedLabel)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+
+            Text(cameraManager.status.detailLabel)
+                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var statusTrailingAction: some View {
+        if let onToggleConnection {
+            Button {
+                onToggleConnection()
+            } label: {
+                HStack(spacing: 3) {
+                    if cameraManager.status == .connecting {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: cameraManager.status == .connected ? "checkmark.circle.fill" : "cable.connector")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    Text(cameraManager.status == .connected ? "Disconnect" : "Connect")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(cameraManager.status == .connected ? Color.white.opacity(0.08) : Theme.emeraldGreen.opacity(0.18))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(cameraManager.status == .connected ? Color.white.opacity(0.16) : Theme.emeraldGreen.opacity(0.5), lineWidth: 0.8)
+                )
+                .foregroundStyle(cameraManager.status == .connected ? Theme.textSecondary : Theme.emeraldGreen)
+            }
+            .buttonStyle(.plain)
+            .disabled(cameraManager.status == .connecting)
+            .help(cameraManager.status == .connected ? "Disconnect Camera" : "1-Click Connect to Fujifilm X100VI")
+        } else {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Theme.textTertiary)
+                .padding(5)
+                .background(Circle().fill(Color.white.opacity(0.06)))
+        }
+    }
+
     private var statusFooter: some View {
         Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -267,75 +340,10 @@ public struct SidebarView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                // Live pulsing beacon
-                ZStack {
-                    Circle()
-                        .fill(cameraManager.status.tint)
-                        .frame(width: 7, height: 7)
-
-                    if cameraManager.status == .connected || cameraManager.status == .connecting {
-                        Circle()
-                            .stroke(cameraManager.status.tint.opacity(0.6), lineWidth: 1.2)
-                            .frame(width: 14, height: 14)
-                            .scaleEffect(cameraManager.status == .connecting ? 1.4 : 1.1)
-                            .opacity(cameraManager.status == .connecting ? 0.4 : 0.8)
-                            .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: cameraManager.status)
-                    }
-                }
-                .shadow(color: cameraManager.status.tint.opacity(0.8), radius: 3)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(cameraManager.status.formattedLabel)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Theme.textPrimary)
-                        .lineLimit(1)
-
-                    Text(cameraManager.status.detailLabel)
-                        .font(.system(size: 8, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(1)
-                }
-
+                statusBeacon
+                statusLabels
                 Spacer(minLength: 4)
-
-                // 1-Click Connect Button or Chevron
-                if let onToggleConnection {
-                    Button {
-                        onToggleConnection()
-                    } label: {
-                        HStack(spacing: 3) {
-                            if cameraManager.status == .connecting {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                Image(systemName: cameraManager.status == .connected ? "checkmark.circle.fill" : "cable.connector")
-                                    .font(.system(size: 8, weight: .bold))
-                            }
-                            Text(cameraManager.status == .connected ? "Disconnect" : "Connect")
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(cameraManager.status == .connected ? Color.white.opacity(0.08) : Theme.emeraldGreen.opacity(0.18))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(cameraManager.status == .connected ? Color.white.opacity(0.16) : Theme.emeraldGreen.opacity(0.5), lineWidth: 0.8)
-                        )
-                        .foregroundStyle(cameraManager.status == .connected ? Theme.textSecondary : Theme.emeraldGreen)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cameraManager.status == .connecting)
-                    .help(cameraManager.status == .connected ? "Disconnect Camera" : "1-Click Connect to Fujifilm X100VI")
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.textTertiary)
-                        .padding(5)
-                        .background(Circle().fill(Color.white.opacity(0.06)))
-                }
+                statusTrailingAction
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

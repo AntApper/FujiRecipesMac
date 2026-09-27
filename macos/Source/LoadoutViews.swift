@@ -433,9 +433,10 @@ public struct LoadoutCard: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Custom slot C\(slot), \(isConfigured ? "configured" : "empty"), \(syncStateLabel)")
-        .accessibilityHint(isSelected ? "Selected. Use the edit button to change this local draft, or drop a recipe here to stage it." : "Selects this custom slot, or drop a recipe here to stage it.")
+        .accessibilityHint(isSelected ? "Selected. Press ⌥\(slot) or use the edit button to change this local draft, or drop a recipe here to stage it." : "Selects custom slot C\(slot) (⌥\(slot)), or drop a recipe here to stage it.")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Select slot C\(slot)") { onSelect() }
+        .help("Custom dial slot C\(slot) (⌥\(slot))")
     }
 
     private var slotHeader: some View {

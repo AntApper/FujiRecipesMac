@@ -10,8 +10,10 @@ public final class LoadoutStore: ObservableObject {
     @Published public private(set) var cameraEmptySlots: Set<Int> = []
     /// Slots changed locally since their last verified camera read/write.
     @Published public private(set) var dirtySlots: Set<Int> = []
-    /// Bumped on every change to a slot, so a camera write can tell whether
-    /// the draft it sent is still the current one.
+    /// Bumped on every local edit to a slot, so a camera write can tell
+    /// whether the user changed the slot after the write was requested.
+    /// Camera syncs don't bump it: they only run while the camera gate is
+    /// held, and a sync must not make a queued import reject its own readback.
     private var revisions: [Int: Int] = [:]
     
     private let loadoutsKey = "com.ant.fuji-recipes.loadouts"
@@ -224,7 +226,6 @@ public final class LoadoutStore: ObservableObject {
         for data in presetData {
             guard overwriteDirtyDrafts || !dirtySlots.contains(data.slot) else { continue }
             guard let index = loadouts.firstIndex(where: { $0.slot == data.slot }) else { continue }
-            bumpRevision(data.slot)
 
             if data.isEmptySlot {
                 cameraEmptySlots.insert(data.slot)

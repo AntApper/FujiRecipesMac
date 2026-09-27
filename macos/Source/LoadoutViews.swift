@@ -139,7 +139,9 @@ public struct LoadoutsView: View {
         Task {
             do {
                 _ = try await cameraManager.writeSlot(slot, from: loadouts)
-                refreshMessage = "✓ Verified C\(slot) on camera."
+                refreshMessage = loadouts.isDirty(slot)
+                    ? "Wrote C\(slot). A newer local draft is still staged."
+                    : "✓ Verified C\(slot) on camera."
             } catch {
                 refreshMessage = "Write failed for C\(slot): \(error.localizedDescription)"
             }

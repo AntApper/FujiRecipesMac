@@ -142,15 +142,22 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertNil(CSlotPresetEncoder.uiTone(from: Int32(Int16.min)))
     }
 
-    func testHalfStepTonesRoundToNearestWritableStop() {
-        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 5), 1)
-        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -5), -1)
-        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 15), 2)
-        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -15), -2)
-        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 25), 3)
-        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -25), -3)
+    func testCameraToneDecodingTruncatesHalfSteps() {
+        // Raw +1.5 must stay UI +1 so an editor change to +2 clears the raw tenth.
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 15), 1)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -15), -1)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 5), 0)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -5), 0)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 25), 2)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -25), -2)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 10), 1)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -10), -1)
+        XCTAssertEqual(RecipeLoader.catalogTone(from: 5), 1)
+        XCTAssertEqual(RecipeLoader.catalogTone(from: -5), -1)
+        XCTAssertEqual(RecipeLoader.catalogTone(from: 15), 2)
+        XCTAssertEqual(RecipeLoader.catalogTone(from: -15), -2)
+        XCTAssertEqual(RecipeLoader.catalogTone(from: 25), 3)
+        XCTAssertEqual(RecipeLoader.catalogTone(from: -25), -3)
     }
 
     func testBundledHalfStepRecipesKeepExactToneTenths() throws {

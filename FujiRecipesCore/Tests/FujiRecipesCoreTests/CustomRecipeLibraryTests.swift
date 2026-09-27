@@ -277,6 +277,23 @@ final class CustomRecipeLibraryTests: XCTestCase {
         XCTAssertEqual(library.recipes.map(\.name), ["Good"])
     }
 
+    @MainActor
+    func testSavingTwoCopiesOfOneRecipeGivesEachAUniqueName() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let library = CustomRecipeLibrary(storageURL: url, loadOnInit: false)
+        let bundled = recipe(id: "kodak-portra-400", name: "Kodak Portra 400")
+
+        try library.saveCopy(of: bundled)
+        try library.saveCopy(of: bundled)
+
+        XCTAssertEqual(
+            CustomRecipeLibrary(storageURL: url).recipes.map(\.name),
+            ["Kodak Portra 400 (Custom 2)", "Kodak Portra 400 (Custom)"]
+        )
+    }
+
     private func error(from operation: () throws -> Void) throws -> CustomRecipeLibraryError {
         do {
             try operation()

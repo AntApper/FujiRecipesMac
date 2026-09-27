@@ -744,7 +744,7 @@ public struct RecipeListView: View {
         GlassPillToggle(
             options: [
                 (value: Optional<RecipeStore.FilterCategory>.none, label: "All (\(store.recipes.count))"),
-                (value: Optional<RecipeStore.FilterCategory>.some(.favorites), label: "★ Favorites (\(store.favorites.favoriteIDs.count))"),
+                (value: Optional<RecipeStore.FilterCategory>.some(.favorites), label: "★ Favorites (\(store.favoriteCount))"),
                 (value: Optional<RecipeStore.FilterCategory>.some(.myRecipes), label: "My Recipes (\(store.customRecipes.recipes.count))")
             ],
             selection: $store.selectedFilterCategory,

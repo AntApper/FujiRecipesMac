@@ -182,6 +182,12 @@ public final class RecipeStore: ObservableObject {
         return result
     }
 
+    /// Favorite IDs outlive the recipes they name, such as a custom recipe
+    /// skipped at load, so count only the loaded ones.
+    public var favoriteCount: Int {
+        recipes.filter { favorites.isFavorite($0.id) }.count
+    }
+
     public var availableWhiteBalances: [WhiteBalanceMode] { catalog.whiteBalances }
     public var availableKeywords: [RecipeCatalog.Keyword] { catalog.keywords }
 

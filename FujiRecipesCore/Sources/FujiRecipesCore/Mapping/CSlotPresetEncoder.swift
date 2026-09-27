@@ -17,9 +17,9 @@ public enum CSlotPresetEncoder {
     /// `0x8000` is Fuji's unset sentinel and must not be treated as -3276.8.
     ///
     /// The app model stores whole stops (`-2...+4`). Fuji half-stops arrive as
-    /// tenths (`+0.5` is `5`, `-1.5` is `-15`). Those round to the nearest
-    /// writable stop instead of truncating toward zero, which would turn
-    /// `±0.5` into `0`.
+    /// tenths (`+0.5` is `5`, `-1.5` is `-15`). This integer view rounds to the
+    /// nearest stop so `±0.5` is not shown as `0`. C-slot writes keep the
+    /// original tenths through `Recipe.sourceRawPreset`.
     public static func uiTone(from raw: Int32?) -> Int32? {
         guard let raw else { return nil }
         let signed16 = Int32(Int16(truncatingIfNeeded: raw))
@@ -60,7 +60,7 @@ public enum CSlotPresetEncoder {
             monoMagentaGreen: nil,
             longExpNr: nil,
             colorSpace: nil,
-            rawPreset: nil
+            rawPreset: recipe.sourceRawPreset
         )
     }
 

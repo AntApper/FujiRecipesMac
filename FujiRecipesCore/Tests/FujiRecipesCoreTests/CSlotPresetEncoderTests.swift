@@ -153,14 +153,15 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -10), -1)
     }
 
-    func testBundledHalfStepRecipesEncodeToNearestWholeStop() throws {
+    func testBundledHalfStepRecipesKeepExactToneTenths() throws {
         let database = try bundledRecipeDatabase()
         let kodachrome = try XCTUnwrap(database.recipes.first { $0.id == "kodachrome-64" })
         let recipe = RecipeLoader.recipe(from: kodachrome)
         XCTAssertEqual(kodachrome.settings["shadow"], "+0.5")
-        XCTAssertEqual(recipe.shadow, 1, "Shadow +0.5 must round to +1, not truncate to 0")
+        XCTAssertEqual(recipe.shadow, 1, "UI shadow rounds +0.5 to +1")
+        XCTAssertEqual(recipe.sourceRawPreset?.shadow, 5)
         let encoded = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
-        XCTAssertEqual(encoded.shadow, 10)
+        XCTAssertEqual(encoded.shadow, 5, "C-slot write keeps shadow +0.5")
 
         let amber = try XCTUnwrap(database.recipes.first { $0.id == "classic-amber" })
         let amberRecipe = RecipeLoader.recipe(from: amber)
@@ -169,8 +170,8 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertEqual(amberRecipe.highlight, -2)
         XCTAssertEqual(amberRecipe.shadow, 3)
         let encodedAmber = try CSlotPresetEncoder.encode(recipe: amberRecipe, slot: 2)
-        XCTAssertEqual(encodedAmber.highlight, -20)
-        XCTAssertEqual(encodedAmber.shadow, 30)
+        XCTAssertEqual(encodedAmber.highlight, -15, "C-slot write keeps highlight -1.5")
+        XCTAssertEqual(encodedAmber.shadow, 25, "C-slot write keeps shadow +2.5")
     }
 
     func testRejectsOutOfRangeValuesBeforePTPWrite() {
@@ -413,12 +414,81 @@ final class CSlotPresetEncoderTests: XCTestCase {
 
         XCTAssertEqual(database.recipes.count, 50, "Expected exactly 50 recipes in recipes-data.json")
 
+        let monochrome: Set<FilmSimulation> = [
+            .monochrome, .monochromeY, .monochromeR, .monochromeG,
+            .sepia, .acros, .acrosY, .acrosR, .acrosG
+        ]
+
         for jsonRecipe in database.recipes {
             let recipe = RecipeLoader.recipe(from: jsonRecipe)
-            XCTAssertNoThrow(
-                try CSlotPresetEncoder.encode(recipe: recipe, slot: 1),
-                "Recipe '\(recipe.name)' (\(recipe.id)) failed to encode for C-slot"
-            )
+            let encoded = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
+            let preset = jsonRecipe.presetSettings
+            assertTone(preset["highlightTone"], equals: encoded.highlight, recipe: recipe.name, field: "highlight")
+            assertTone(preset["shadowTone"], equals: encoded.shadow, recipe: recipe.name, field: "shadow")
+            assertTone(preset["sharpness"], equals: encoded.sharpness, recipe: recipe.name, field: "sharpness")
+            assertTone(preset["clarity"], equals: encoded.clarity, recipe: recipe.name, field: "clarity")
+            if let film = recipe.filmSimulation, monochrome.contains(film) {
+                XCTAssertNil(encoded.color, "\(recipe.name) must omit color")
+            } else {
+                assertTone(preset["color"], equals: encoded.color, recipe: recipe.name, field: "color")
+            }
+        }
+    }
+
+    @MainActor
+    func testHalfStepShadowSurvivesRecipeAndLoadoutEncode() throws {
+        let defaults = UserDefaults.standard
+        let key = "com.ant.fuji-recipes.loadouts"
+        let original = defaults.data(forKey: key)
+        defer {
+            if let original {
+                defaults.set(original, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        defaults.removeObject(forKey: key)
+
+        let raw = LoadoutRawPresetState(shadow: 5)
+        let recipe = Recipe(
+            id: "half-step",
+            name: "Half Step",
+            source: "test",
+            sourceUrl: nil,
+            filmSimulation: .classicChrome,
+            shadow: 0,
+            sourceRawPreset: raw
+        )
+
+        let encodedRecipe = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
+        XCTAssertEqual(encodedRecipe.shadow, 5, "shadow +0.5 must stay raw tenths 5")
+
+        let store = LoadoutStore()
+        store.applyRecipe(recipe, to: 2)
+        let loadout = try XCTUnwrap(store.loadout(for: 2))
+        XCTAssertEqual(loadout.shadow, 0)
+        XCTAssertEqual(loadout.rawPreset?.shadow, 5)
+        let encodedLoadout = try CSlotPresetEncoder.encode(loadout: loadout, slot: 2)
+        XCTAssertEqual(encodedLoadout.shadow, 5)
+
+        let edited = recipe.mutating(shadow: 2)
+        XCTAssertNil(edited.sourceRawPreset?.shadow)
+        let encodedEdit = try CSlotPresetEncoder.encode(recipe: edited, slot: 1)
+        XCTAssertEqual(encodedEdit.shadow, 20)
+    }
+
+    private func assertTone(
+        _ preset: Double?,
+        equals encoded: Int32?,
+        recipe: String,
+        field: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        if let preset {
+            XCTAssertEqual(encoded, Int32(preset.rounded(.towardZero)), "\(recipe) \(field)", file: file, line: line)
+        } else {
+            XCTAssertNil(encoded, "\(recipe) \(field)", file: file, line: line)
         }
     }
 

@@ -2225,15 +2225,17 @@ public struct RecipeQuickLookView: View {
                             .foregroundStyle(Theme.textSecondary)
 
                             if let tags = recipe.tags, !tags.isEmpty {
-                                HStack(spacing: 6) {
-                                    ForEach(tags, id: \.self) { tag in
-                                        Text("#\(tag)")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundStyle(accent.opacity(0.85))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(accent.opacity(0.12))
-                                            .clipShape(Capsule())
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(tags, id: \.self) { tag in
+                                            Text("#\(tag)")
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundStyle(accent.opacity(0.85))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(accent.opacity(0.12))
+                                                .clipShape(Capsule())
+                                        }
                                     }
                                 }
                                 .padding(.top, 2)

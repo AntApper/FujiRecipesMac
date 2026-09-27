@@ -1326,8 +1326,8 @@ private struct GallerySlotPill: View {
                     .frame(maxWidth: 85)
             } else {
                 Text("Empty")
-                    .font(.system(size: 9, weight: .regular))
-                    .foregroundStyle(Theme.textTertiary.opacity(0.6))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
         .padding(.horizontal, 8)
@@ -1811,8 +1811,8 @@ private struct RecipeCard: View {
                     .foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Text("CLICK TO ZOOM")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.textMuted)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
             }
             .padding(.horizontal, 12)
 

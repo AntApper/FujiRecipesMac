@@ -771,8 +771,8 @@ public struct SidebarDialRackRow: View {
                 }
             } else if !hasSettings {
                 Text("Ready to stage")
-                    .font(.system(size: 8, weight: .regular))
-                    .foregroundStyle(Theme.textTertiary.opacity(0.6))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
             }
         }

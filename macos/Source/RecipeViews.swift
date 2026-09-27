@@ -37,6 +37,7 @@ public struct RecipeListView: View {
     @State private var gridWidth: Double = 0
     @FocusState private var isSearchFocused: Bool
     @FocusState private var isGridFocused: Bool
+    @State private var isSearchPresented = false
 
     private var columnCount: Int {
         GridNavigation.columnCount(width: gridWidth, minimum: 330, spacing: 14)
@@ -175,8 +176,13 @@ public struct RecipeListView: View {
             }
         }
         .navigationTitle("Fuji Recipes Studio")
-        .searchable(text: $store.searchQuery, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
+        .searchable(text: $store.searchQuery, isPresented: $isSearchPresented, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
         .modifier(SearchFocusModifier(isSearchFocused: $isSearchFocused))
+        .onChange(of: isSearchPresented) { _, isPresented in
+            if !isPresented {
+                isGridFocused = true
+            }
+        }
         .onAppear {
             if !focusSearchIfRequested() {
                 isGridFocused = true

@@ -660,8 +660,11 @@ public struct RecipeListView: View {
             .padding(.vertical, 5)
             .background(Capsule().fill(Color.white.opacity(0.05)))
             .overlay(Capsule().stroke(Theme.specularBorder, lineWidth: 0.8))
+            .accessibilityElement(children: .combine)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .accessibilityIdentifier("custom-recipe-library-menu")
     }
 
@@ -1557,8 +1560,11 @@ private struct RecipeCard: View {
                             .stroke(isHovered ? Theme.fujiAmber.opacity(0.55) : Color.white.opacity(0.14), lineWidth: 1)
                     )
                     .foregroundStyle(isHovered ? Theme.fujiAmber : Color.white)
+                    .accessibilityElement(children: .combine)
                 }
-                .menuStyle(.borderlessButton)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
                 .help("Stage \"\(recipe.name)\" to custom dial slot (C1–C7)")
                 .accessibilityIdentifier("send-to-dial-\(recipe.id)")
 

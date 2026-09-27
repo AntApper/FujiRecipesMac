@@ -21,6 +21,7 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
     case invalidRecipe(String)
     case duplicateID(String)
     case invalidFile(String)
+    case persistenceBlocked
 
     public var errorDescription: String? {
         switch self {
@@ -32,7 +33,44 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
             return "The import contains more than one recipe with ID “\(id)”. Give each recipe a unique ID and try again."
         case .invalidFile(let message):
             return "Couldn’t import this recipe library: \(message)"
+        case .persistenceBlocked:
+            return "My Recipes didn’t load cleanly. Dismiss the notice about it before saving changes."
         }
+    }
+}
+
+/// Why the stored library didn't load in full. The original file is copied
+/// aside before anything can overwrite it.
+public struct CustomRecipeLibraryLoadIssue: Equatable, Sendable {
+    public struct SkippedRecipe: Equatable, Sendable {
+        /// The stored name when it is readable, otherwise “Recipe N” by file position.
+        public let name: String
+        public let reason: String
+    }
+
+    public enum Problem: Equatable, Sendable {
+        case unreadableFile(reason: String)
+        case skippedRecipes([SkippedRecipe])
+    }
+
+    public let problem: Problem
+    /// `nil` only when copying the original file aside failed.
+    public let backupURL: URL?
+
+    public var message: String {
+        let finding: String
+        switch problem {
+        case .unreadableFile(let reason):
+            finding = "FujiRecipes couldn’t read your custom recipe library (\(reason))."
+        case .skippedRecipes(let skipped):
+            let recipes = skipped.count == 1 ? "1 custom recipe" : "\(skipped.count) custom recipes"
+            let verb = skipped.count == 1 ? "was" : "were"
+            let list = skipped.map { "“\($0.name)” (\($0.reason))" }.joined(separator: ", ")
+            finding = "\(recipes) couldn’t be read and \(verb) left out: \(list)."
+        }
+        let backup = backupURL.map { "The original file was copied to “\($0.lastPathComponent)”." }
+            ?? "FujiRecipes couldn’t make a copy of the original file, so it was left untouched."
+        return "\(finding) \(backup) Changes to My Recipes won’t be saved until you dismiss this."
     }
 }
 
@@ -43,6 +81,9 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
 @MainActor
 public final class CustomRecipeLibrary: ObservableObject {
     @Published public private(set) var recipes: [Recipe] = []
+    /// While set, every change is refused so the next save can't replace a
+    /// file that still holds recipes this library couldn't read.
+    @Published public private(set) var loadIssue: CustomRecipeLibraryLoadIssue?
 
     public let storageURL: URL
     private let fileManager: FileManager
@@ -55,21 +96,30 @@ public final class CustomRecipeLibrary: ObservableObject {
         self.storageURL = storageURL
         self.fileManager = fileManager
         if loadOnInit {
-            do {
-                try load()
-            } catch {
-                // A caller can surface and recover from the same error via `load()`.
-                recipes = []
-            }
+            load()
         }
     }
 
-    public func load() throws {
+    public func load() {
         guard fileManager.fileExists(atPath: storageURL.path) else {
             recipes = []
+            loadIssue = nil
             return
         }
-        recipes = try Self.decode(Data(contentsOf: storageURL))
+        let problem: CustomRecipeLibraryLoadIssue.Problem?
+        do {
+            let stored = try Self.readStoredLibrary(Data(contentsOf: storageURL))
+            recipes = stored.recipes
+            problem = stored.skipped.isEmpty ? nil : .skippedRecipes(stored.skipped)
+        } catch {
+            recipes = []
+            problem = .unreadableFile(reason: storedDataFailureReason(error))
+        }
+        loadIssue = problem.map { CustomRecipeLibraryLoadIssue(problem: $0, backupURL: backUpStoredFile()) }
+    }
+
+    public func acknowledgeLoadIssue() {
+        loadIssue = nil
     }
 
     public func conflictingRecipe(named name: String, excludingID: String? = nil) -> Recipe? {
@@ -88,6 +138,7 @@ public final class CustomRecipeLibrary: ObservableObject {
     }
 
     public func save(_ recipe: Recipe, disallowNameCollision: Bool = false) throws {
+        try ensurePersistenceAllowed()
         try Self.validate(recipe)
         if disallowNameCollision {
             try validateNameUniqueness(for: recipe)
@@ -109,6 +160,7 @@ public final class CustomRecipeLibrary: ObservableObject {
     }
 
     public func delete(id: Recipe.ID) throws {
+        try ensurePersistenceAllowed()
         recipes.removeAll { $0.id == id }
         try persist()
     }
@@ -116,6 +168,7 @@ public final class CustomRecipeLibrary: ObservableObject {
     /// Merges an exported library by stable ID, replacing matching local recipes.
     @discardableResult
     public func `import`(_ data: Data) throws -> Int {
+        try ensurePersistenceAllowed()
         let imported = try Self.decode(data)
         for recipe in imported {
             if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
@@ -139,12 +192,82 @@ public final class CustomRecipeLibrary: ObservableObject {
         AppSupportDirectory.current.appendingPathComponent("custom-recipes-v1.json")
     }
 
+    private func ensurePersistenceAllowed() throws {
+        if loadIssue != nil {
+            throw CustomRecipeLibraryError.persistenceBlocked
+        }
+    }
+
     private func persist() throws {
         try fileManager.createDirectory(
             at: storageURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         try exportData().write(to: storageURL, options: .atomic)
+    }
+
+    /// Copies, never moves, so the stored file stays in place until the
+    /// person acknowledges the issue and saves again.
+    private func backUpStoredFile() -> URL? {
+        let directory = storageURL.deletingLastPathComponent()
+        let stem = storageURL.deletingPathExtension().lastPathComponent
+        let pathExtension = storageURL.pathExtension.isEmpty ? "" : ".\(storageURL.pathExtension)"
+        let baseName = "\(stem).unreadable-\(storedDataRecoveryTimestamp())"
+        var attempt = 1
+        var backupURL = directory.appendingPathComponent(baseName + pathExtension)
+        while fileManager.fileExists(atPath: backupURL.path) {
+            attempt += 1
+            backupURL = directory.appendingPathComponent("\(baseName)-\(attempt)\(pathExtension)")
+        }
+        do {
+            try fileManager.copyItem(at: storageURL, to: backupURL)
+            return backupURL
+        } catch {
+            return nil
+        }
+    }
+
+    /// Reads each stored recipe on its own so one unreadable or invalid
+    /// recipe is left out instead of hiding the rest.
+    private static func readStoredLibrary(
+        _ data: Data
+    ) throws -> (recipes: [Recipe], skipped: [CustomRecipeLibraryLoadIssue.SkippedRecipe]) {
+        let archive = try JSONDecoder().decode(StoredLibrary.self, from: data)
+        guard archive.version == CustomRecipeLibraryExport.currentVersion else {
+            throw CustomRecipeLibraryError.unsupportedVersion(archive.version)
+        }
+
+        var recipes: [Recipe] = []
+        var skipped: [CustomRecipeLibraryLoadIssue.SkippedRecipe] = []
+        var ids = Set<String>()
+        for (index, stored) in archive.recipes.enumerated() {
+            do {
+                let recipe = try stored.recipe.get()
+                try validate(recipe)
+                guard ids.insert(recipe.id).inserted else {
+                    throw CustomRecipeLibraryError.duplicateID(recipe.id)
+                }
+                recipes.append(recipe)
+            } catch {
+                let storedName = stored.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                skipped.append(.init(
+                    name: storedName.isEmpty ? "Recipe \(index + 1)" : storedName,
+                    reason: skippedRecipeReason(error)
+                ))
+            }
+        }
+        return (recipes, skipped)
+    }
+
+    private static func skippedRecipeReason(_ error: Error) -> String {
+        switch error {
+        case CustomRecipeLibraryError.invalidRecipe(let message):
+            return reasonClause(message)
+        case CustomRecipeLibraryError.duplicateID(let id):
+            return "another recipe in the file already uses the ID “\(id)”"
+        default:
+            return storedDataFailureReason(error)
+        }
     }
 
     private static func decode(_ data: Data) throws -> [Recipe] {
@@ -179,5 +302,24 @@ public final class CustomRecipeLibrary: ObservableObject {
            !(2_500...10_000).contains(recipe.colorTempK ?? 0) {
             throw CustomRecipeLibraryError.invalidRecipe("Color Temperature white balance needs a Kelvin value from 2500 to 10000.")
         }
+    }
+}
+
+private struct StoredLibrary: Decodable {
+    let version: Int
+    let recipes: [StoredRecipe]
+}
+
+private struct StoredRecipe: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case name
+    }
+
+    let name: String?
+    let recipe: Result<Recipe, any Error>
+
+    init(from decoder: any Decoder) throws {
+        name = try? decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .name)
+        recipe = Result { try Recipe(from: decoder) }
     }
 }

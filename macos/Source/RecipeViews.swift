@@ -281,7 +281,7 @@ public struct RecipeListView: View {
             titleVisibility: .visible,
             presenting: pendingStageTop
         ) { pending in
-            Button("Replace Drafts", role: .destructive) {
+            Button("Replace Draft\(pending.replacedSlots.count == 1 ? "" : "s")", role: .destructive) {
                 stageToDial(pending.recipes)
             }
             Button("Cancel", role: .cancel) {}

@@ -848,10 +848,10 @@ public struct SlotEditorSheet: View {
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.textTertiary)
 
-                            optionalStepperRow(title: "Highlight Tone", included: $includesHighlight, value: $highlight)
-                            optionalStepperRow(title: "Shadow Tone", included: $includesShadow, value: $shadow)
-                            optionalStepperRow(title: "Color Saturation", included: $includesColor, value: $color)
-                            optionalStepperRow(title: "Sharpness", included: $includesSharpness, value: $sharpness)
+                            optionalStepperRow(title: "Highlight Tone", included: $includesHighlight, value: $highlight, range: CSlotPresetEncoder.highlightShadowRange)
+                            optionalStepperRow(title: "Shadow Tone", included: $includesShadow, value: $shadow, range: CSlotPresetEncoder.highlightShadowRange)
+                            optionalStepperRow(title: "Color Saturation", included: $includesColor, value: $color, range: CSlotPresetEncoder.colorSharpnessRange)
+                            optionalStepperRow(title: "Sharpness", included: $includesSharpness, value: $sharpness, range: CSlotPresetEncoder.colorSharpnessRange)
                         }
                         .glassCard()
                         if let writeMessage {
@@ -882,7 +882,7 @@ public struct SlotEditorSheet: View {
         .defaultFocus($isNameFocused, true)
     }
 
-    private func stepperRow(title: String, value: Binding<Int32>) -> some View {
+    private func stepperRow(title: String, value: Binding<Int32>, range: ClosedRange<Int32>) -> some View {
         HStack {
             Text(title)
                 .font(.subheadline)
@@ -891,7 +891,7 @@ public struct SlotEditorSheet: View {
             HStack(spacing: 8) {
                 Button {
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                        if value.wrappedValue > -4 { value.wrappedValue -= 1 }
+                        if value.wrappedValue > range.lowerBound { value.wrappedValue -= 1 }
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")
@@ -910,7 +910,7 @@ public struct SlotEditorSheet: View {
 
                 Button {
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                        if value.wrappedValue < 4 { value.wrappedValue += 1 }
+                        if value.wrappedValue < range.upperBound { value.wrappedValue += 1 }
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -924,11 +924,11 @@ public struct SlotEditorSheet: View {
         }
     }
 
-    private func optionalStepperRow(title: String, included: Binding<Bool>, value: Binding<Int32>) -> some View {
+    private func optionalStepperRow(title: String, included: Binding<Bool>, value: Binding<Int32>, range: ClosedRange<Int32>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Toggle("Include \(title)", isOn: included)
                 .font(.caption)
-            stepperRow(title: title, value: value)
+            stepperRow(title: title, value: value, range: range)
                 .disabled(!included.wrappedValue)
                 .opacity(included.wrappedValue ? 1 : 0.45)
         }

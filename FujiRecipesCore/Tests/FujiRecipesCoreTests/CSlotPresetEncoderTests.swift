@@ -377,6 +377,27 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertEqual(encodedProvia.color, 30, "Color film simulation must encode color tenths")
     }
 
+    func testAllBundledRecipesEncodeSuccessfullyForCSlot() throws {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repository = testFile
+            .deletingLastPathComponent() // FujiRecipesCoreTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // FujiRecipesCore
+            .deletingLastPathComponent() // repository root
+        let resource = repository.appendingPathComponent("macos/Resources/recipes-data.json")
+        let database = try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
+
+        XCTAssertEqual(database.recipes.count, 40, "Expected exactly 40 recipes in recipes-data.json")
+
+        for jsonRecipe in database.recipes {
+            let recipe = RecipeLoader.recipe(from: jsonRecipe)
+            XCTAssertNoThrow(
+                try CSlotPresetEncoder.encode(recipe: recipe, slot: 1),
+                "Recipe '\(recipe.name)' (\(recipe.id)) failed to encode for C-slot"
+            )
+        }
+    }
+
     private func recipe(
         filmSimulation: FilmSimulation? = .classicChrome,
         dynamicRange: DynamicRange? = nil,

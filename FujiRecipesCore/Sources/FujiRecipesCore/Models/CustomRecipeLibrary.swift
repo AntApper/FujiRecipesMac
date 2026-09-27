@@ -217,6 +217,17 @@ public final class CustomRecipeLibrary: ObservableObject {
         let directory = storageURL.deletingLastPathComponent()
         let stem = storageURL.deletingPathExtension().lastPathComponent
         let pathExtension = storageURL.pathExtension.isEmpty ? "" : ".\(storageURL.pathExtension)"
+        let existingBackups = ((try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [])
+            .filter {
+                $0.lastPathComponent.hasPrefix("\(stem).unreadable-") &&
+                $0.lastPathComponent.hasSuffix(pathExtension)
+            }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        if let identical = existingBackups.first(where: {
+            fileManager.contentsEqual(atPath: $0.path, andPath: storageURL.path)
+        }) {
+            return directory.appendingPathComponent(identical.lastPathComponent)
+        }
         let baseName = "\(stem).unreadable-\(storedDataRecoveryTimestamp())"
         var attempt = 1
         var backupURL = directory.appendingPathComponent(baseName + pathExtension)

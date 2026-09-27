@@ -17,7 +17,6 @@
 		6A6CECFA4A8810323C7EAB2B /* GlassDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = D358801E89EFF05B57002EA9 /* GlassDesign.swift */; };
 		737ED956010758934CA73540 /* CustomRecipeLibraryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535891D68C2721AB3E84DD1D /* CustomRecipeLibraryUITests.swift */; };
 		746F56F7C45CE939540BDB64 /* FujiRecipesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7E07608E46992A7EF9E2439E /* FujiRecipesCore */; };
-		8155F6370B1D2124F2D1DD7B /* AppAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1B1FA821F3994E5F677084 /* AppAssets.swift */; };
 		869E6B26379C407DA5A2751E /* libusb-COPYING.txt in Resources */ = {isa = PBXBuildFile; fileRef = A22A780E87320959E804670A /* libusb-COPYING.txt */; };
 		8967D474460C9DFBA7867BE5 /* RecipeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B6E075FA28F4544704F5AC /* RecipeStore.swift */; };
 		89A3F4CF699E2D5A08D0C094 /* x100vi_helper in Resources */ = {isa = PBXBuildFile; fileRef = BF66A582900FE07CD6914EDB /* x100vi_helper */; };
@@ -43,7 +42,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		2C1B1FA821F3994E5F677084 /* AppAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAssets.swift; sourceTree = "<group>"; };
 		2DC371735BC4BE498B7BF9A0 /* RecipeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeViews.swift; sourceTree = "<group>"; };
 		4980B2268F5DFD8DA6BE59D1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4EF75C3D67CCF4BB23ABA713 /* FujiRecipesMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FujiRecipesMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -104,7 +102,6 @@
 			isa = PBXGroup;
 			children = (
 				CCD25D50FB14813A0F1BFAA5 /* App.swift */,
-				2C1B1FA821F3994E5F677084 /* AppAssets.swift */,
 				C2D9D05BF55F33F8B8D9A510 /* AppShell.swift */,
 				E6526C64BD5A31DE03741605 /* CameraViews.swift */,
 				6C8E4746DA4B341CE31EBADA /* ClearLocalDraftConfirmation.swift */,
@@ -279,7 +276,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D247865DBD9D1106B10951CB /* App.swift in Sources */,
-				8155F6370B1D2124F2D1DD7B /* AppAssets.swift in Sources */,
 				5ED7AA79B7F83488945017F0 /* AppShell.swift in Sources */,
 				373062E6DA8679E86394D835 /* CameraViews.swift in Sources */,
 				355B62A657030EA52AD80135 /* ClearLocalDraftConfirmation.swift in Sources */,

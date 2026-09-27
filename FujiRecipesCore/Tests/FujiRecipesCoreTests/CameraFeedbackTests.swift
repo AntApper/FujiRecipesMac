@@ -183,9 +183,9 @@ final class CameraFeedbackTests: XCTestCase {
     }
 }
 
-/// Stores every C-slot field. A write applies each field it sets unless the
-/// field is in `rejectedValues`, which the X100VI answers with 0x201C and
-/// leaves unchanged.
+/// Stores every C-slot field. A write applies each field it sets, except a
+/// grain in `rejectedGrain` (the X100VI answers 0x201C and leaves it
+/// unchanged) and monochrome tones under a color film.
 final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
     private let lock = NSLock()
     private var slots: [Int: PTPClientPresetData]
@@ -221,7 +221,8 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
         get { lock.withLock { _conversionOutcome } }
         set { lock.withLock { _conversionOutcome = newValue } }
     }
-    /// The cable is pulled as this slot write (1-based) starts.
+    /// The cable is pulled as the Nth write call starts. N counts calls from
+    /// 1; it is not a slot number.
     var unplugOnWrite: Int? {
         get { lock.withLock { _unplugOnWrite } }
         set { lock.withLock { _unplugOnWrite = newValue } }

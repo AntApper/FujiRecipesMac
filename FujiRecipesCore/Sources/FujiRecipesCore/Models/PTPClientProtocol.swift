@@ -275,7 +275,6 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         self.differences = differences
     }
 
-    /// "Wrote and verified C3." or "Wrote C3 with 1 difference: Grain."
     public var summary: String {
         guard !differences.isEmpty else {
             return "\(createdFromEmpty ? "Created" : "Wrote") and verified C\(slot)."
@@ -286,7 +285,7 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
     }
 }
 
-public enum PresetField: String, CaseIterable, Sendable {
+public enum PresetField: Sendable {
     case name, imageQuality, imageSize, dynamicRange, filmSimulation
     case monoWarmCool, monoMagentaGreen, grainEffect, colorChrome, colorChromeFxBlue
     case smoothSkin, whiteBalance, wbShiftRed, wbShiftBlue, colorTemp

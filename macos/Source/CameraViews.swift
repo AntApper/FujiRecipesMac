@@ -31,9 +31,9 @@ public struct CameraConnectionView: View {
     @State private var slotToEdit: Loadout?
     @Binding public var selectedDialSlot: Int
     @State private var isWritingAll = false
-    /// Slots Write All set out to write, in order, for "Writing C3 (2 of 5)".
+    /// Captured when Write All starts, because `stagedSlots` shrinks as each
+    /// slot verifies and the "2 of 5" progress needs the original list.
     @State private var writeAllPlan: [Int] = []
-    /// The result of the latest camera action. Each new action replaces it.
     @State private var feedback: ActionFeedback?
     private let cameraSessionFactory: CameraSessionFactory
 

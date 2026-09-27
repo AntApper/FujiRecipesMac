@@ -530,7 +530,6 @@ public struct SlotRefreshResult: Sendable {
 
     public var isComplete: Bool { failures.isEmpty && presets.count == 7 }
 
-    /// "Read all 7 camera slots." or "Read 5 of 7 slots. C3: reason; C6: reason"
     public var summary: String {
         guard !isComplete else { return "Read all 7 camera slots." }
         return "Read \(presets.count) of 7 slots. \(failures.map(\.description).joined(separator: "; "))"
@@ -540,8 +539,6 @@ public struct SlotRefreshResult: Sendable {
 public typealias SlotWriteOutcome = (slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)
 
 public enum WriteAllSummary {
-    /// One line for a Write All run: verified slots, slots written with
-    /// differences, and each failure with its reason.
     public static func text(for outcomes: [SlotWriteOutcome]) -> String {
         guard !outcomes.isEmpty else { return "No staged slots were written." }
         let written = outcomes.compactMap { try? $0.result.get() }

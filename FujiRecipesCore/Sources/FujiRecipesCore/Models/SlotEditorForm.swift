@@ -58,8 +58,8 @@ public struct SlotEditorForm: Equatable, Sendable {
 }
 
 extension LoadoutStore {
-    /// Saves `form` over the slot's current draft, unless the form shows
-    /// exactly that draft.
+    /// An unedited form saves nothing: `saveLocalDraft` always marks the slot
+    /// dirty, which would restage a camera-synced slot the user only viewed.
     public func saveEditorForm(_ form: SlotEditorForm, slot: Int) {
         guard let current = loadout(for: slot), form != SlotEditorForm(current) else { return }
         saveLocalDraft(form.draft(updating: current))

@@ -34,7 +34,6 @@ public enum Theme {
     public static let textPrimary        = Color.white
     public static let textSecondary      = Color.white.opacity(0.72)
     public static let textTertiary       = Color.white.opacity(0.46)
-    public static let textMuted          = Color.white.opacity(0.28)
     
     // Film Simulation Thematic Tints
     public static func filmSimColor(for simName: String) -> Color {
@@ -496,6 +495,7 @@ public struct GlassPillToggle<Value: Hashable>: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
         .padding(2)
@@ -542,6 +542,15 @@ public struct ToneCurveRadar: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         )
+        .accessibilityRepresentation {
+            Text(spokenSummary)
+        }
+    }
+
+    private var spokenSummary: String {
+        let values = [("Highlight", tones.highlight), ("Shadow", tones.shadow), ("Color", tones.color), ("Sharpness", tones.sharpness)]
+            .map { name, tenths in "\(name) \(tenths.map(ToneTenths.text) ?? "not set")" }
+        return "Tone and detail: " + values.joined(separator: ", ")
     }
 
     private func toneBar(label: String, tenths: Int32?) -> some View {
@@ -559,7 +568,7 @@ public struct ToneCurveRadar: View {
     }
 
     private func toneColor(_ tenths: Int32?) -> Color {
-        guard let tenths else { return Theme.textTertiary.opacity(0.6) }
+        guard let tenths else { return Theme.textTertiary }
         if tenths == 0 { return Theme.textTertiary }
         return tenths > 0 ? accentColor : Theme.cyanAccent
     }

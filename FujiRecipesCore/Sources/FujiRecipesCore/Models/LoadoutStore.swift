@@ -668,4 +668,11 @@ extension Loadout {
         }
         return "C\(slot)"
     }
+
+    public var contentName: String? {
+        guard hasAnySettings else { return nil }
+        if !name.isEmpty, name != "C\(slot)" { return name }
+        if let recipeName, !recipeName.isEmpty { return recipeName }
+        return "Custom Preset"
+    }
 }

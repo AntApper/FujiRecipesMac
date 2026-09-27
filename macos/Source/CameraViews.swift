@@ -35,6 +35,8 @@ public struct CameraConnectionView: View {
     /// slot verifies and the "2 of 5" progress needs the original list.
     @State private var writeAllPlan: [Int] = []
     @State private var feedback: ActionFeedback?
+    @State private var rackWidth: Double = 0
+    @FocusState private var isRackFocused: Bool
     private let cameraSessionFactory: CameraSessionFactory
 
     private var isConnectionInFlight: Bool {
@@ -130,6 +132,11 @@ public struct CameraConnectionView: View {
         .onChange(of: manager.status) { _, status in
             if status == .connecting {
                 feedback = nil
+            }
+        }
+        .onChange(of: feedback) { _, feedback in
+            if let feedback {
+                AccessibilityNotification.Announcement(feedback.text).post()
             }
         }
         .sheet(item: $slotToEdit) { loadout in
@@ -516,7 +523,7 @@ public struct CameraConnectionView: View {
                                 ? "Camera presets match local library"
                                 : "Cleared locally, still on the camera: \(clearedSlots.formatted(.list(type: .and))). Refresh to reload.")))
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textMuted)
+                        .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textTertiary)
                 }
 
                 Spacer(minLength: 4)
@@ -597,9 +604,20 @@ public struct CameraConnectionView: View {
 
     // MARK: - Dial Rack (C1 to C7)
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 280, maximum: 420), spacing: 14)
-    ]
+    private var rackColumnCount: Int {
+        GridNavigation.columnCount(width: rackWidth, minimum: 280, spacing: 14)
+    }
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(maximum: 420), spacing: 14), count: rackColumnCount)
+    }
+
+    private func selectSlot(_ slot: Int) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            selectedDialSlot = slot
+        }
+        isRackFocused = true
+    }
 
     private var dialRackGrid: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -632,7 +650,7 @@ public struct CameraConnectionView: View {
                         isCameraSlotEmpty: loadouts.isCameraSlotEmpty(slot),
                         isWriting: manager.operation == .writingSlot(slot),
                         isCameraBusy: manager.isBusy,
-                        onSelect: { selectedDialSlot = slot },
+                        onSelect: { selectSlot(slot) },
                         onClear: { slotPendingLocalClear = slot },
                         onEdit: { slotToEdit = loadout },
                         onWriteToCamera: { writeSingleSlot(slot) },
@@ -647,27 +665,23 @@ public struct CameraConnectionView: View {
                     .accessibilityIdentifier("slot-\(slot)")
                 }
             }
+            .frame(maxWidth: .infinity)
+            .onGeometryChange(for: Double.self) { $0.size.width } action: { rackWidth = $0 }
+            .focusable()
+            .focusEffectDisabled()
+            .focused($isRackFocused)
             .onKeyPress { keyPress in
                 if let char = keyPress.characters.first, let num = Int(String(char)), (1...7).contains(num) {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        selectedDialSlot = num
-                    }
+                    selectSlot(num)
                     return .handled
                 }
-                switch keyPress.key {
-                case .leftArrow, .upArrow:
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        selectedDialSlot = max(1, selectedDialSlot - 1)
-                    }
-                    return .handled
-                case .rightArrow, .downArrow:
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        selectedDialSlot = min(7, selectedDialSlot + 1)
-                    }
-                    return .handled
-                default:
-                    return .ignored
-                }
+                guard let move = GridNavigation.Move(key: keyPress.key) else { return .ignored }
+                let index = GridNavigation.index(from: selectedDialSlot - 1, move: move, count: 7, columns: rackColumnCount)
+                selectSlot(index + 1)
+                return .handled
+            }
+            .onAppear {
+                isRackFocused = true
             }
         }
     }

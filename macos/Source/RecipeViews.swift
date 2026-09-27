@@ -34,48 +34,58 @@ public struct RecipeListView: View {
     @State private var customRecipeMessage: String?
     @State private var selectedRecipeID: Recipe.ID? = nil
     @State private var quickLookRecipe: Recipe? = nil
+    @State private var gridWidth: Double = 0
     @FocusState private var isSearchFocused: Bool
+    @FocusState private var isGridFocused: Bool
+
+    private var columnCount: Int {
+        GridNavigation.columnCount(width: gridWidth, minimum: 330, spacing: 14)
+    }
 
     // Expanded cards can be substantially taller than the compact cards.
-    // Top-align each adaptive grid cell so adjacent cards do not float in the
+    // Top-align each grid cell so adjacent cards do not float in the
     // middle of the selected recipe's detail area.
-    private let columns = [
-        GridItem(.adaptive(minimum: 330, maximum: 560), spacing: 14, alignment: .top)
-    ]
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(maximum: 560), spacing: 14, alignment: .top),
+            count: columnCount
+        )
+    }
 
     public var onNavigateToCamera: (() -> Void)? = nil
+    /// Set by Find Recipes… before this view may exist.
+    @Binding private var isSearchFocusPending: Bool
 
     public init(
         store: RecipeStore,
         cameraManager: CameraManager,
+        isSearchFocusPending: Binding<Bool> = .constant(false),
         onNavigateToCamera: (() -> Void)? = nil
     ) {
         self.store = store
         self.cameraManager = cameraManager
+        self._isSearchFocusPending = isSearchFocusPending
         self.onNavigateToCamera = onNavigateToCamera
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                // Sleek Floating Control Header
-                headerControlBar
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    headerControlBar
 
-                // Filter & Sort Pills
-                filterAndSortBar
+                    filterAndSortBar
 
-                // Quick Dial Strip for 1-click drag & drop
-                quickDialBar
+                    quickDialBar
 
-                if store.loadingState == .loading {
-                    recipeLoadingState
-                } else {
-                    if store.loadingState == .failed {
+                    if store.loadingState == .loading {
+                        recipeLoadingState
+                    } else if store.loadingState == .failed {
                         emptyState
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
 
-                    // Recipe Cards Grid
+                    // Stays mounted while recipes load so it keeps keyboard focus.
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(store.filteredRecipes) { recipe in
                             RecipeCard(
@@ -86,16 +96,16 @@ public struct RecipeListView: View {
                                 loadouts: store.loadouts,
                                 isCustomRecipe: store.isCustomRecipe(recipe),
                                 onSelect: {
-                                    selectedRecipeID = recipe.id
+                                    select(recipe)
                                 },
                                 onQuickLook: {
-                                    selectedRecipeID = recipe.id
+                                    select(recipe)
                                     withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                                         quickLookRecipe = recipe
                                     }
                                 },
                                 onToggleExpand: {
-                                    selectedRecipeID = recipe.id
+                                    select(recipe)
                                     withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
                                         if expandedRecipeIDs.contains(recipe.id) {
                                             expandedRecipeIDs.remove(recipe.id)
@@ -122,10 +132,11 @@ public struct RecipeListView: View {
                                     recipeToDelete = recipe
                                 },
                                 onDuplicate: {
-                                    selectedRecipeID = recipe.id
+                                    select(recipe)
                                     recipeToEdit = recipe.duplicated()
                                 }
                             )
+                            .id(recipe.id)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.94)).combined(with: .offset(y: 10)),
                                 removal: .opacity.combined(with: .scale(scale: 0.96))
@@ -133,79 +144,51 @@ public struct RecipeListView: View {
                         }
                     }
                     .animation(.spring(response: 0.32, dampingFraction: 0.8), value: store.filteredRecipes.map(\.id))
+                    .frame(maxWidth: .infinity)
+                    .onGeometryChange(for: Double.self) { $0.size.width } action: { gridWidth = $0 }
+                    .focusable()
+                    .focusEffectDisabled()
+                    .focused($isGridFocused)
+                    .onKeyPress { press in
+                        guard let move = GridNavigation.Move(key: press.key) else { return .ignored }
+                        return moveSelection(move, scrollProxy: scrollProxy)
+                    }
+                    .onKeyPress(.space) {
+                        toggleQuickLook()
+                        return .handled
+                    }
+                    .onKeyPress(.escape) {
+                        guard quickLookRecipe != nil else { return .ignored }
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            quickLookRecipe = nil
+                        }
+                        return .handled
+                    }
 
-                    if store.filteredRecipes.isEmpty && store.loadingState != .failed {
+                    if store.filteredRecipes.isEmpty && store.loadingState != .failed && store.loadingState != .loading {
                         emptyState
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
                 }
+                .padding(16)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: store.filteredRecipes.isEmpty)
             }
-            .padding(16)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: store.filteredRecipes.isEmpty)
         }
         .navigationTitle("Fuji Recipes Studio")
         .searchable(text: $store.searchQuery, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
         .modifier(SearchFocusModifier(isSearchFocused: $isSearchFocused))
-        .onChange(of: isSearchFocused) { _, focused in
-            if focused {
-                DispatchQueue.main.async {
-                    if let window = NSApp.keyWindow ?? NSApp.mainWindow,
-                       let searchField = window.findSearchField() {
-                        window.makeFirstResponder(searchField)
-                    }
-                }
+        .onAppear {
+            if !focusSearchIfRequested() {
+                isGridFocused = true
             }
         }
-        .background {
-            // Cmd+F shortcut to focus search bar
-            Button("Find in Recipes") {
-                focusSearchField()
+        .onChange(of: isSearchFocusPending) {
+            focusSearchIfRequested()
+        }
+        .onChange(of: activeHUDToast) { _, toast in
+            if let toast {
+                AccessibilityNotification.Announcement("\(toast.title). \(toast.message)").post()
             }
-            .keyboardShortcut("f", modifiers: .command)
-            .opacity(0)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-
-            // Spacebar shortcut to toggle Quick Look (disabled when search is focused)
-            Button("Toggle Quick Look") {
-                toggleQuickLook()
-            }
-            .keyboardShortcut(.space, modifiers: [])
-            .disabled(isSearchFocused)
-            .opacity(0)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        .onKeyPress(.space) {
-            if isSearchFocused { return .ignored }
-            toggleQuickLook()
-            return .handled
-        }
-        .onKeyPress(.escape) {
-            if quickLookRecipe != nil {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    quickLookRecipe = nil
-                }
-                return .handled
-            }
-            if isSearchFocused {
-                isSearchFocused = false
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress(.downArrow) {
-            if isSearchFocused { return .ignored }
-            selectNextRecipe()
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            if isSearchFocused { return .ignored }
-            selectPreviousRecipe()
-            return .handled
-        }
-        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
-            focusSearchField()
         }
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.showToast)) { notification in
             guard
@@ -380,6 +363,7 @@ public struct RecipeListView: View {
                             .background(Circle().fill(Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss message")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -403,7 +387,6 @@ public struct RecipeListView: View {
     }
 
     private func toggleQuickLook() {
-        guard !isSearchFocused else { return }
         if quickLookRecipe != nil {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 quickLookRecipe = nil
@@ -420,48 +403,44 @@ public struct RecipeListView: View {
         }
     }
 
-    private func selectNextRecipe() {
-        guard !store.filteredRecipes.isEmpty else { return }
-        if let currentID = selectedRecipeID,
-           let idx = store.filteredRecipes.firstIndex(where: { $0.id == currentID }) {
-            let nextIdx = min(idx + 1, store.filteredRecipes.count - 1)
-            let nextRecipe = store.filteredRecipes[nextIdx]
-            selectedRecipeID = nextRecipe.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = nextRecipe
-            }
-        } else if let first = store.filteredRecipes.first {
-            selectedRecipeID = first.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = first
-            }
-        }
+    private func select(_ recipe: Recipe) {
+        selectedRecipeID = recipe.id
+        isGridFocused = true
     }
 
-    private func selectPreviousRecipe() {
-        guard !store.filteredRecipes.isEmpty else { return }
-        if let currentID = selectedRecipeID,
-           let idx = store.filteredRecipes.firstIndex(where: { $0.id == currentID }) {
-            let prevIdx = max(idx - 1, 0)
-            let prevRecipe = store.filteredRecipes[prevIdx]
-            selectedRecipeID = prevRecipe.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = prevRecipe
-            }
-        } else if let first = store.filteredRecipes.first {
-            selectedRecipeID = first.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = first
-            }
+    private func moveSelection(_ move: GridNavigation.Move, scrollProxy: ScrollViewProxy) -> KeyPress.Result {
+        let recipes = store.filteredRecipes
+        guard !recipes.isEmpty else { return .ignored }
+        let target = recipes.firstIndex(where: { $0.id == selectedRecipeID })
+            .map { recipes[GridNavigation.index(from: $0, move: move, count: recipes.count, columns: columnCount)] }
+            ?? recipes[0]
+        selectedRecipeID = target.id
+        if quickLookRecipe != nil {
+            quickLookRecipe = target
         }
+        withAnimation(.easeOut(duration: 0.2)) {
+            scrollProxy.scrollTo(target.id)
+        }
+        return .handled
+    }
+
+    @discardableResult
+    private func focusSearchIfRequested() -> Bool {
+        guard isSearchFocusPending else { return false }
+        isSearchFocusPending = false
+        focusSearchField()
+        return true
     }
 
     private func focusSearchField() {
-        isSearchFocused = true
-        DispatchQueue.main.async {
-            if let window = NSApp.keyWindow ?? NSApp.mainWindow,
-               let searchField = window.findSearchField() {
-                window.makeFirstResponder(searchField)
+        if #available(macOS 15.0, *) {
+            isSearchFocused = true
+        } else {
+            DispatchQueue.main.async {
+                if let window = NSApp.keyWindow ?? NSApp.mainWindow,
+                   let searchField = window.findSearchField() {
+                    window.makeFirstResponder(searchField)
+                }
             }
         }
     }
@@ -813,6 +792,7 @@ public struct RecipeListView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .trailingScrollFade()
 
             HStack(spacing: 8) {
                 metadataFilterMenus
@@ -935,6 +915,7 @@ public struct RecipeListView: View {
             .shadow(color: isSelected ? accent.opacity(0.35) : Color.clear, radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 
@@ -986,6 +967,7 @@ public struct RecipeListView: View {
                 }
                 .padding(.vertical, 2)
             }
+            .trailingScrollFade()
 
             if let onNavigateToCamera {
                 Button {
@@ -1044,6 +1026,7 @@ public struct RecipeListView: View {
                 Button("Try Loading Recipes Again") {
                     Task { await store.loadRecipes() }
                 }
+                .keyboardShortcut(.defaultAction)
                 .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 32))
                 .frame(width: 220)
                 .padding(.top, 6)
@@ -1147,6 +1130,34 @@ public struct RecipeListView: View {
     }
 }
 
+// MARK: - Keyboard and Scroll Row Helpers
+
+extension GridNavigation.Move {
+    init?(key: KeyEquivalent) {
+        switch key {
+        case .leftArrow: self = .left
+        case .rightArrow: self = .right
+        case .upArrow: self = .up
+        case .downArrow: self = .down
+        default: return nil
+        }
+    }
+}
+
+private extension ScrollView {
+    func trailingScrollFade() -> some View {
+        let width: CGFloat = 24
+        return contentMargins(.trailing, width, for: .scrollContent)
+            .mask {
+                HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width)
+                }
+            }
+    }
+}
+
 // MARK: - Search Focus Helpers
 
 private struct SearchFocusModifier: ViewModifier {
@@ -1162,8 +1173,10 @@ private struct SearchFocusModifier: ViewModifier {
 }
 
 private extension NSWindow {
+    /// The toolbar search field lives beside `contentView`, under the
+    /// window's frame view, so the search starts one level up.
     func findSearchField() -> NSSearchField? {
-        contentView?.findSearchField()
+        (contentView?.superview ?? contentView)?.findSearchField()
     }
 }
 
@@ -1251,8 +1264,8 @@ private struct CSlotPickerSheet: View {
             destination = loadouts.isCameraSlotEmpty(slot)
                 ? "Camera last read as empty"
                 : "Write and verify on camera"
-        } else if let loadout, loadout.hasAnySettings {
-            destination = "Local draft: \(loadout.displayLabel)"
+        } else if let name = loadout?.contentName {
+            destination = "Local draft: \(name)"
         } else {
             destination = "No local draft"
         }
@@ -1450,9 +1463,7 @@ private struct RecipeCard: View {
 
             Section("Stage to Camera Dial Slot") {
                 ForEach(1...7, id: \.self) { slot in
-                    let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
-                        ? "Empty"
-                        : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                    let slotName = loadouts.loadout(for: slot)?.contentName ?? "Empty"
                     Button {
                         onQuickLoadToSlot(slot)
                     } label: {
@@ -1534,9 +1545,7 @@ private struct RecipeCard: View {
                 Menu {
                     Section("Stage to Camera Dial Slot") {
                         ForEach(1...7, id: \.self) { slot in
-                            let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
-                                ? "Empty"
-                                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                            let slotName = loadouts.loadout(for: slot)?.contentName ?? "Empty"
                             Button {
                                 onQuickLoadToSlot(slot)
                             } label: {
@@ -2181,6 +2190,7 @@ public struct RecipeQuickLookView: View {
                     }
                     .buttonStyle(.plain)
                     .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                    .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
                     .accessibilityIdentifier("recipe-quick-look-favorite")
 
                     // Close Button
@@ -2238,6 +2248,7 @@ public struct RecipeQuickLookView: View {
                                         }
                                     }
                                 }
+                                .trailingScrollFade()
                                 .padding(.top, 2)
                             }
                         }
@@ -2395,6 +2406,9 @@ public struct RecipeQuickLookView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .shadow(color: Color.black.opacity(0.7), radius: 36, y: 16)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Quick Look, \(recipe.name)")
+            .accessibilityAddTraits(.isModal)
             .accessibilityIdentifier("recipe-quick-look-modal")
             .padding(24)
         }
@@ -2408,9 +2422,7 @@ public struct RecipeQuickLookView: View {
 
     private var stageSlotButtons: some View {
         ForEach(1...7, id: \.self) { slot in
-            let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
-                ? "Empty"
-                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+            let slotName = loadouts.loadout(for: slot)?.contentName ?? "Empty"
             Button {
                 onStageToSlot(slot)
             } label: {
@@ -2429,7 +2441,8 @@ public struct RecipeQuickLookView: View {
                     )
             }
             .buttonStyle(.plain)
-            .help("Stage to C\(slot): \(slotName)")
+            .help("Stage to C\(slot), currently \(slotName)")
+            .accessibilityLabel("Stage to C\(slot), currently \(slotName)")
             .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
         }
     }

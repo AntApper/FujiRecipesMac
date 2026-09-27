@@ -474,6 +474,8 @@ public struct CameraConnectionView: View {
         let stagedCount = loadouts.stagedSlots.count
         let isConnected = manager.status == .connected
         let canWrite = isConnected && stagedCount > 0 && !manager.isBusy
+        let isSynced = isConnected && stagedCount == 0 && loadouts.dirtySlots.isEmpty
+        let clearedSlots = loadouts.dirtySlots.subtracting(loadouts.stagedSlots).sorted().map { "C\($0)" }
 
         return Button {
             confirmWriteAll = true
@@ -486,7 +488,7 @@ public struct CameraConnectionView: View {
 
                     if isWritingAll {
                         ProgressView().controlSize(.small)
-                    } else if isConnected && stagedCount == 0 {
+                    } else if isSynced {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Theme.emeraldGreen)
@@ -501,16 +503,18 @@ public struct CameraConnectionView: View {
                     Text(isWritingAll
                         ? writeAllProgress
                         : (stagedCount == 0
-                            ? (isConnected ? "All 7 Slots Synced with Camera" : "No Staged Changes")
+                            ? (isSynced ? "All 7 Slots Synced with Camera" : "No Staged Changes")
                             : "Write \(stagedCount) Staged Slot\(stagedCount == 1 ? "" : "s") to Camera"))
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(canWrite ? Color.black : (isConnected && stagedCount == 0 ? Theme.emeraldGreen : Theme.textTertiary))
+                        .foregroundStyle(canWrite ? Color.black : (isSynced ? Theme.emeraldGreen : Theme.textTertiary))
 
                     Text(!isConnected
                         ? "Connect camera via USB to sync"
-                        : (stagedCount == 0
-                            ? "Camera presets match local library"
-                            : "\(stagedCount) unsynced draft\(stagedCount == 1 ? "" : "s") ready to upload over USB-C"))
+                        : (stagedCount > 0
+                            ? "\(stagedCount) unsynced draft\(stagedCount == 1 ? "" : "s") ready to upload over USB-C"
+                            : (isSynced
+                                ? "Camera presets match local library"
+                                : "Cleared locally, still on the camera: \(clearedSlots.formatted(.list(type: .and))). Refresh to reload.")))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textMuted)
                 }
@@ -532,7 +536,7 @@ public struct CameraConnectionView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(canWrite ? Color.white.opacity(0.3) : (isConnected && stagedCount == 0 ? Theme.emeraldGreen.opacity(0.3) : Color.white.opacity(0.08)), lineWidth: 1)
+                    .stroke(canWrite ? Color.white.opacity(0.3) : (isSynced ? Theme.emeraldGreen.opacity(0.3) : Color.white.opacity(0.08)), lineWidth: 1)
             )
             .shadow(color: canWrite ? Theme.emeraldGreen.opacity(0.4) : Color.clear, radius: 10, y: 3)
         }

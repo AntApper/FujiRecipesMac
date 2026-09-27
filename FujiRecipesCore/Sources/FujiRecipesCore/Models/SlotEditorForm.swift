@@ -104,7 +104,7 @@ public struct SlotEditorSession: Sendable {
     /// The store's slot changed. An untouched form shows the new values; an
     /// edited form keeps its edits.
     public mutating func follow(_ loadout: Loadout) {
-        guard !isEdited else { return }
+        guard !isEdited, SlotEditorForm(loadout) != baseline else { return }
         reload(from: loadout)
     }
 

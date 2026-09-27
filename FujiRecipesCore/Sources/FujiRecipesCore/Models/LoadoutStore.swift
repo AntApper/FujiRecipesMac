@@ -191,47 +191,55 @@ public final class LoadoutStore: ObservableObject {
     public func syncFromCameraPresetData(_ presetData: [PTPClientPresetData], overwriteDirtyDrafts: Bool = false) {
         for data in presetData {
             guard overwriteDirtyDrafts || !dirtySlots.contains(data.slot) else { continue }
+            guard let index = loadouts.firstIndex(where: { $0.slot == data.slot }) else { continue }
+
             if data.isEmptySlot {
                 cameraEmptySlots.insert(data.slot)
+                loadouts[index] = Loadout(slot: data.slot, name: "C\(data.slot)", filmSim: nil, dr: nil)
+                dirtySlots.remove(data.slot)
+                continue
             } else {
                 cameraEmptySlots.remove(data.slot)
             }
-            if let index = loadouts.firstIndex(where: { $0.slot == data.slot }) {
-                var loadout = loadouts[index]
-                loadout.name = data.name.isEmpty ? "C\(data.slot)" : data.name
-                loadout.imageQuality = data.imageQuality
-                loadout.imageSize = data.imageSize
-                loadout.filmSim = data.filmSimulation.flatMap(FilmSimulation.init(rawValue:))
-                loadout.dr = data.dynamicRange.flatMap(DynamicRange.init(rawValue:))
-                loadout.monoWarmCool = data.monoWarmCool
-                loadout.monoMagentaGreen = data.monoMagentaGreen
-                loadout.grain = data.grainEffect.flatMap(GrainEffect.init(rawValue:))
-                loadout.colorChrome = data.colorChrome.flatMap(EffectIntensity.init(rawValue:))
-                loadout.colorChromeFxBlue = data.colorChromeFxBlue.flatMap(EffectIntensity.init(rawValue:))
-                loadout.smoothSkin = data.smoothSkin.flatMap(EffectIntensity.init(rawValue:))
-                loadout.wb = data.whiteBalance.flatMap(WhiteBalanceMode.init(rawValue:))
-                loadout.wbShiftRed = data.wbShiftRed
-                loadout.wbShiftBlue = data.wbShiftBlue
-                loadout.colorTempK = data.colorTemp
-                // C-slot tone fields are signed raw tenths; Loadout stores
-                // app/UI units so a subsequent write does not scale twice.
-                loadout.highlight = CSlotPresetEncoder.uiTone(from: data.highlight)
-                loadout.shadow = CSlotPresetEncoder.uiTone(from: data.shadow)
-                loadout.color = CSlotPresetEncoder.uiTone(from: data.color)
-                loadout.sharpness = CSlotPresetEncoder.uiTone(from: data.sharpness)
-                loadout.highIsoNr = CSlotPresetEncoder.uiHighIsoNR(from: data.highIsoNr)
-                loadout.clarity = CSlotPresetEncoder.uiTone(from: data.clarity)
-                loadout.longExpNr = data.longExpNr
-                loadout.colorSpace = data.colorSpace
-                // Keep every raw value, including values newer than this
-                // app's enums or values whose camera representation is not a
-                // UI unit (such as High ISO NR and tone tenths).
-                loadout.rawPreset = LoadoutRawPresetState(data)
-                loadout.provenance = .cameraSynced
-                
-                loadouts[index] = loadout
-                dirtySlots.remove(data.slot)
-            }
+
+            var loadout = loadouts[index]
+            let cameraName = data.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let slotLabel = cameraName.isEmpty ? "C\(data.slot)" : cameraName
+            loadout.name = slotLabel
+            loadout.recipeName = slotLabel
+            loadout.recipeID = nil
+            loadout.imageQuality = data.imageQuality
+            loadout.imageSize = data.imageSize
+            loadout.filmSim = data.filmSimulation.flatMap(FilmSimulation.init(rawValue:))
+            loadout.dr = data.dynamicRange.flatMap(DynamicRange.init(rawValue:))
+            loadout.monoWarmCool = data.monoWarmCool
+            loadout.monoMagentaGreen = data.monoMagentaGreen
+            loadout.grain = data.grainEffect.flatMap(GrainEffect.init(rawValue:))
+            loadout.colorChrome = data.colorChrome.flatMap(EffectIntensity.init(rawValue:))
+            loadout.colorChromeFxBlue = data.colorChromeFxBlue.flatMap(EffectIntensity.init(rawValue:))
+            loadout.smoothSkin = data.smoothSkin.flatMap(EffectIntensity.init(rawValue:))
+            loadout.wb = data.whiteBalance.flatMap(WhiteBalanceMode.init(rawValue:))
+            loadout.wbShiftRed = data.wbShiftRed
+            loadout.wbShiftBlue = data.wbShiftBlue
+            loadout.colorTempK = data.colorTemp
+            // C-slot tone fields are signed raw tenths; Loadout stores
+            // app/UI units so a subsequent write does not scale twice.
+            loadout.highlight = CSlotPresetEncoder.uiTone(from: data.highlight)
+            loadout.shadow = CSlotPresetEncoder.uiTone(from: data.shadow)
+            loadout.color = CSlotPresetEncoder.uiTone(from: data.color)
+            loadout.sharpness = CSlotPresetEncoder.uiTone(from: data.sharpness)
+            loadout.highIsoNr = CSlotPresetEncoder.uiHighIsoNR(from: data.highIsoNr)
+            loadout.clarity = CSlotPresetEncoder.uiTone(from: data.clarity)
+            loadout.longExpNr = data.longExpNr
+            loadout.colorSpace = data.colorSpace
+            // Keep every raw value, including values newer than this
+            // app's enums or values whose camera representation is not a
+            // UI unit (such as High ISO NR and tone tenths).
+            loadout.rawPreset = LoadoutRawPresetState(data)
+            loadout.provenance = .cameraSynced
+
+            loadouts[index] = loadout
+            dirtySlots.remove(data.slot)
         }
         saveLoadouts()
         print("✅ Synced \(presetData.count) loadouts from camera")

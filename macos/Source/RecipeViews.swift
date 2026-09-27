@@ -27,7 +27,7 @@ public struct RecipeListView: View {
     // Top-align each adaptive grid cell so adjacent cards do not float in the
     // middle of the selected recipe's detail area.
     private let columns = [
-        GridItem(.adaptive(minimum: 280, maximum: 540), spacing: 14, alignment: .top)
+        GridItem(.adaptive(minimum: 330, maximum: 560), spacing: 14, alignment: .top)
     ]
 
     public var onNavigateToCamera: (() -> Void)? = nil
@@ -472,8 +472,21 @@ public struct RecipeListView: View {
             }
             .accessibilityIdentifier("custom-recipe-export")
         } label: {
-            Label("My Recipes (\(store.customRecipes.recipes.count))", systemImage: "person.crop.rectangle.stack")
+            HStack(spacing: 5) {
+                Image(systemName: "folder.badge.gearshape")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("My Recipes (\(store.customRecipes.recipes.count))")
+                    .font(.caption.weight(.medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Color.white.opacity(0.05)))
+            .overlay(Capsule().stroke(Theme.specularBorder, lineWidth: 0.8))
         }
+        .menuStyle(.borderlessButton)
         .accessibilityIdentifier("custom-recipe-library-menu")
     }
 
@@ -1192,6 +1205,7 @@ private struct RecipeCard: View {
                     .font(.system(size: 14, weight: .bold))
                     .glassPrimary()
                     .lineLimit(2)
+                    .minimumScaleFactor(0.88)
 
                 // Tone Curve Radar & Kelvin Swatch
                 ViewThatFits(in: .horizontal) {
@@ -1336,7 +1350,7 @@ private struct RecipeCard: View {
                 thumbnailPlaceholder
             }
         }
-        .frame(width: 80, height: 80)
+        .frame(width: 72, height: 72)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)

@@ -113,7 +113,15 @@ public final class RecipeStore: ObservableObject {
             if let recipes = try? RecipeLoader.loadRecipes(from: .main) {
                 return recipes
             }
-            return try RecipeLoader.loadRecipes(from: .module)
+            #if SWIFT_PACKAGE
+            if let recipes = try? RecipeLoader.loadRecipes(from: Bundle.module) {
+                return recipes
+            }
+            #endif
+            if let recipes = try? RecipeLoader.loadRecipes(from: Bundle(for: RecipeStore.self)) {
+                return recipes
+            }
+            throw RecipeLoaderError.fileNotFound
         }
         self.customRecipes = customRecipes
         customRecipeSubscription = customRecipes.$recipes.dropFirst().sink { [weak self] _ in

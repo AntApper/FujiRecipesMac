@@ -36,7 +36,7 @@ public struct SidebarView: View {
                         ForEach(AppTab.primaryTabs) { tab in
                             SidebarRow(
                                 tab: tab,
-                                isSelected: selection == tab || (tab == .camera && selection == .loadouts),
+                                isSelected: selection == tab,
                                 badge: tabBadge(for: tab)
                             ) {
                                 withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
@@ -154,7 +154,7 @@ public struct SidebarView: View {
         case .recipes:
             let favs = recipeStore.favorites.favoriteIDs.count
             return favs > 0 ? "\(favs) ★" : nil
-        case .camera, .loadouts:
+        case .camera:
             if cameraManager.status == .connected {
                 return "ONLINE"
             }
@@ -483,7 +483,18 @@ public enum AppTab: String, CaseIterable, Identifiable {
     case recipes
     case camera
     case darkroom
-    case loadouts
+
+    /// Backward compatibility alias for the unified Camera & Staging tab
+    public static var loadouts: AppTab { .camera }
+
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "recipes": self = .recipes
+        case "camera", "loadouts": self = .camera
+        case "darkroom": self = .darkroom
+        default: return nil
+        }
+    }
 
     /// The two primary core workflows of FujiRecipes
     public static var primaryTabs: [AppTab] {
@@ -495,7 +506,7 @@ public enum AppTab: String, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .recipes: return "Recipes"
-        case .camera, .loadouts: return "Camera & Staging"
+        case .camera: return "Camera & Staging"
         case .darkroom: return "RAF Darkroom"
         }
     }
@@ -505,14 +516,13 @@ public enum AppTab: String, CaseIterable, Identifiable {
         case .recipes: return "photo.stack.fill"
         case .camera: return "camera.fill"
         case .darkroom: return "moon.stars.fill"
-        case .loadouts: return "dial.low.fill"
         }
     }
 
     public var accentColor: Color {
         switch self {
         case .recipes: return Theme.fujiAmber
-        case .camera, .loadouts: return Theme.emeraldGreen
+        case .camera: return Theme.emeraldGreen
         case .darkroom: return Theme.cyanAccent
         }
     }

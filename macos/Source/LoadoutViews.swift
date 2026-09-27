@@ -338,8 +338,8 @@ public struct LoadoutCard: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 }
 
-                // Camera vs Staged Comparison Box
-                cameraVsStagedComparison
+                // Camera Sync Status Indicator
+                cameraSyncStatusRow
 
                 // Direct Slot Action Bar
                 slotActionBar
@@ -485,7 +485,7 @@ public struct LoadoutCard: View {
                 HStack(spacing: 3) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 8, weight: .bold))
-                    Text("CAMERA-VERIFIED")
+                    Text("CAMERA-SYNCED")
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                 }
                 .foregroundStyle(Theme.emeraldGreen)
@@ -507,63 +507,55 @@ public struct LoadoutCard: View {
         }
     }
 
-    private var cameraVsStagedComparison: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Local Staged Row
-            HStack(spacing: 5) {
-                Image(systemName: "square.and.arrow.down.fill")
-                    .font(.system(size: 8))
-                    .foregroundStyle(isConfigured ? Theme.fujiAmber : Theme.textTertiary)
-                Text("STAGED:")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Theme.textTertiary)
-                Text(isConfigured ? (loadout?.recipeName ?? loadout?.name ?? "C\(slot)") : "Unassigned")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(isConfigured ? Color.white : Theme.textTertiary)
-                    .lineLimit(1)
-            }
+    private var cameraSyncStatusRow: some View {
+        HStack(spacing: 5) {
+            Image(systemName: isCameraConnected ? (isCameraVerified ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath") : "cable.connector.slash")
+                .font(.system(size: 8))
+                .foregroundStyle(isCameraConnected ? (isCameraVerified ? Theme.emeraldGreen : Theme.fujiAmber) : Theme.textTertiary)
 
-            // Physical Camera Row
-            HStack(spacing: 5) {
-                Image(systemName: isCameraConnected ? "camera.fill" : "camera")
-                    .font(.system(size: 8))
-                    .foregroundStyle(isCameraVerified ? Theme.emeraldGreen : Theme.textTertiary)
-                Text("CAMERA:")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Theme.textTertiary)
-                Text(cameraStateDescription)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(isCameraVerified ? Theme.emeraldGreen : Theme.textSecondary)
-                    .lineLimit(1)
+            Text(cameraStateDescription)
+                .font(.system(size: 8.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(isCameraVerified ? Theme.emeraldGreen : Theme.textSecondary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if isDirty && isCameraConnected {
+                Text("UNSAVED DRAFT")
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Theme.fujiAmber)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Theme.fujiAmber.opacity(0.18))
+                    .clipShape(Capsule())
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.black.opacity(0.3))
+                .fill(Color.black.opacity(0.25))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.8)
+                        .stroke(Color.white.opacity(0.05), lineWidth: 0.6)
                 )
         )
     }
 
     private var cameraStateDescription: String {
         guard isCameraConnected else {
-            return "Camera offline"
+            return isConfigured ? "Draft staged • Connect USB to write" : "Camera offline"
         }
         if isCameraSlotEmpty {
-            return "Empty on camera"
+            return "Camera slot is currently empty"
         }
         if isCameraVerified {
-            return "Verified: \(loadout?.name ?? "C\(slot)")"
+            return "Camera Slot: \(loadout?.name ?? "C\(slot)")"
         }
         if isDirty {
-            return "Unsynced local edits"
+            return "Staged draft differs from camera"
         }
-        return "Not read"
+        return "Camera slot read"
     }
 
     private var slotActionBar: some View {
@@ -649,11 +641,14 @@ public struct LoadoutCard: View {
 
     private func configuredBody(_ loadout: Loadout) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Recipe Title
-            Text(loadout.recipeName ?? loadout.name)
+            // Recipe Title: If camera-synced, display the verified camera name.
+            // If local draft, display the staged draft recipe name.
+            Text(isCameraVerified ? loadout.name : (loadout.recipeName ?? loadout.name))
                 .font(.system(size: 13, weight: .bold))
                 .glassPrimary()
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(height: 18, alignment: .leading)
 
             // Film Sim Badge + Dynamic Range + White Balance
             HStack(spacing: 4) {
@@ -682,6 +677,7 @@ public struct LoadoutCard: View {
                         .lineLimit(1)
                 }
             }
+            .frame(height: 20, alignment: .leading)
 
             // Tone Radar
             ToneCurveRadar(
@@ -691,6 +687,7 @@ public struct LoadoutCard: View {
                 sharpness: loadout.sharpness,
                 accentColor: accent
             )
+            .frame(height: 36, alignment: .leading)
         }
     }
 
@@ -709,7 +706,7 @@ public struct LoadoutCard: View {
                 .glassTertiary()
                 .lineLimit(2)
         }
-        .padding(.vertical, 4)
+        .frame(height: 86, alignment: .leading)
     }
 
     private var syncStateLabel: String {

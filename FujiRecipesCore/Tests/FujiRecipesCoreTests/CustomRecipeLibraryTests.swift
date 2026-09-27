@@ -447,6 +447,31 @@ final class CustomRecipeLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testRetiredWhiteBalanceNamesFromOlderBuildsReadAsIncandescent() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let olderBuildLibrary = Data("""
+        {"version": 1, "recipes": [
+          {"id": "custom-cloudy", "name": "Cloudy Walk", "source": "My Recipes", "imageUrls": [], "parseStatus": "ok",
+           "whiteBalanceMode": 6, "settings": {"whiteBalance": "Cloudy"}},
+          {"id": "custom-tungsten", "name": "Tungsten Night", "source": "My Recipes", "imageUrls": [], "parseStatus": "ok",
+           "whiteBalanceMode": 5, "settings": {"whiteBalance": "Tungsten"}},
+          {"id": "custom-daylight", "name": "Daylight", "source": "My Recipes", "imageUrls": [], "parseStatus": "ok",
+           "whiteBalanceMode": 4, "settings": {"whiteBalance": "Daylight"}}
+        ]}
+        """.utf8)
+        try olderBuildLibrary.write(to: url)
+
+        let loaded = CustomRecipeLibrary(storageURL: url)
+        let imported = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("imported.json"), loadOnInit: false)
+        try imported.import(olderBuildLibrary)
+
+        XCTAssertEqual(loaded.recipes.map { $0.settings?["whiteBalance"] }, ["Incandescent", "Incandescent", "Daylight"])
+        XCTAssertEqual(imported.recipes.map { $0.settings?["whiteBalance"] }, ["Incandescent", "Daylight", "Incandescent"])
+    }
+
+    @MainActor
     func testMissingLibraryFileLoadsEmptyWithoutAnIssue() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

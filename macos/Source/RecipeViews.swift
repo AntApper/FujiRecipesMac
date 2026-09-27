@@ -282,12 +282,8 @@ public struct RecipeListView: View {
                 recipe: recipe,
                 existingRecipes: store.customRecipes.recipes
             ) { edited in
-                do {
-                    try store.customRecipes.save(edited)
-                    recipeToEdit = nil
-                } catch {
-                    customRecipeMessage = error.localizedDescription
-                }
+                try store.customRecipes.save(edited)
+                recipeToEdit = nil
             }
         }
         .sheet(isPresented: Binding(

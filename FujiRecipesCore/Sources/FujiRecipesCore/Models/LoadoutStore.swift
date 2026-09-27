@@ -10,6 +10,11 @@ public final class LoadoutStore: ObservableObject {
     @Published public private(set) var cameraEmptySlots: Set<Int> = []
     /// Slots changed locally since their last verified camera read/write.
     @Published public private(set) var dirtySlots: Set<Int> = []
+    /// Bumped on every local edit to a slot, so a camera write can tell
+    /// whether the user changed the slot since the write captured it.
+    /// Camera syncs don't bump it. They only run while the camera gate is
+    /// held, and a sync must not make a queued import reject its own readback.
+    private var revisions: [Int: Int] = [:]
     
     private let loadoutsKey = "com.ant.fuji-recipes.loadouts"
     
@@ -53,6 +58,14 @@ public final class LoadoutStore: ObservableObject {
         dirtySlots.contains(slot)
     }
 
+    public func revision(of slot: Int) -> Int {
+        revisions[slot, default: 0]
+    }
+
+    private func bumpRevision(_ slot: Int) {
+        revisions[slot, default: 0] += 1
+    }
+
     /// Slots holding local settings the camera doesn't have yet. A cleared
     /// draft has no settings, so it is never written over the camera slot.
     public var stagedSlots: [Int] {
@@ -69,6 +82,7 @@ public final class LoadoutStore: ObservableObject {
         loadout.provenance = .localDraft
         loadouts[index] = loadout
         dirtySlots.insert(slot)
+        bumpRevision(slot)
         if save {
             saveLoadouts()
         }
@@ -140,6 +154,7 @@ public final class LoadoutStore: ObservableObject {
             cleared.provenance = .localDraft
             loadouts[index] = cleared
             dirtySlots.insert(slot)
+            bumpRevision(slot)
             if save {
                 saveLoadouts()
             }
@@ -273,6 +288,21 @@ public final class LoadoutStore: ObservableObject {
         saveLoadouts()
     }
 
+    @discardableResult
+    public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int) -> Bool {
+        guard self.revision(of: observed.slot) == revision else {
+            if observed.isEmptySlot {
+                cameraEmptySlots.insert(observed.slot)
+            } else {
+                cameraEmptySlots.remove(observed.slot)
+            }
+            return false
+        }
+        syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
+        markCameraWriteVerified(slot: observed.slot)
+        return true
+    }
+
     /// Saves the editor's complete visible state, including cleared optionals.
     public func saveLocalDraft(_ loadout: Loadout) {
         guard let index = loadouts.firstIndex(where: { $0.slot == loadout.slot }) else { return }
@@ -281,6 +311,7 @@ public final class LoadoutStore: ObservableObject {
         draft.provenance = .localDraft
         loadouts[index] = draft
         dirtySlots.insert(loadout.slot)
+        bumpRevision(loadout.slot)
         saveLoadouts()
     }
 

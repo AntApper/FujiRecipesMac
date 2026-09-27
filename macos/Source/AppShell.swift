@@ -447,7 +447,7 @@ public struct SidebarView: View {
     private var statusSubtitle: String {
         switch cameraManager.status {
         case .connected: return "USB PTP • Verified"
-        case .connecting: return "USB PTP • Linking"
+        case .connecting: return cameraManager.operation == .readingSlots ? "Reading C1–C7" : "USB PTP • Linking"
         case .disconnected: return "USB RAW mode"
         case .error: return "Check USB-C cable"
         }
@@ -494,7 +494,7 @@ public struct SidebarView: View {
                 .foregroundStyle(cameraManager.status == .connected ? Theme.textSecondary : Theme.emeraldGreen)
             }
             .buttonStyle(.plain)
-            .disabled(cameraManager.status == .connecting)
+            .disabled(cameraManager.status == .connecting || cameraManager.isBusy)
             .help(cameraManager.status == .connected ? "Disconnect Camera" : "1-Click Connect to Fujifilm X100VI")
         }
     }

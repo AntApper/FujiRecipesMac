@@ -35,6 +35,10 @@ public struct CameraConnectionView: View {
         isConnecting || manager.status == .connecting
     }
 
+    private var isReadingSlotsDuringConnect: Bool {
+        manager.status == .connecting && manager.operation == .readingSlots
+    }
+
     public init(
         manager: CameraManager,
         loadouts: LoadoutStore,
@@ -307,7 +311,7 @@ public struct CameraConnectionView: View {
             Text(manager.status == .connected ? "Session Active" : (isConnectionInFlight ? "Connecting…" : (manager.status == .error ? "Retry Available" : "Ready to Connect")))
                 .font(.subheadline.weight(.semibold))
                 .glassPrimary()
-            Text(manager.status == .connected ? "Verified USB session. C1–C7 preset reads and local drafts remain separate." : (isConnectionInFlight ? "Opening a USB PTP session. This can take up to 15 seconds." : "Connect over USB-C to inspect C1–C7 preset slots."))
+            Text(manager.status == .connected ? "Verified USB session. C1–C7 preset reads and local drafts remain separate." : (isReadingSlotsDuringConnect ? "Session open. Reading preset slots C1–C7 from the camera." : (isConnectionInFlight ? "Opening a USB PTP session. This can take up to 15 seconds." : "Connect over USB-C to inspect C1–C7 preset slots.")))
                 .font(.caption2)
                 .glassSecondary()
                 .lineLimit(2)
@@ -321,7 +325,7 @@ public struct CameraConnectionView: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(Color.black)
-                    Text("Establishing Link…")
+                    Text(isReadingSlotsDuringConnect ? "Reading C1–C7…" : "Establishing Link…")
                         .lineLimit(1)
                 } else {
                     Image(systemName: manager.status == .connected ? "xmark.circle.fill" : "bolt.fill")
@@ -331,7 +335,7 @@ public struct CameraConnectionView: View {
             }
         }
         .buttonStyle(GlassProminentButtonStyle(color: manager.status == .connected ? Theme.fujiRed : Theme.emeraldGreen, height: 36))
-        .disabled(isConnectionInFlight)
+        .disabled(isConnectionInFlight || manager.isBusy)
         .accessibilityLabel(manager.status == .connected ? "Disconnect camera" : "Connect camera")
         .accessibilityHint(manager.status == .connected
             ? "Ends the current USB camera session."
@@ -459,7 +463,7 @@ public struct CameraConnectionView: View {
     private var writeAllButton: some View {
         let stagedCount = loadouts.stagedSlots.count
         let isConnected = manager.status == .connected
-        let canWrite = isConnected && stagedCount > 0 && !isWritingAll
+        let canWrite = isConnected && stagedCount > 0 && !manager.isBusy
 
         return Button {
             confirmWriteAll = true
@@ -552,7 +556,7 @@ public struct CameraConnectionView: View {
             .foregroundStyle(Color.white)
         }
         .buttonStyle(.plain)
-        .disabled(manager.status != .connected || manager.operation == .readingSlots || isWritingAll)
+        .disabled(manager.status != .connected || manager.isBusy)
         .help("Reads physical slots C1–C7 from the connected camera")
     }
 
@@ -573,7 +577,7 @@ public struct CameraConnectionView: View {
             .foregroundStyle(Theme.textSecondary)
         }
         .buttonStyle(.plain)
-        .disabled(loadouts.loadoutCountWithSettings() == 0 || isWritingAll)
+        .disabled(loadouts.loadoutCountWithSettings() == 0 || manager.isBusy)
         .help("Clears all 7 local recipe drafts")
     }
 
@@ -613,6 +617,7 @@ public struct CameraConnectionView: View {
                         isCameraConnected: manager.status == .connected,
                         isCameraSlotEmpty: loadouts.isCameraSlotEmpty(slot),
                         isWriting: manager.operation == .writingSlot(slot),
+                        isCameraBusy: manager.isBusy,
                         onSelect: { selectedDialSlot = slot },
                         onClear: { slotPendingLocalClear = slot },
                         onEdit: { slotToEdit = loadout },
@@ -689,14 +694,14 @@ public struct CameraConnectionView: View {
     }
 
     private func writeSingleSlot(_ slot: Int) {
-        guard manager.status == .connected, let loadout = loadouts.loadout(for: slot) else { return }
+        guard manager.status == .connected else { return }
         Task {
             do {
                 writeStatusFeedback = "Writing C\(slot) to camera…"
-                let result = try await manager.writeLoadout(loadout, to: slot)
-                if let observed = result.observedSnapshot, observed.slot == slot {
-                    loadouts.syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
-                    loadouts.markCameraWriteVerified(slot: slot)
+                let result = try await manager.writeSlot(slot, from: loadouts)
+                guard !loadouts.isDirty(slot) else {
+                    writeStatusFeedback = "Wrote C\(slot) to the camera. You edited it during the write, so the newer draft is still staged."
+                    return
                 }
                 let action = result.createdFromEmpty ? "Created & verified" : "Updated & verified"
                 let warnSuffix = result.warnings.isEmpty ? "" : " (warnings: \(result.warnings.joined(separator: ", ")))"
@@ -1376,7 +1381,7 @@ public struct RAFDarkroomView: View {
                             }
                         }
                         .buttonStyle(GlassProminentButtonStyle(color: Theme.cyanAccent, height: 34))
-                        .disabled(isConnectingCamera || manager.status == .connecting)
+                        .disabled(isConnectingCamera || manager.status == .connecting || manager.isBusy)
                         .accessibilityIdentifier("darkroom-connect-camera-button")
                     }
                 }
@@ -1417,7 +1422,7 @@ public struct RAFDarkroomView: View {
                             }
                         }
                         .buttonStyle(GlassProminentButtonStyle(color: Theme.cyanAccent, height: 40))
-                        .disabled(selectedRAFURL == nil)
+                        .disabled(selectedRAFURL == nil || manager.isBusy)
                         .accessibilityIdentifier("develop-raf-button")
 
                         if selectedRAFURL == nil {

@@ -8,23 +8,19 @@ public final class CameraManager: ObservableObject {
 
     @Published public private(set) var status: CameraStatus = .disconnected
     @Published public private(set) var cameraInfo: PTPCameraInfo?
-    /// Explicitly describes whether this backend can read live active settings.
-    /// USB RAW mode exposes C-slot properties, but not the active-property
-    /// telemetry range; an empty dictionary would incorrectly suggest a valid
-    /// successful read with zero settings.
-    @Published public private(set) var activeSettingsState: ActiveSettingsState = .notRead
-    /// Compatibility projection for existing views. It is nil unless live
-    /// settings were actually available; callers needing the reason should use
-    /// `activeSettingsState`.
-    public var activeSettings: [String: AnyHashable]? {
-        activeSettingsState.settings
-    }
     @Published public var lastError: String?
     @Published public private(set) var operation: CameraOperation = .idle
     @Published public private(set) var lastSlotRefresh: SlotRefreshResult?
+    /// True while a camera operation holds the gate or is queued behind it.
+    @Published public private(set) var isBusy = false
 
     private var client: PTPClientProtocol?
     private var connectionMonitorTask: Task<Void, Never>?
+    /// Bumped by `connect` and `disconnect()`. Work captured under an older
+    /// value belongs to an ended connection and must not touch the gate or
+    /// published state.
+    private var generation = 0
+    private var gateWaiters: [CheckedContinuation<Void, Error>] = []
 
     // MARK: - Connection
 
@@ -32,14 +28,17 @@ public final class CameraManager: ObservableObject {
         guard status != .connecting, status != .connected else { return }
 
         DebugLogger.info("CameraManager.connect() called", category: .camera)
+        generation += 1
+        let gen = generation
         status = .connecting
         operation = .connecting
         lastError = nil
         client = session
+        isBusy = true
 
         session.setDisconnectHandler { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.generation == gen else { return }
                 if self.status == .connected || self.status == .connecting {
                     DebugLogger.info("Camera USB physical disconnection detected", category: .camera)
                     self.disconnect()
@@ -51,34 +50,46 @@ public final class CameraManager: ObservableObject {
             try await withTimeout(timeout: 15.0) {
                 try await session.connect()
             }
+            guard gen == generation else { return }
 
             let info = session.cameraInfo
             self.cameraInfo = PTPCameraInfo(
                 model: info.model,
                 vendorExtensionId: info.vendorExtensionId
             )
-            // Active settings can fail for properties not supported in the current
-            // USB mode; don't let that fail the whole connection.
-            await readActiveSettings()
 
             // Keep dirty drafts: anything staged while offline still needs writing.
             if let loadouts {
-                _ = await refreshCameraSlots(into: loadouts)
+                operation = .readingSlots
+                _ = await refreshSlots(into: loadouts, overwriteDirtyDrafts: false, using: session, gen: gen)
+                guard gen == generation else { return }
             }
 
+            guard session.isConnected else {
+                disconnect()
+                return
+            }
             status = .connected
             operation = .idle
-            startConnectionMonitor()
+            release(gen)
+            startConnectionMonitor(gen)
         } catch {
+            guard gen == generation else { return }
             status = .error
             operation = .failed("Connection failed")
             lastError = "Connection failed. Check the USB connection and camera mode, then retry. \(error.localizedDescription)"
             session.disconnect()
             client = nil
+            release(gen)
         }
     }
 
     public func disconnect() {
+        generation += 1
+        let waiters = gateWaiters
+        gateWaiters = []
+        isBusy = false
+        waiters.forEach { $0.resume(throwing: CameraError.notConnected) }
         connectionMonitorTask?.cancel()
         connectionMonitorTask = nil
         client?.setDisconnectHandler(nil)
@@ -86,33 +97,25 @@ public final class CameraManager: ObservableObject {
         client = nil
         status = .disconnected
         cameraInfo = nil
-        activeSettingsState = .notRead
         lastError = nil
         operation = .idle
         lastSlotRefresh = nil
     }
 
-    private func startConnectionMonitor() {
+    private func startConnectionMonitor(_ gen: Int) {
         connectionMonitorTask?.cancel()
         connectionMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                guard let self = self, self.status == .connected else { break }
-                if let client = self.client, !client.isConnected {
+                guard let self = self, self.generation == gen, self.status == .connected else { break }
+                guard let client = self.client, client.isConnected else {
                     DebugLogger.info("Camera client reported isConnected == false; setting status to disconnected", category: .camera)
                     self.disconnect()
                     break
                 }
             }
         }
-    }
-
-    // MARK: - Active Settings
-
-    public func readActiveSettings() async {
-        guard let client = client, client.isConnected else { return }
-        activeSettingsState = await readAllActiveSettings()
     }
 
     // MARK: - Read C-States
@@ -122,14 +125,46 @@ public final class CameraManager: ObservableObject {
     }
 
     public func refreshCameraSlots(into loadouts: LoadoutStore?, overwriteDirtyDrafts: Bool = false) async -> SlotRefreshResult {
-        operation = .readingSlots
-        let result = await readCStatesWithStatus()
-        lastSlotRefresh = result
-        if !result.presets.isEmpty {
-            loadouts?.syncFromCameraPresetData(result.presets, overwriteDirtyDrafts: overwriteDirtyDrafts)
+        let result = try? await exclusive(.readingSlots) { client, gen in
+            await refreshSlots(into: loadouts, overwriteDirtyDrafts: overwriteDirtyDrafts, using: client, gen: gen)
         }
-        operation = result.failures.isEmpty ? .idle : .failed("Some camera slots could not be read")
+        return result ?? notConnectedRefresh
+    }
+
+    public func readCStatesWithStatus() async -> SlotRefreshResult {
+        let result = try? await exclusive(nil) { client, _ in
+            await readSlots(using: client)
+        }
+        return result ?? notConnectedRefresh
+    }
+
+    private var notConnectedRefresh: SlotRefreshResult {
+        SlotRefreshResult(
+            presets: [],
+            failures: (1...7).map { SlotRefreshFailure(slot: $0, message: CameraError.notConnected.localizedDescription) }
+        )
+    }
+
+    private func refreshSlots(
+        into loadouts: LoadoutStore?,
+        overwriteDirtyDrafts: Bool,
+        using client: PTPClientProtocol,
+        gen: Int
+    ) async -> SlotRefreshResult {
+        let revisions = loadouts.map { store in
+            Dictionary(uniqueKeysWithValues: (1...7).map { ($0, store.revision(of: $0)) })
+        }
+        let result = await readSlots(using: client)
+        guard gen == generation else { return result }
+        lastSlotRefresh = result
+        if let loadouts, !result.presets.isEmpty {
+            let presets = overwriteDirtyDrafts
+                ? result.presets.filter { loadouts.revision(of: $0.slot) == revisions?[$0.slot] }
+                : result.presets
+            loadouts.syncFromCameraPresetData(presets, overwriteDirtyDrafts: overwriteDirtyDrafts)
+        }
         if !result.failures.isEmpty {
+            operation = .failed("Some camera slots could not be read")
             let failureDetails = result.failures.map(\.description).joined(separator: "; ")
             let recoveryHint = result.failures.contains { $0.message.contains("slot_selection failed") }
                 ? " Slot selection could not acquire the camera PTP session. Close other camera apps, reconnect the USB cable, then retry."
@@ -139,14 +174,7 @@ public final class CameraManager: ObservableObject {
         return result
     }
 
-    public func readCStatesWithStatus() async -> SlotRefreshResult {
-        guard let client = client, client.isConnected else {
-            return SlotRefreshResult(
-                presets: [],
-                failures: (1...7).map { SlotRefreshFailure(slot: $0, message: CameraError.notConnected.localizedDescription) }
-            )
-        }
-
+    private func readSlots(using client: PTPClientProtocol) async -> SlotRefreshResult {
         var presetData: [PTPClientPresetData] = []
         var failures: [SlotRefreshFailure] = []
 
@@ -165,103 +193,189 @@ public final class CameraManager: ObservableObject {
 
     // MARK: - Import Recipe to C-State
 
-    public func importRecipeToCState(_ recipe: Recipe, slot: Int) async throws -> PTPPresetSlotWriteResult {
-        guard let client = client, client.isConnected else {
-            throw CameraError.notConnected
-        }
+    /// When `loadouts` is given, the verified readback replaces the slot only
+    /// if the slot has not changed since this call, including while queued.
+    public func importRecipeToCState(
+        _ recipe: Recipe,
+        slot: Int,
+        updating loadouts: LoadoutStore? = nil
+    ) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
             throw PTPError.invalidResponse("Preset slot must be 1–7")
         }
-
-        operation = .writingSlot(slot)
-        defer { if case .writingSlot = operation { operation = .idle } }
-        do {
-            return try await writePresetSlotRecoverably(
-                CSlotPresetEncoder.encode(recipe: recipe, slot: slot),
-                to: slot,
-                using: client
-            )
-        } catch {
-            operation = .failed("C\(slot) write failed")
-            lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
-            throw error
+        let revision = loadouts?.revision(of: slot)
+        return try await exclusive(nil) { client, gen in
+            let result = try await writePreset(CSlotPresetEncoder.encode(recipe: recipe, slot: slot), to: slot, using: client, gen: gen)
+            if let loadouts, let revision {
+                adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
+            }
+            return result
         }
     }
 
     // MARK: - Write Loadout
 
-    public func writeLoadout(_ loadout: Loadout, to slot: Int) async throws -> PTPPresetSlotWriteResult {
-        guard let client = client, client.isConnected else {
-            throw CameraError.notConnected
-        }
+    /// Writes the store's current draft for `slot`, captured once the camera
+    /// is free. The readback is adopted only if the draft did not change
+    /// during the write; callers can tell from `loadouts.isDirty(slot)`.
+    public func writeSlot(_ slot: Int, from loadouts: LoadoutStore) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
             throw PTPError.invalidResponse("Preset slot must be 1–7")
         }
+        return try await exclusive(nil) { client, gen in
+            try await writeStoredSlot(slot, from: loadouts, using: client, gen: gen)
+        }
+    }
 
-        operation = .writingSlot(slot)
-        defer { if case .writingSlot = operation { operation = .idle } }
-        do {
-            return try await writePresetSlotRecoverably(
-                CSlotPresetEncoder.encode(loadout: loadout, slot: slot),
-                to: slot,
-                using: client
-            )
-        } catch {
-            operation = .failed("C\(slot) write failed")
-            lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
-            throw error
+    public func writeLoadout(_ loadout: Loadout, to slot: Int) async throws -> PTPPresetSlotWriteResult {
+        guard (1...7).contains(slot) else {
+            throw PTPError.invalidResponse("Preset slot must be 1–7")
+        }
+        return try await exclusive(nil) { client, gen in
+            try await writePreset(CSlotPresetEncoder.encode(loadout: loadout, slot: slot), to: slot, using: client, gen: gen)
         }
     }
 
     // MARK: - Batch Write Staged Slots
 
     public func writeAllStagedSlots(from loadouts: LoadoutStore) async -> [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] {
-        var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
+        do {
+            return try await exclusive(nil) { client, gen in
+                var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
 
-        for slot in loadouts.stagedSlots {
-            guard let loadout = loadouts.loadout(for: slot) else { continue }
+                for slot in loadouts.stagedSlots {
+                    guard loadouts.stagedSlots.contains(slot) else { continue }
+                    guard gen == generation else {
+                        results.append((slot: slot, result: .failure(CameraError.notConnected)))
+                        continue
+                    }
 
-            do {
-                let writeResult = try await writeLoadout(loadout, to: slot)
-                if let snapshot = writeResult.observedSnapshot {
-                    loadouts.syncFromCameraPresetData([snapshot], overwriteDirtyDrafts: true)
+                    do {
+                        let writeResult = try await writeStoredSlot(slot, from: loadouts, using: client, gen: gen)
+                        results.append((slot: slot, result: .success(writeResult)))
+                    } catch {
+                        results.append((slot: slot, result: .failure(error)))
+                    }
                 }
-                loadouts.markCameraWriteVerified(slot: slot)
-                results.append((slot: slot, result: .success(writeResult)))
-            } catch {
-                results.append((slot: slot, result: .failure(error)))
-            }
-        }
 
-        return results
+                return results
+            }
+        } catch {
+            return loadouts.stagedSlots.map { (slot: $0, result: .failure(error)) }
+        }
     }
 
     // MARK: - RAF Conversion
 
     public func convertRAF(_ raf: RAFFile, profileModifier: ((inout Data) -> Void)? = nil) async -> RAFConversionOutcome {
-        guard let client = client, client.isConnected else {
-            return .failed(message: CameraError.notConnected.localizedDescription)
-        }
         // Profile modification is intentionally unsupported for the X100VI pipeline.
         _ = profileModifier
-        operation = .convertingRAF
-        defer { if case .convertingRAF = operation { operation = .idle } }
-        let outcome = await client.convertRAF(raf, profileModifier: nil)
-        if case .failed(let message) = outcome {
-            operation = .failed("RAW conversion failed")
-            lastError = "RAW conversion failed: \(message)"
+        do {
+            return try await exclusive(.convertingRAF) { client, gen in
+                let outcome = await client.convertRAF(raf, profileModifier: nil)
+                if gen == generation, case .failed(let message) = outcome {
+                    operation = .failed("RAW conversion failed")
+                    lastError = "RAW conversion failed: \(message)"
+                }
+                return outcome
+            }
+        } catch {
+            return .failed(message: error.localizedDescription)
         }
-        return outcome
     }
 
     public func capturePreview() async throws -> JPEGFile? {
-        guard let client = client, client.isConnected else {
+        try await exclusive(nil) { client, _ in
+            try await client.capturePreview()
+        }
+    }
+
+    // MARK: - Camera Gate
+
+    /// Runs `body` as the only camera operation. The camera applies property
+    /// reads and writes to whichever C slot was last selected, so no two
+    /// operations may interleave. Not reentrant: multi-slot work holds one
+    /// acquisition and calls private bodies, never public operations.
+    private func exclusive<T>(
+        _ op: CameraOperation?,
+        _ body: @MainActor (PTPClientProtocol, Int) async throws -> T
+    ) async throws -> T {
+        guard status == .connected, let client, client.isConnected else {
             throw CameraError.notConnected
         }
-        return try await client.capturePreview()
+        let gen = generation
+        try await acquire(gen)
+        defer { release(gen) }
+        if let op { operation = op }
+        defer { if let op, gen == generation, operation == op { operation = .idle } }
+        return try await body(client, gen)
+    }
+
+    private func acquire(_ gen: Int) async throws {
+        guard isBusy else {
+            isBusy = true
+            return
+        }
+        // A handoff from `release` resumes this waiter with the gate still held.
+        try await withCheckedThrowingContinuation { gateWaiters.append($0) }
+        guard gen == generation else { throw CameraError.notConnected }
+    }
+
+    private func release(_ gen: Int) {
+        guard gen == generation else { return }
+        if gateWaiters.isEmpty {
+            isBusy = false
+        } else {
+            gateWaiters.removeFirst().resume()
+        }
     }
 
     // MARK: - Helpers
+
+    private func writeStoredSlot(
+        _ slot: Int,
+        from loadouts: LoadoutStore,
+        using client: PTPClientProtocol,
+        gen: Int
+    ) async throws -> PTPPresetSlotWriteResult {
+        guard let loadout = loadouts.loadout(for: slot) else {
+            throw PTPError.invalidResponse("No local draft for C\(slot)")
+        }
+        let revision = loadouts.revision(of: slot)
+        let result = try await writePreset(CSlotPresetEncoder.encode(loadout: loadout, slot: slot), to: slot, using: client, gen: gen)
+        adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
+        return result
+    }
+
+    private func adopt(
+        _ result: PTPPresetSlotWriteResult,
+        for slot: Int,
+        into loadouts: LoadoutStore,
+        ifUnchangedSince revision: Int,
+        gen: Int
+    ) {
+        guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return }
+        loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision)
+    }
+
+    private func writePreset(
+        _ data: @autoclosure () throws -> PTPClientPresetData,
+        to slot: Int,
+        using client: PTPClientProtocol,
+        gen: Int
+    ) async throws -> PTPPresetSlotWriteResult {
+        if gen == generation { operation = .writingSlot(slot) }
+        defer { if gen == generation, operation == .writingSlot(slot) { operation = .idle } }
+        do {
+            return try await writePresetSlotRecoverably(data(), to: slot, using: client)
+        } catch {
+            if gen == generation {
+                operation = .failed("C\(slot) write failed")
+                lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
+            }
+            throw error
+        }
+    }
 
     /// Captures a trustworthy pre-write state and restores it after any
     /// partial/verification failure. Camera raw-zero empty slots are a
@@ -338,73 +452,6 @@ public final class CameraManager: ObservableObject {
             rollback: rollback,
             failurePhase: phase
         )
-    }
-
-    private func readAllActiveSettings() async -> ActiveSettingsState {
-        guard let client = client else { return .notRead }
-
-        var settings: [String: AnyHashable] = [:]
-
-        let propertyCodes: [String: UInt16] = [
-            "FilmSim": 0xD001, "Color": 0xD002, "DR": 0xD007,
-            "WB": 0x5005, "WBRed": 0xD00B, "WBBlue": 0xD00C,
-            "ColorTemp": 0xD017, "HighIsoNr": 0xD01C,
-            "Grain": 0xD023, "Highlight": 0xD320, "Shadow": 0xD321,
-            "ISO": 0x500F, "Sharpness": 0x5015, "ExpoComp": 0x5010
-        ]
-
-        for (name, code) in propertyCodes {
-            do {
-                let response = try await client.readProperty(code)
-                switch response {
-                case .uint32(let value):
-                    settings[name] = value as AnyHashable
-                case .int32(let value):
-                    settings[name] = value as AnyHashable
-                case .string(let value):
-                    settings[name] = value as AnyHashable
-                case .data(let data):
-                    settings[name] = data as AnyHashable
-                case .unsupported, .error:
-                    DebugLogger.debug("Property 0x\(String(code, radix: 16)) unsupported or errored", category: .camera)
-                }
-            } catch {
-                DebugLogger.debug("Property 0x\(String(code, radix: 16)) read failed: \(error.localizedDescription)", category: .camera)
-            }
-        }
-
-        // The X100VI in USB RAW CONV mode rejects the active-property range
-        // (for example D001/D007). Treat an all-unavailable pass as a
-        // capability result, not as an apparently successful empty payload.
-        return settings.isEmpty
-            ? .unavailable(.unsupportedInUSBRAWMode)
-            : .available(settings)
-    }
-}
-
-/// Outcome of attempting to read the current, live camera settings.
-///
-/// This is deliberately separate from C-slot reads: the camera can support
-/// preset-slot inspection while declining active-property telemetry.
-public enum ActiveSettingsState: Equatable {
-    case notRead
-    case available([String: AnyHashable])
-    case unavailable(ActiveSettingsUnavailableReason)
-
-    public var settings: [String: AnyHashable]? {
-        guard case .available(let settings) = self else { return nil }
-        return settings
-    }
-}
-
-public enum ActiveSettingsUnavailableReason: String, Sendable, Equatable {
-    case unsupportedInUSBRAWMode
-
-    public var userFacingDescription: String {
-        switch self {
-        case .unsupportedInUSBRAWMode:
-            return "Live active settings are unavailable while the X100VI is in USB RAW mode."
-        }
     }
 }
 

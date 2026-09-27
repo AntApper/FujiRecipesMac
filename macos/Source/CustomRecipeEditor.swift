@@ -77,10 +77,6 @@ struct CustomRecipeEditor: View {
         )
     }
 
-    static func duplicate(from recipe: Recipe) -> Recipe {
-        recipe.duplicated()
-    }
-
     // MARK: - Real-Time Validation
 
     private var trimmedName: String {

@@ -17,7 +17,6 @@
 		432BF628A1C8228B8A3101DD /* FilmSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A976B5E1A6946AABDBA234 /* FilmSimulation.swift */; };
 		4D695F976FDDAF5AFFDE76D0 /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4596BE669854A41A6B47EF78 /* Recipe.swift */; };
 		4FCAB65989ED68CDBD8AB64A /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4465AEE694517412281AF398 /* CameraManager.swift */; };
-		5085A37C22AAA57EDC72175E /* PresetSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */; };
 		53EA2196E1C97B4D6D214F4E /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4596BE669854A41A6B47EF78 /* Recipe.swift */; };
 		63F1399D508AEEBFD42A3815 /* DynamicRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EA4AEE17C12FA4754D0BB7 /* DynamicRange.swift */; };
 		740D37035E27905FC3A6156F /* EffectIntensity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0815A28D6BB86760831BE5 /* EffectIntensity.swift */; };
@@ -26,7 +25,6 @@
 		BBD7DCE4F9EF0663E4E9C1F6 /* WhiteBalanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */; };
 		C280F870FF663028BB6D44AC /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B5BB39B7CC3474BEEDF43E /* FavoritesStore.swift */; };
 		D3140AC40792BDA8B75F3514 /* PTPConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F552636700A2461E11C95C3A /* PTPConstants.swift */; };
-		DE7300DF2CB796B3732CB4AC /* PresetSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */; };
 		E6E51D8C1A964A81678BB229 /* WhiteBalanceMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */; };
 		EC911AFB6AD7F49A2B1AD464 /* LoadoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875614B04BEDBF25F3FCBA39 /* LoadoutStore.swift */; };
 /* End PBXBuildFile section */
@@ -43,7 +41,6 @@
 		A7A976B5E1A6946AABDBA234 /* FilmSimulation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilmSimulation.swift; sourceTree = "<group>"; };
 		B31ABFB3ADE4BE2BB428990A /* WhiteBalanceMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhiteBalanceMode.swift; sourceTree = "<group>"; };
 		D9FE01CFF049C98715CBCC43 /* FujiRecipesCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FujiRecipesCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetSlot.swift; sourceTree = "<group>"; };
 		F552636700A2461E11C95C3A /* PTPConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTPConstants.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -54,7 +51,6 @@
 				4465AEE694517412281AF398 /* CameraManager.swift */,
 				12B5BB39B7CC3474BEEDF43E /* FavoritesStore.swift */,
 				875614B04BEDBF25F3FCBA39 /* LoadoutStore.swift */,
-				EDDA9868EE51BA225EEF9E29 /* PresetSlot.swift */,
 				4596BE669854A41A6B47EF78 /* Recipe.swift */,
 			);
 			path = Models;
@@ -189,7 +185,6 @@
 				33C730AB66E06EC80104E0A8 /* GrainEffect.swift in Sources */,
 				146881519CB5FE2F36D4ECA7 /* LoadoutStore.swift in Sources */,
 				159B88F74DC7D56ADF7DCB05 /* PTPConstants.swift in Sources */,
-				5085A37C22AAA57EDC72175E /* PresetSlot.swift in Sources */,
 				53EA2196E1C97B4D6D214F4E /* Recipe.swift in Sources */,
 				BBD7DCE4F9EF0663E4E9C1F6 /* WhiteBalanceMode.swift in Sources */,
 			);
@@ -207,7 +202,6 @@
 				A21D649AD3454D2B62BCE661 /* GrainEffect.swift in Sources */,
 				EC911AFB6AD7F49A2B1AD464 /* LoadoutStore.swift in Sources */,
 				D3140AC40792BDA8B75F3514 /* PTPConstants.swift in Sources */,
-				DE7300DF2CB796B3732CB4AC /* PresetSlot.swift in Sources */,
 				4D695F976FDDAF5AFFDE76D0 /* Recipe.swift in Sources */,
 				E6E51D8C1A964A81678BB229 /* WhiteBalanceMode.swift in Sources */,
 			);

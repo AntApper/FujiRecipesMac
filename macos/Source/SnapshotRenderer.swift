@@ -41,15 +41,12 @@ public enum SnapshotRenderer {
         let shots: [(String, AppTab, AnyView)] = [
             ("recipes_studio_\(tag).png", .recipes, AnyView(
                 RecipeListView(store: store, cameraManager: camera)
-                    .environment(\.snapshotMode, true)
             )),
             ("camera_hub_\(tag).png", .camera, AnyView(
                 CameraConnectionView(manager: camera, loadouts: store.loadouts)
-                    .environment(\.snapshotMode, true)
             )),
             ("darkroom_\(tag).png", .darkroom, AnyView(
                 RAFDarkroomView(manager: camera, store: store)
-                    .environment(\.snapshotMode, true)
             )),
         ]
 
@@ -190,18 +187,5 @@ public enum SnapshotRenderer {
             print("Failed to encode PNG for \(url.lastPathComponent)")
         }
         window.close()
-    }
-}
-
-// MARK: - Snapshot environment (disable searchable/toolbar chrome that blanks offscreen)
-
-private struct SnapshotModeKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    var snapshotMode: Bool {
-        get { self[SnapshotModeKey.self] }
-        set { self[SnapshotModeKey.self] = newValue }
     }
 }

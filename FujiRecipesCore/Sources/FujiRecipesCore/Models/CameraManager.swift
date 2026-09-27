@@ -8,7 +8,7 @@ public final class CameraManager: ObservableObject {
 
     @Published public private(set) var status: CameraStatus = .disconnected
     @Published public private(set) var cameraInfo: PTPCameraInfo?
-    @Published public var lastError: String?
+    @Published public var lastError: CameraFailure?
     @Published public private(set) var operation: CameraOperation = .idle
     @Published public private(set) var lastSlotRefresh: SlotRefreshResult?
     /// True while a camera operation holds the gate or is queued behind it.
@@ -77,7 +77,7 @@ public final class CameraManager: ObservableObject {
             guard gen == generation else { return }
             status = .error
             operation = .failed("Connection failed")
-            lastError = "Connection failed. Check the USB connection and camera mode, then retry. \(error.localizedDescription)"
+            lastError = CameraFailure(.connection, "Check the USB connection and camera mode, then retry. \(error.localizedDescription)")
             session.disconnect()
             client = nil
             release(gen)
@@ -163,13 +163,15 @@ public final class CameraManager: ObservableObject {
                 : result.presets
             loadouts.syncFromCameraPresetData(presets, overwriteDirtyDrafts: overwriteDirtyDrafts)
         }
-        if !result.failures.isEmpty {
+        if result.failures.isEmpty {
+            clearFailure(.slotRead)
+        } else {
             operation = .failed("Some camera slots could not be read")
             let failureDetails = result.failures.map(\.description).joined(separator: "; ")
             let recoveryHint = result.failures.contains { $0.message.contains("slot_selection failed") }
                 ? " Slot selection could not acquire the camera PTP session. Close other camera apps, reconnect the USB cable, then retry."
                 : ""
-            lastError = "Camera slot refresh was partial: \(failureDetails)\(recoveryHint)"
+            lastError = CameraFailure(.slotRead, "\(failureDetails)\(recoveryHint)")
         }
         return result
     }
@@ -273,9 +275,15 @@ public final class CameraManager: ObservableObject {
         do {
             return try await exclusive(.convertingRAF) { client, gen in
                 let outcome = await client.convertRAF(raf, profileModifier: nil)
-                if gen == generation, case .failed(let message) = outcome {
+                guard gen == generation else { return outcome }
+                switch outcome {
+                case .failed(let message):
                     operation = .failed("RAW conversion failed")
-                    lastError = "RAW conversion failed: \(message)"
+                    lastError = CameraFailure(.rawConversion, message)
+                case .downloadedJPEG, .triggerAcceptedOutputNotRetrievable:
+                    clearFailure(.rawConversion)
+                case .cancelled:
+                    break
                 }
                 return outcome
             }
@@ -367,14 +375,20 @@ public final class CameraManager: ObservableObject {
         if gen == generation { operation = .writingSlot(slot) }
         defer { if gen == generation, operation == .writingSlot(slot) { operation = .idle } }
         do {
-            return try await writePresetSlotRecoverably(data(), to: slot, using: client)
+            let result = try await writePresetSlotRecoverably(data(), to: slot, using: client)
+            if gen == generation { clearFailure(.slotWrite(slot)) }
+            return result
         } catch {
             if gen == generation {
                 operation = .failed("C\(slot) write failed")
-                lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
+                lastError = CameraFailure(.slotWrite(slot), error.localizedDescription)
             }
             throw error
         }
+    }
+
+    private func clearFailure(_ kind: CameraFailure.Kind) {
+        if lastError?.kind == kind { lastError = nil }
     }
 
     /// Captures a trustworthy pre-write state and restores it after any
@@ -471,6 +485,25 @@ public enum CameraOperation: Equatable, Sendable {
     case writingSlot(Int)
     case convertingRAF
     case failed(String)
+}
+
+/// The most recent camera failure. It stays until the user dismisses it or
+/// the next operation of the same kind succeeds.
+public struct CameraFailure: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        case connection
+        case slotRead
+        case slotWrite(Int)
+        case rawConversion
+    }
+
+    public let kind: Kind
+    public let message: String
+
+    public init(_ kind: Kind, _ message: String) {
+        self.kind = kind
+        self.message = message
+    }
 }
 
 public struct SlotRefreshFailure: Equatable, Sendable {

@@ -27,9 +27,11 @@ final class CameraFeedbackTests: XCTestCase {
         await manager.connect(using: camera)
         camera.failingWrites = [3]
         _ = try? await manager.writeLoadout(draft(3, .acros), to: 3)
-        XCTAssertNotNil(manager.lastError)
+        XCTAssertEqual(manager.lastError?.kind, .slotWrite(3))
 
         camera.failingWrites = []
+        _ = try await manager.writeLoadout(draft(5, .velvia), to: 5)
+        XCTAssertEqual(manager.lastError?.kind, .slotWrite(3), "a C5 write cleared C3's failure")
         _ = try await manager.writeLoadout(draft(3, .acros), to: 3)
 
         XCTAssertNil(manager.lastError, "a successful C3 write left C3's failure banner up")
@@ -43,7 +45,7 @@ final class CameraFeedbackTests: XCTestCase {
         let raf = RAFFile(name: "DSCF0001.RAF", data: Data([0x46]))
         camera.conversionOutcome = .failed(message: "camera busy")
         _ = await manager.convertRAF(raf)
-        XCTAssertNotNil(manager.lastError)
+        XCTAssertEqual(manager.lastError, CameraFailure(.rawConversion, "camera busy"))
 
         camera.conversionOutcome = .triggerAcceptedOutputNotRetrievable(reason: "no download")
         _ = await manager.convertRAF(raf)
@@ -59,9 +61,11 @@ final class CameraFeedbackTests: XCTestCase {
         await manager.connect(using: camera, loadouts: store)
         camera.failingReads = [6]
         _ = await manager.refreshCameraSlots(into: store)
-        XCTAssertNotNil(manager.lastError)
+        XCTAssertEqual(manager.lastError, CameraFailure(.slotRead, "C6: Failed to read property 0xd18d: busy"))
 
         camera.failingReads = []
+        _ = try await manager.writeLoadout(draft(2, .velvia), to: 2)
+        XCTAssertEqual(manager.lastError?.kind, .slotRead, "a write cleared the refresh failure")
         _ = await manager.refreshCameraSlots(into: store)
 
         XCTAssertNil(manager.lastError, "a complete refresh left the partial-refresh banner up")

@@ -84,8 +84,8 @@ public struct CameraConnectionView: View {
                     }
 
                     // Error / Warning Diagnostic HUD
-                    if let error = manager.lastError {
-                        errorHUD(error)
+                    if let failure = manager.lastError {
+                        errorHUD(failure)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -6)),
                                 removal: .opacity.combined(with: .scale(scale: 0.95))
@@ -336,25 +336,21 @@ public struct CameraConnectionView: View {
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
-    private func errorHUD(_ error: String) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.title3)
-                    .foregroundStyle(Theme.fujiAmber)
-                    .symbolEffect(.pulse)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Connection Diagnostic")
-                        .font(.subheadline.weight(.semibold))
-                        .glassPrimary()
-                    Text(error)
-                        .font(.caption)
-                        .glassSecondary()
-                }
-
-                Spacer(minLength: 8)
-
+    private func errorHUD(_ failure: CameraFailure) -> some View {
+        let title: String
+        let offersTroubleshooting: Bool
+        switch failure.kind {
+        case .connection:
+            (title, offersTroubleshooting) = ("Connection Failed", true)
+        case .slotRead:
+            (title, offersTroubleshooting) = ("Some Slots Couldn’t Be Read", true)
+        case .slotWrite(let slot):
+            (title, offersTroubleshooting) = ("C\(slot) Write Failed", false)
+        case .rawConversion:
+            (title, offersTroubleshooting) = ("RAW Conversion Failed", false)
+        }
+        let actions = HStack(spacing: 8) {
+            if offersTroubleshooting {
                 Button("Troubleshooting") {
                     showTroubleshooting = true
                 }
@@ -362,28 +358,51 @@ public struct CameraConnectionView: View {
                 .frame(width: 150)
                 .accessibilityHint("Opens USB camera connection troubleshooting steps.")
             }
+            Button("Dismiss") {
+                manager.lastError = nil
+            }
+            .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.textSecondary, height: 30))
+            .frame(width: 90)
+        }
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title3)
+                    .foregroundStyle(Theme.fujiAmber)
+                    .symbolEffect(.pulse)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .glassPrimary()
+                    Text(failure.message)
+                        .font(.caption)
+                        .glassSecondary()
+                }
+
+                Spacer(minLength: 8)
+
+                actions
+            }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.title3)
                         .foregroundStyle(Theme.fujiAmber)
-                    Text("Connection Diagnostic")
+                    Text(title)
                         .font(.subheadline.weight(.semibold))
                         .glassPrimary()
                 }
-                Text(error)
+                Text(failure.message)
                     .font(.caption)
                     .glassSecondary()
-                Button("Troubleshooting Guide") {
-                    showTroubleshooting = true
-                }
-                .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 30))
-                .frame(maxWidth: .infinity)
-                .accessibilityHint("Opens USB camera connection troubleshooting steps.")
+                actions
             }
         }
         .glassCard(padding: 14, tint: Theme.fujiAmber.opacity(0.06), borderColor: Theme.fujiAmber.opacity(0.3))
-        .accessibilityLabel("Connection diagnostic: \(error)")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(title): \(failure.message)")
     }
 
     // MARK: - Primary Action Banner & Controls

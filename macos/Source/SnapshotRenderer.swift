@@ -95,7 +95,7 @@ public enum SnapshotRenderer {
                 .background(Color(red: 0.10, green: 0.105, blue: 0.12))
 
                 HStack(alignment: .top, spacing: 0) {
-                    SidebarView(selection: .constant(tab), recipeStore: store, cameraManager: camera)
+                    SidebarView(selection: .constant(tab), recipeStore: store, cameraManager: camera, onToggleConnection: {})
                         .frame(width: sidebarWidth, height: bodyHeight, alignment: .topLeading)
 
                     Rectangle()

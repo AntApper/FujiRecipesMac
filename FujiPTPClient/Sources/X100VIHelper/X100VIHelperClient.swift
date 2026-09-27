@@ -4,80 +4,6 @@
 import Foundation
 import FujiRecipesCore
 
-#if !canImport(Darwin)
-extension FileHandle {
-    struct LinuxAsyncBytes: AsyncSequence {
-        typealias Element = UInt8
-        let handle: FileHandle
-
-        struct AsyncIterator: AsyncIteratorProtocol {
-            let handle: FileHandle
-            var buffer = Data()
-            var index = 0
-
-            mutating func next() async throws -> UInt8? {
-                if index < buffer.count {
-                    let byte = buffer[index]
-                    index += 1
-                    return byte
-                }
-                buffer = handle.readData(ofLength: 4096)
-                index = 0
-                if buffer.isEmpty { return nil }
-                let byte = buffer[index]
-                index += 1
-                return byte
-            }
-        }
-
-        func makeAsyncIterator() -> AsyncIterator {
-            AsyncIterator(handle: handle)
-        }
-
-        var lines: LinuxAsyncLineSequence<LinuxAsyncBytes> {
-            LinuxAsyncLineSequence(self)
-        }
-    }
-
-    var bytes: LinuxAsyncBytes {
-        LinuxAsyncBytes(handle: self)
-    }
-}
-
-struct LinuxAsyncLineSequence<Base: AsyncSequence>: AsyncSequence where Base.Element == UInt8 {
-    typealias Element = String
-    let base: Base
-
-    init(_ base: Base) {
-        self.base = base
-    }
-
-    struct AsyncIterator: AsyncIteratorProtocol {
-        var baseIterator: Base.AsyncIterator
-
-        mutating func next() async throws -> String? {
-            var lineBytes: [UInt8] = []
-            while let byte = try await baseIterator.next() {
-                if byte == UInt8(ascii: "\n") {
-                    return String(decoding: lineBytes, as: UTF8.self)
-                }
-                if byte != UInt8(ascii: "\r") {
-                    lineBytes.append(byte)
-                }
-            }
-            if !lineBytes.isEmpty {
-                return String(decoding: lineBytes, as: UTF8.self)
-            }
-            return nil
-        }
-    }
-
-    func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(baseIterator: base.makeAsyncIterator())
-    }
-}
-#endif
-
 /// PTPClientProtocol implementation that spawns the x100vi_helper C executable.
 /// The C helper uses libusb to send PTP containers directly to the X100VI.
 ///
@@ -91,10 +17,8 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     private var process: Process?
     private var inputPipe: Pipe?
     private var errorPipe: Pipe?
-    private var lineIterator: AsyncThrowingStream<String, any Error>.Iterator?
     private var requestStreamContinuation: AsyncStream<PendingRequest>.Continuation?
     private var requestProcessorTask: Task<Void, Never>?
-    private var stderrReaderTask: Task<Void, Never>?
     private var stderrTail = ""
     private var terminationSummary: String?
     private var isConnectedFlag = false
@@ -185,32 +109,15 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
 
         try process.run()
 
-        // Build an async line iterator over the helper's stdout.  We bridge
-        // FileHandle's bytes.lines into an AsyncThrowingStream so the iterator
-        // type is simple and Sendable-friendly.
         let (lines, linesContinuation) = AsyncThrowingStream<String, any Error>.makeStream()
-        Task {
-            do {
-                for try await rawLine in stdoutPipe.fileHandleForReading.bytes.lines {
-                    linesContinuation.yield(String(rawLine))
-                }
-                linesContinuation.finish()
-            } catch {
-                linesContinuation.finish(throwing: error)
-            }
+        LineReader.start(stdoutPipe.fileHandleForReading) { line in
+            if let line { linesContinuation.yield(line) } else { linesContinuation.finish() }
         }
-
-        // The helper emits useful libusb/PTP diagnostics on stderr.  Drain it
-        // continuously (to avoid a full pipe stalling a long write) and retain
-        // only a small tail for an actionable error if the child terminates.
-        let stderrReader = Task { [weak self] in
-            do {
-                for try await rawLine in stderrPipe.fileHandleForReading.bytes.lines {
-                    self?.appendHelperStderr(String(rawLine))
-                }
-            } catch {
-                self?.appendHelperStderr("stderr reader failed: \(error.localizedDescription)")
-            }
+        // The helper emits libusb/PTP diagnostics on stderr. Drain it so a
+        // full pipe cannot stall a long write, and keep a small tail for an
+        // actionable error if the child terminates.
+        LineReader.start(stderrPipe.fileHandleForReading) { [weak self] line in
+            if let line { self?.appendHelperStderr(line) }
         }
 
         let (requestStream, requestContinuation) = AsyncStream<PendingRequest>.makeStream()
@@ -219,17 +126,19 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             self.process = process
             self.inputPipe = stdinPipe
             self.errorPipe = stderrPipe
-            self.lineIterator = lines.makeAsyncIterator()
             self.requestStreamContinuation = requestContinuation
-            self.stderrReaderTask = stderrReader
             self.stderrTail = ""
             self.terminationSummary = nil
         }
 
-        // Start the single worker that owns the iterator and serialises I/O.
         let processor = Task { [weak self] in
             guard let self else { return }
-            await self.processRequests(from: requestStream)
+            await self.processRequests(
+                from: requestStream,
+                responses: lines,
+                input: stdinPipe.fileHandleForWriting,
+                process: process
+            )
         }
         self.queue.sync { self.requestProcessorTask = processor }
 
@@ -266,26 +175,25 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     }
 
     public func disconnect() {
-        let processToStop: Process? = queue.sync {
-            guard shutdownTask == nil else { return nil }
+        queue.sync {
+            guard shutdownTask == nil else { return }
             isConnectedFlag = false
             lifecycle = .disconnecting
             guard let process else {
                 lifecycle = .idle
-                return nil
+                return
             }
-            return process
-        }
-        guard let processToStop else { return }
 
-        // PTPClientProtocol intentionally exposes synchronous disconnect.
-        // Keep that API stable while serialising a graceful JSON teardown
-        // behind it; a following connect awaits this task before spawning.
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await self.shutdownHelperGracefully(processToStop)
+            // PTPClientProtocol intentionally exposes synchronous disconnect.
+            // Keep that API stable while serialising a graceful JSON teardown
+            // behind it; a following connect awaits this task before spawning.
+            // The task clears `shutdownTask` on `queue`, and a dead helper's
+            // teardown can do that before a separate store runs, so assign it here.
+            shutdownTask = Task { [weak self] in
+                guard let self else { return }
+                await self.shutdownHelperGracefully(process)
+            }
         }
-        queue.sync { shutdownTask = task }
     }
 
     public func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
@@ -803,9 +711,7 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     ) -> [String: any Sendable] {
         var params: [String: any Sendable] = ["index": index]
 
-        // x100vi_helper.c refuses a whole write whose name exceeds its
-        // FUJI_PRESET_NAME_MAX_CHARACTERS of 15.
-        if !data.name.isEmpty { params["name"] = String(data.name.prefix(15)) }
+        if !data.name.isEmpty { params["name"] = CameraPresetName.label(for: data.name, slot: index) }
         if let v = data.filmSimulation { params["film_simulation"] = Int(v) }
         if let v = data.dynamicRange { params["dynamic_range"] = Int(v) }
         if let v = data.grainEffect { params["grain_effect"] = Int(v) }
@@ -888,9 +794,17 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
         init(_ dict: [String: Any]) { self.dict = dict }
     }
 
-    /// The single worker that owns the helper's stdout iterator and processes
-    /// one request at a time.  This guarantees request/response ordering.
-    private func processRequests(from stream: AsyncStream<PendingRequest>) async {
+    /// The single worker for one helper session. It processes one request at
+    /// a time, which guarantees request/response ordering. It takes the
+    /// session's pipes and process because it can outlive teardown and must
+    /// never reach a later session.
+    private func processRequests(
+        from stream: AsyncStream<PendingRequest>,
+        responses: AsyncThrowingStream<String, any Error>,
+        input: FileHandle,
+        process: Process
+    ) async {
+        var responseLines = responses.makeAsyncIterator()
         for await request in stream {
             // A request can time out while waiting behind a long transfer.
             // Do not write cancelled queued work to the camera.
@@ -898,15 +812,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
                 continue
             }
             do {
-                var (iterator, inputPipe, process) = self.queue.sync { () -> (AsyncThrowingStream<String, any Error>.Iterator, Pipe, Process) in
-                    guard let iterator = self.lineIterator,
-                          let inputPipe = self.inputPipe,
-                          let process = self.process else {
-                        fatalError("Request processor started before connect")
-                    }
-                    return (iterator, inputPipe, process)
-                }
-
                 guard process.isRunning else {
                     throw PTPError.notConnected
                 }
@@ -921,15 +826,11 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
                     throw PTPError.invalidResponse("Failed to encode request")
                 }
 
-                inputPipe.fileHandleForWriting.write(lineData)
+                input.write(lineData)
 
-                guard let responseLine = try await iterator.next() else {
+                guard let responseLine = try await responseLines.next() else {
                     throw PTPError.invalidResponse(self.helperTerminationDetails(for: process))
                 }
-
-                // Store the mutated iterator back (AsyncThrowingStream iterators
-                // are value types that share read state via internal reference).
-                self.queue.sync { self.lineIterator = iterator }
 
                 guard let responseData = responseLine.data(using: String.Encoding.utf8),
                       let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
@@ -1018,11 +919,8 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             requestStreamContinuation = nil
             requestProcessorTask?.cancel()
             requestProcessorTask = nil
-            stderrReaderTask?.cancel()
-            stderrReaderTask = nil
             inputPipe = nil
             errorPipe = nil
-            lineIterator = nil
             process = nil
             lifecycle = .idle
             shutdownTask = nil
@@ -1117,6 +1015,32 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
         #endif
 
         return nil
+    }
+}
+
+/// Passes each line read from a handle to `deliver`, then `nil` at end of
+/// file. Foundation serializes `FileHandle.bytes` reads, so a read parked on
+/// the helper's idle stderr would stall its stdout replies.
+private final class LineReader: @unchecked Sendable {
+    /// Needs no lock: `readabilityHandler` calls for one handle never overlap.
+    private var pending = Data()
+
+    static func start(_ handle: FileHandle, deliver: @escaping @Sendable (String?) -> Void) {
+        let reader = LineReader()
+        handle.readabilityHandler = { handle in
+            let data = handle.availableData
+            reader.pending.append(data)
+            while let newline = reader.pending.firstIndex(of: UInt8(ascii: "\n")) {
+                deliver(String(decoding: reader.pending[..<newline], as: UTF8.self))
+                reader.pending.removeSubrange(...newline)
+            }
+            guard data.isEmpty else { return }
+            handle.readabilityHandler = nil
+            if !reader.pending.isEmpty {
+                deliver(String(decoding: reader.pending, as: UTF8.self))
+            }
+            deliver(nil)
+        }
     }
 }
 

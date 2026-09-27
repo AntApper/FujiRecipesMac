@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "helper_source": "poc-x100vi-reader/x100vi_helper.c",
-  "helper_source_sha256": "a5ac77aad34266d282bad49a572abc0fd3b90c3f82f366036fe2b19ed041fa7d",
-  "helper_sha256": "02c227507ab4cb21de118bcaa56467d4bd9e4b931d08c49fb34dd9eeeb00fdc4",
+  "helper_source_sha256": "066fa8bb9088c9e2ecd9246e85518c7f3b51c48c5a3b6098be7d5ff997f73196",
+  "helper_sha256": "5d6eb71e4f5fa26d8f73caedd4d72ebed8a0376ee106f92ea80893e3b9471c95",
   "runtime": "libusb-1.0.0.dylib",
-  "runtime_sha256": "fd41f0045567cb927f4aabc5e52eeefd32cb7df6b7f5d54964161069918f6e31",
+  "runtime_sha256": "8059d22be632bca4fab0c1bdaaba2abe1835aa1a9db1d24913d8b11575c4bfa6",
   "architectures": "x86_64 arm64",
   "runtime_install_name": "@rpath/libusb-1.0.0.dylib",
   "helper_rpath": "@loader_path"

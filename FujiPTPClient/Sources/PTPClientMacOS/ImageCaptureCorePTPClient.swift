@@ -416,36 +416,45 @@ private final class DeviceCoordinator: NSObject, ICDeviceBrowserDelegate, @unche
     }
 
     func acquireCamera(timeout: TimeInterval = 15.0) async throws -> ICCameraDevice {
-        let sendable: SendableCamera = try await withCheckedThrowingContinuation { continuation in
-            let gate = ContinuationGate(continuation)
-            queue.async {
-                if let camera = self.matchingCamera {
+        let gate = ContinuationGate<SendableCamera>()
+        let sendable = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                gate.install(continuation)
+                lookUpCamera(timeout: timeout, gate: gate)
+            }
+        } onCancel: {
+            gate.cancel()
+        }
+        return sendable.camera
+    }
+
+    private func lookUpCamera(timeout: TimeInterval, gate: ContinuationGate<SendableCamera>) {
+        queue.async {
+            if let camera = self.matchingCamera {
+                _ = gate.finishReturning(SendableCamera(camera: camera))
+                return
+            }
+
+            for device in self.browser.devices ?? [] {
+                if let camera = device as? ICCameraDevice, self.isTargetCamera(camera) {
+                    self.matchingCamera = camera
                     _ = gate.finishReturning(SendableCamera(camera: camera))
                     return
                 }
+            }
 
-                for device in self.browser.devices ?? [] {
-                    if let camera = device as? ICCameraDevice, self.isTargetCamera(camera) {
-                        self.matchingCamera = camera
-                        _ = gate.finishReturning(SendableCamera(camera: camera))
-                        return
-                    }
-                }
+            let timer = DispatchWorkItem {
+                _ = gate.finishThrowing(PTPError.connectionFailed(
+                    "ImageCaptureCore did not find an X100VI camera within \(Int(timeout)) seconds."
+                ))
+            }
+            self.queue.asyncAfter(deadline: .now() + timeout, execute: timer)
 
-                let timer = DispatchWorkItem {
-                    _ = gate.finishThrowing(PTPError.connectionFailed(
-                        "ImageCaptureCore did not find an X100VI camera within \(Int(timeout)) seconds."
-                    ))
-                }
-                self.queue.asyncAfter(deadline: .now() + timeout, execute: timer)
-
-                self.waiters.append { camera in
-                    timer.cancel()
-                    _ = gate.finishReturning(SendableCamera(camera: camera))
-                }
+            self.waiters.append { camera in
+                timer.cancel()
+                _ = gate.finishReturning(SendableCamera(camera: camera))
             }
         }
-        return sendable.camera
     }
 
     private func isTargetCamera(_ camera: ICCameraDevice) -> Bool {
@@ -548,6 +557,15 @@ private final class State: NSObject, ICDeviceDelegate, @unchecked Sendable {
             )
         }
 
+        try Task.checkCancellation()
+        try await withTaskCancellationHandler {
+            try await openSession(on: camera)
+        } onCancel: {
+            self.cancelPendingConnect()
+        }
+    }
+
+    private func openSession(on camera: ICCameraDevice) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async {
                 guard !self.connected, !self.closing, self.connectWaiter == nil else {
@@ -591,44 +609,55 @@ private final class State: NSObject, ICDeviceDelegate, @unchecked Sendable {
 
     func disconnect(completion: (@Sendable () -> Void)? = nil) {
         queue.async {
-            if let id = self.removalHandlerID {
-                self.removalHandlerID = nil
-                DeviceCoordinator.shared.removeRemovalHandler(id)
-            }
-            self.connectTimeout?.cancel()
-            self.connectTimeout = nil
-            let cameraToClose = self.camera
-            self.failActiveCommand()
+            self.disconnectOnQueue(completion: completion)
+        }
+    }
 
-            if let waiter = self.connectWaiter {
-                self.connectWaiter = nil
-                self.camera = nil
-                self.connected = false
-                self.transactionID = 0
-                waiter.resume(throwing: PTPError.connectionFailed(
-                    "Camera connection was cancelled."
-                ))
-            }
+    private func cancelPendingConnect() {
+        queue.async {
+            guard self.connectWaiter != nil else { return }
+            self.disconnectOnQueue(completion: nil)
+        }
+    }
 
-            guard let camera = cameraToClose else {
-                self.connected = false
+    private func disconnectOnQueue(completion: (@Sendable () -> Void)?) {
+        if let id = removalHandlerID {
+            removalHandlerID = nil
+            DeviceCoordinator.shared.removeRemovalHandler(id)
+        }
+        connectTimeout?.cancel()
+        connectTimeout = nil
+        let cameraToClose = camera
+        failActiveCommand()
+
+        if let waiter = connectWaiter {
+            connectWaiter = nil
+            camera = nil
+            connected = false
+            transactionID = 0
+            waiter.resume(throwing: PTPError.connectionFailed(
+                "Camera connection was cancelled."
+            ))
+        }
+
+        guard let camera = cameraToClose else {
+            connected = false
+            closeWaiter?.resume()
+            closeWaiter = nil
+            completion?()
+            return
+        }
+
+        connected = false
+        self.camera = nil
+        closing = true
+        transactionID = 0
+        camera.requestCloseSession { [self] _ in
+            self.queue.async {
+                self.closing = false
                 self.closeWaiter?.resume()
                 self.closeWaiter = nil
                 completion?()
-                return
-            }
-
-            self.connected = false
-            self.camera = nil
-            self.closing = true
-            self.transactionID = 0
-            camera.requestCloseSession { [self] _ in
-                self.queue.async {
-                    self.closing = false
-                    self.closeWaiter?.resume()
-                    self.closeWaiter = nil
-                    completion?()
-                }
             }
         }
     }
@@ -802,9 +831,32 @@ private final class State: NSObject, ICDeviceDelegate, @unchecked Sendable {
 private final class ContinuationGate<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Value, Error>?
+    private var cancelled = false
+
+    init() {}
 
     init(_ continuation: CheckedContinuation<Value, Error>) {
         self.continuation = continuation
+    }
+
+    func install(_ continuation: CheckedContinuation<Value, Error>) {
+        lock.lock()
+        guard !cancelled else {
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(throwing: CancellationError())
     }
 
     @discardableResult

@@ -119,6 +119,7 @@ public struct FujiRecipesMacRoot: View {
     @StateObject private var recipeStore: RecipeStore
     @StateObject private var cameraManager = CameraManager()
     @State private var selectedTab: AppTab = .recipes
+    @State private var selectedDialSlot: Int = 1
     private let cameraSessionFactory: CameraSessionFactory
 
     public init(
@@ -136,6 +137,7 @@ public struct FujiRecipesMacRoot: View {
             NavigationSplitView {
                 SidebarView(
                     selection: $selectedTab,
+                    selectedDialSlot: $selectedDialSlot,
                     recipeStore: recipeStore,
                     cameraManager: cameraManager,
                     onToggleConnection: toggleCameraConnection
@@ -160,6 +162,7 @@ public struct FujiRecipesMacRoot: View {
                             CameraConnectionView(
                                 manager: cameraManager,
                                 loadouts: recipeStore.loadouts,
+                                selectedDialSlot: $selectedDialSlot,
                                 cameraSessionFactory: cameraSessionFactory
                             )
                         case .darkroom:

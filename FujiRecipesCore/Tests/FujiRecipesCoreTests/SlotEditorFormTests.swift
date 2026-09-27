@@ -25,10 +25,22 @@ final class SlotEditorFormTests: XCTestCase {
         let store = storeWithCameraSyncedC3()
         let loadout = try XCTUnwrap(store.loadout(for: 3))
 
-        store.saveEditorForm(SlotEditorForm(loadout), editing: loadout)
+        store.saveEditorForm(SlotEditorForm(loadout), slot: 3)
 
         XCTAssertFalse(store.isDirty(3))
         XCTAssertEqual(store.loadout(for: 3)?.provenance, .cameraSynced)
+    }
+
+    func testRevertingTheFormAfterAnEarlierSaveRestoresTheOriginalValues() throws {
+        let store = storeWithCameraSyncedC3()
+        let original = SlotEditorForm(try XCTUnwrap(store.loadout(for: 3)))
+        var edited = original
+        edited.filmSim = .classicChrome
+        store.saveEditorForm(edited, slot: 3)
+
+        store.saveEditorForm(original, slot: 3)
+
+        XCTAssertEqual(store.loadout(for: 3)?.filmSim, .nostalgicNegative)
     }
 
     func testEditingAFormReloadedFromTheReadbackKeepsTheCameraLabel() throws {
@@ -37,7 +49,7 @@ final class SlotEditorFormTests: XCTestCase {
         var form = SlotEditorForm(loadout)
         form.filmSim = .classicChrome
 
-        store.saveEditorForm(form, editing: loadout)
+        store.saveEditorForm(form, slot: 3)
 
         XCTAssertTrue(store.isDirty(3))
         let saved = try XCTUnwrap(store.loadout(for: 3))

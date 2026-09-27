@@ -58,8 +58,10 @@ public struct SlotEditorForm: Equatable, Sendable {
 }
 
 extension LoadoutStore {
-    public func saveEditorForm(_ form: SlotEditorForm, editing loadout: Loadout) {
-        guard form != SlotEditorForm(loadout) else { return }
-        saveLocalDraft(form.draft(updating: loadout))
+    /// Saves `form` over the slot's current draft, unless the form shows
+    /// exactly that draft.
+    public func saveEditorForm(_ form: SlotEditorForm, slot: Int) {
+        guard let current = loadout(for: slot), form != SlotEditorForm(current) else { return }
+        saveLocalDraft(form.draft(updating: current))
     }
 }

@@ -897,7 +897,7 @@ public struct SlotEditorSheet: View {
     }
 
     private func saveChanges() {
-        store.saveEditorForm(form, editing: loadout)
+        store.saveEditorForm(form, slot: loadout.slot)
     }
 
     private func writeToCamera() {

@@ -296,25 +296,76 @@ struct PerformanceView: View {
     }
 }
 
+// MARK: - CameraManager Environment Key
+
+private struct CameraManagerKey: EnvironmentKey {
+    static let defaultValue: CameraManager? = nil
+}
+
+public extension EnvironmentValues {
+    var cameraManager: CameraManager? {
+        get { self[CameraManagerKey.self] }
+        set { self[CameraManagerKey.self] = newValue }
+    }
+}
+
 // MARK: - PTPStatusView
 
 struct PTPStatusView: View {
-    @EnvironmentObject private var cameraManager: CameraManager
+    @Environment(\.cameraManager) private var cameraManager: CameraManager?
     
+    var body: some View {
+        if let cameraManager {
+            PTPStatusActiveContent(manager: cameraManager)
+        } else {
+            PTPStatusDisconnectedContent()
+        }
+    }
+}
+
+private struct PTPStatusActiveContent: View {
+    @ObservedObject var manager: CameraManager
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Circle()
-                        .fill(cameraManager.status == CameraStatus.connected ? .green :
-                              cameraManager.status == CameraStatus.connecting ? .yellow : .red)
+                        .fill(manager.status == CameraStatus.connected ? .green :
+                              manager.status == CameraStatus.connecting ? .yellow : .red)
                         .frame(width: 12, height: 12)
                     Text("PTP Connection Status")
                         .font(.headline)
                 }
                 
-                InfoRow(title: "State", value: cameraManager.status.rawValue)
-                InfoRow(title: "Camera", value: cameraManager.cameraInfo?.model ?? "Not connected")
+                InfoRow(title: "State", value: manager.status.rawValue)
+                InfoRow(title: "Camera", value: manager.cameraInfo?.model ?? "Not connected")
+                
+                Divider()
+                
+                Text("Connect your X100VI via USB-C to see live PTP status here.")
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+        }
+        .navigationTitle("PTP Status")
+    }
+}
+
+private struct PTPStatusDisconnectedContent: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 12, height: 12)
+                    Text("PTP Connection Status")
+                        .font(.headline)
+                }
+                
+                InfoRow(title: "State", value: CameraStatus.disconnected.rawValue)
+                InfoRow(title: "Camera", value: "Not connected")
                 
                 Divider()
                 
@@ -356,20 +407,37 @@ struct MemoryInfo {
 
 // MARK: - DebugHUDModifier (SwiftUI view modifier for triggering debug HUD)
 
-/// Attach to any view to enable the debug HUD with a long-press gesture.
-/// Press and hold for ~1.5 s anywhere on the view to open the debug panel.
+/// Attach to any view to enable the debug HUD.
+/// On macOS, trigger via keyboard shortcut ⌘⌥D or Notification.
+/// On iOS, trigger via multi-finger long press.
 struct DebugHUDModifier: ViewModifier {
     @State private var showDebug = false
+    @Environment(\.cameraManager) private var cameraManager: CameraManager?
 
     func body(content: Content) -> some View {
         #if DEBUG
         content
+            #if os(macOS)
+            .background {
+                Button("") {
+                    showDebug = true
+                }
+                .keyboardShortcut("d", modifiers: [.command, .option])
+                .opacity(0)
+                .allowsHitTesting(false)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("com.ant.fuji-recipes.toggle-debug-hud"))) { _ in
+                showDebug.toggle()
+            }
+            #else
             .simultaneousGesture(
-                LongPressGesture(minimumDuration: 1.5)
+                LongPressGesture(minimumDuration: 2.0)
                     .onEnded { _ in showDebug = true }
             )
+            #endif
             .sheet(isPresented: $showDebug) {
                 DebugHUDView(isPresented: $showDebug)
+                    .environment(\.cameraManager, cameraManager)
             }
         #else
         content

@@ -1664,13 +1664,7 @@ private struct RecipeCard: View {
     }
 
     private var radarView: some View {
-        ToneCurveRadar(
-            highlight: recipe.highlight,
-            shadow: recipe.shadow,
-            color: recipe.color,
-            sharpness: recipe.sharpness,
-            accentColor: accent
-        )
+        ToneCurveRadar(tones: recipe.toneTenths, accentColor: accent)
     }
 
     private var kelvinView: some View {
@@ -2223,14 +2217,9 @@ public struct RecipeQuickLookView: View {
 
                         // Tone Curve Radar & Key Visual Readout
                         HStack(alignment: .top, spacing: 16) {
-                            ToneCurveRadar(
-                                highlight: recipe.highlight,
-                                shadow: recipe.shadow,
-                                color: recipe.color,
-                                sharpness: recipe.sharpness,
-                                accentColor: accent
-                            )
-                            .frame(width: 110, height: 95)
+                            ToneCurveRadar(tones: recipe.toneTenths, accentColor: accent)
+                            .fixedSize()
+                            .frame(minWidth: 110, minHeight: 95)
                             .padding(8)
                             .background(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)

@@ -3,6 +3,7 @@ import FujiRecipesCore
 
 /// A focused editor for the fields the C-slot writer understands. Defaults are
 /// intentionally valid X100VI values, so every new recipe can use Send to Dial.
+/// A field the recipe leaves unset stays "Not set" until the user picks a value.
 struct CustomRecipeEditor: View {
     let recipe: Recipe
     let existingRecipes: [Recipe]
@@ -11,19 +12,20 @@ struct CustomRecipeEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var source: String
-    @State private var filmSimulation: UInt32
-    @State private var dynamicRange: UInt32
-    @State private var grain: UInt32
-    @State private var whiteBalance: UInt32
+    @State private var filmSimulation: UInt32?
+    @State private var dynamicRange: UInt32?
+    @State private var grain: UInt32?
+    @State private var whiteBalance: UInt32?
     @State private var colorTemperature: Int
-    @State private var redShift: Int
-    @State private var blueShift: Int
-    @State private var highlight: Int
-    @State private var shadow: Int
-    @State private var color: Int
-    @State private var sharpness: Int
-    @State private var highIsoNR: Int
-    @State private var clarity: Int
+    @State private var redShift: Int?
+    @State private var blueShift: Int?
+    /// Highlight and shadow are C-slot tenths so they can hold half steps.
+    @State private var highlight: Int?
+    @State private var shadow: Int?
+    @State private var color: Int?
+    @State private var sharpness: Int?
+    @State private var highIsoNR: Int?
+    @State private var clarity: Int?
 
     init(
         recipe: Recipe,
@@ -35,19 +37,19 @@ struct CustomRecipeEditor: View {
         self.onSave = onSave
         _name = State(initialValue: recipe.name)
         _source = State(initialValue: recipe.source == "My Recipes" ? "" : recipe.source)
-        _filmSimulation = State(initialValue: recipe.filmSimulation?.rawValue ?? FilmSimulation.provia.rawValue)
-        _dynamicRange = State(initialValue: recipe.dynamicRange?.rawValue ?? DynamicRange.dr100.rawValue)
-        _grain = State(initialValue: recipe.grainEffect?.rawValue ?? GrainEffect.off.rawValue)
-        _whiteBalance = State(initialValue: recipe.whiteBalanceMode?.rawValue ?? WhiteBalanceMode.auto.rawValue)
+        _filmSimulation = State(initialValue: recipe.filmSimulation?.rawValue)
+        _dynamicRange = State(initialValue: recipe.dynamicRange?.rawValue)
+        _grain = State(initialValue: recipe.grainEffect?.rawValue)
+        _whiteBalance = State(initialValue: recipe.whiteBalanceMode?.rawValue)
         _colorTemperature = State(initialValue: Int(recipe.colorTempK ?? 5_600))
-        _redShift = State(initialValue: Int(recipe.wbShiftRed ?? 0))
-        _blueShift = State(initialValue: Int(recipe.wbShiftBlue ?? 0))
-        _highlight = State(initialValue: Int(recipe.highlight ?? 0))
-        _shadow = State(initialValue: Int(recipe.shadow ?? 0))
-        _color = State(initialValue: Int(recipe.color ?? 0))
-        _sharpness = State(initialValue: Int(recipe.sharpness ?? 0))
-        _highIsoNR = State(initialValue: Int(recipe.highIsoNr ?? 0))
-        _clarity = State(initialValue: Int(recipe.clarity ?? 0))
+        _redShift = State(initialValue: recipe.wbShiftRed.map(Int.init))
+        _blueShift = State(initialValue: recipe.wbShiftBlue.map(Int.init))
+        _highlight = State(initialValue: recipe.toneTenths.highlight.map(Int.init))
+        _shadow = State(initialValue: recipe.toneTenths.shadow.map(Int.init))
+        _color = State(initialValue: recipe.color.map(Int.init))
+        _sharpness = State(initialValue: recipe.sharpness.map(Int.init))
+        _highIsoNR = State(initialValue: recipe.highIsoNr.map(Int.init))
+        _clarity = State(initialValue: recipe.clarity.map(Int.init))
     }
 
     static func newRecipe() -> Recipe {
@@ -102,7 +104,7 @@ struct CustomRecipeEditor: View {
     }
 
     private var currentSimName: String {
-        FilmSimulation(rawValue: filmSimulation)?.displayName ?? "Provia"
+        filmSimulation.flatMap(FilmSimulation.init(rawValue:))?.displayName ?? "Provia"
     }
 
     private var currentSimColor: Color {
@@ -130,8 +132,9 @@ struct CustomRecipeEditor: View {
             Section("Film Simulation") {
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("Film Simulation", selection: $filmSimulation) {
+                        Text("Not set").tag(UInt32?.none)
                         ForEach(FilmSimulation.allCases, id: \.rawValue) {
-                            Text($0.displayName).tag($0.rawValue)
+                            Text($0.displayName).tag(Optional($0.rawValue))
                         }
                     }
                     .accessibilityIdentifier("custom-recipe-film-simulation")
@@ -180,20 +183,23 @@ struct CustomRecipeEditor: View {
             // Section 3: Exposure, Grain & White Balance
             Section("Exposure and White Balance") {
                 Picker("Dynamic Range", selection: $dynamicRange) {
+                    Text("Not set").tag(UInt32?.none)
                     ForEach(dynamicRangeOptions, id: \.rawValue) { option in
-                        Text(option.name).tag(option.rawValue)
+                        Text(option.name).tag(Optional(option.rawValue))
                     }
                 }
 
                 Picker("Grain", selection: $grain) {
+                    Text("Not set").tag(UInt32?.none)
                     ForEach(grainOptions, id: \.rawValue) { option in
-                        Text(option.name).tag(option.rawValue)
+                        Text(option.name).tag(Optional(option.rawValue))
                     }
                 }
 
                 Picker("White Balance", selection: $whiteBalance) {
+                    Text("Not set").tag(UInt32?.none)
                     ForEach(whiteBalanceOptions, id: \.rawValue) { option in
-                        Text(option.name).tag(option.rawValue)
+                        Text(option.displayName).tag(Optional(option.rawValue))
                     }
                 }
 
@@ -261,21 +267,15 @@ struct CustomRecipeEditor: View {
                     .padding(.vertical, 4)
                 }
 
-                Stepper("WB Red Shift: \(signed(redShift))", value: $redShift, in: -9...9)
-                Stepper("WB Blue Shift: \(signed(blueShift))", value: $blueShift, in: -9...9)
+                optionalStepper("WB Red Shift", $redShift, in: -9...9)
+                optionalStepper("WB Blue Shift", $blueShift, in: -9...9)
             }
 
             // Section 4: Interactive Tone Curve Radar Preview & Tuning
             Section("Tone Curve & Offsets") {
                 VStack(spacing: 14) {
                     // Real-Time Interactive Radar Canvas
-                    InteractiveToneRadarView(
-                        highlight: highlight,
-                        shadow: shadow,
-                        color: color,
-                        sharpness: sharpness,
-                        accentColor: currentSimColor
-                    )
+                    InteractiveToneRadarView(tones: editedTones, accentColor: currentSimColor)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
 
@@ -283,12 +283,12 @@ struct CustomRecipeEditor: View {
 
                     // Live Parameter Steppers
                     VStack(spacing: 6) {
-                        Stepper("Highlight: \(signed(highlight))", value: $highlight, in: -2...4)
-                        Stepper("Shadow: \(signed(shadow))", value: $shadow, in: -2...4)
-                        Stepper("Color: \(signed(color))", value: $color, in: -4...4)
-                        Stepper("Sharpness: \(signed(sharpness))", value: $sharpness, in: -4...4)
-                        Stepper("High ISO NR: \(signed(highIsoNR))", value: $highIsoNR, in: -4...4)
-                        Stepper("Clarity: \(signed(clarity))", value: $clarity, in: -5...5)
+                        optionalStepper("Highlight", $highlight, in: halfStepRange, step: 5, format: toneText)
+                        optionalStepper("Shadow", $shadow, in: halfStepRange, step: 5, format: toneText)
+                        optionalStepper("Color", $color, in: -4...4)
+                        optionalStepper("Sharpness", $sharpness, in: -4...4)
+                        optionalStepper("High ISO NR", $highIsoNR, in: -4...4)
+                        optionalStepper("Clarity", $clarity, in: -5...5)
                     }
                 }
             }
@@ -345,31 +345,64 @@ struct CustomRecipeEditor: View {
         .animation(.easeInOut(duration: 0.18), value: name)
     }
 
+    /// Shows "Not set" until the first step, which starts from 0.
+    private func optionalStepper(
+        _ title: String,
+        _ value: Binding<Int?>,
+        in range: ClosedRange<Int>,
+        step: Int = 1,
+        format: @escaping (Int) -> String = { $0 > 0 ? "+\($0)" : "\($0)" }
+    ) -> some View {
+        Stepper(
+            "\(title): \(value.wrappedValue.map(format) ?? "Not set")",
+            value: Binding(get: { value.wrappedValue ?? 0 }, set: { value.wrappedValue = $0 }),
+            in: range,
+            step: step
+        )
+    }
+
+    private func toneText(_ tenths: Int) -> String {
+        ToneTenths.text(Int32(tenths))
+    }
+
+    private var halfStepRange: ClosedRange<Int> {
+        Int(CSlotPresetEncoder.highlightShadowRange.lowerBound * 10)...Int(CSlotPresetEncoder.highlightShadowRange.upperBound * 10)
+    }
+
+    private var editedTones: ToneTenths {
+        makeRecipe().toneTenths
+    }
+
     private func makeRecipe() -> Recipe {
-        let sim = FilmSimulation(rawValue: filmSimulation) ?? .provia
-        let dr = DynamicRange(rawValue: dynamicRange) ?? .dr100
-        let selectedGrain = GrainEffect(rawValue: grain) ?? .off
-        let wb = WhiteBalanceMode(rawValue: whiteBalance) ?? .auto
-        let editedSettings = [
-            "filmSimulation": sim.displayName,
-            "dynamicRange": dr.displayName,
-            "grainEffect": selectedGrain.displayName,
-            "whiteBalance": wb.displayName,
-            "highlight": signed(highlight),
-            "shadow": signed(shadow),
-            "color": signed(color),
-            "sharpness": signed(sharpness),
-            "highIsoNr": signed(highIsoNR),
-            "clarity": signed(clarity)
+        let sim = filmSimulation.flatMap(FilmSimulation.init(rawValue:))
+        let dr = dynamicRange.flatMap(DynamicRange.init(rawValue:))
+        let selectedGrain = grain.flatMap(GrainEffect.init(rawValue:))
+        let wb = whiteBalance.flatMap(WhiteBalanceMode.init(rawValue:))
+        let editedSettings: [String: String?] = [
+            "filmSimulation": sim?.displayName,
+            "dynamicRange": dr?.displayName,
+            "grainEffect": selectedGrain?.displayName,
+            "whiteBalance": wb?.displayName,
+            "highlight": highlight.map(toneText),
+            "shadow": shadow.map(toneText),
+            "color": color.map(signed),
+            "sharpness": sharpness.map(signed),
+            "highIsoNr": highIsoNR.map(signed),
+            "clarity": clarity.map(signed)
         ]
-        // Half-step values live only in the raw preset, so keep each raw value
-        // until the user moves that slider off its initial whole-step value.
-        var rawPreset = recipe.sourceRawPreset
-        if highlight != Int(recipe.highlight ?? 0) { rawPreset?.highlight = nil }
-        if shadow != Int(recipe.shadow ?? 0) { rawPreset?.shadow = nil }
-        if color != Int(recipe.color ?? 0) { rawPreset?.color = nil }
-        if sharpness != Int(recipe.sharpness ?? 0) { rawPreset?.sharpness = nil }
-        if clarity != Int(recipe.clarity ?? 0) { rawPreset?.clarity = nil }
+        var settings = recipe.settings ?? [:]
+        for (key, text) in editedSettings {
+            settings[key] = text
+        }
+        // Whole-step fields cannot hold a half step, so highlight and shadow
+        // keep one in the raw preset. Other raw values last until the user
+        // moves that stepper off its initial whole-step value.
+        var rawPreset = recipe.sourceRawPreset ?? LoadoutRawPresetState()
+        rawPreset.highlight = highlight.flatMap { $0 % 10 == 0 ? nil : Int32($0) }
+        rawPreset.shadow = shadow.flatMap { $0 % 10 == 0 ? nil : Int32($0) }
+        if color != recipe.color.map(Int.init) { rawPreset.color = nil }
+        if sharpness != recipe.sharpness.map(Int.init) { rawPreset.sharpness = nil }
+        if clarity != recipe.clarity.map(Int.init) { rawPreset.clarity = nil }
 
         return Recipe(
             id: recipe.id,
@@ -387,23 +420,23 @@ struct CustomRecipeEditor: View {
             colorChromeFxBlue: recipe.colorChromeFxBlue,
             smoothSkin: recipe.smoothSkin,
             whiteBalanceMode: wb,
-            wbShiftRed: Int32(redShift),
-            wbShiftBlue: Int32(blueShift),
+            wbShiftRed: redShift.map(Int32.init),
+            wbShiftBlue: blueShift.map(Int32.init),
             colorTempK: wb == .colorTemperature ? UInt32(colorTemperature) : nil,
-            highlight: Int32(highlight),
-            shadow: Int32(shadow),
-            color: Int32(color),
-            sharpness: Int32(sharpness),
-            highIsoNr: Int32(highIsoNR),
-            clarity: Int32(clarity),
+            highlight: highlight.map { Int32($0 / 10) },
+            shadow: shadow.map { Int32($0 / 10) },
+            color: color.map(Int32.init),
+            sharpness: sharpness.map(Int32.init),
+            highIsoNr: highIsoNR.map(Int32.init),
+            clarity: clarity.map(Int32.init),
             iso: recipe.iso,
             exposureCompensation: recipe.exposureCompensation,
-            settings: (recipe.settings ?? [:]).merging(editedSettings) { _, edited in edited },
+            settings: settings,
             sensorGeneration: "X-Trans V",
             compatibleCameras: ["X100VI"],
             tags: ["My Recipes"],
             parseStatus: .ok,
-            sourceRawPreset: rawPreset?.hasAnyValue == true ? rawPreset : nil
+            sourceRawPreset: rawPreset.hasAnyValue ? rawPreset : nil
         )
     }
 
@@ -422,35 +455,20 @@ struct CustomRecipeEditor: View {
         (name: "Weak, Large", rawValue: GrainEffect.weakLarge.rawValue),
         (name: "Strong, Large", rawValue: GrainEffect.strongLarge.rawValue)
     ]
-    private let whiteBalanceOptions = [
-        (name: "Auto (AWB)", rawValue: WhiteBalanceMode.auto.rawValue),
-        (name: "Daylight", rawValue: WhiteBalanceMode.daylight.rawValue),
-        (name: "Cloudy", rawValue: WhiteBalanceMode.cloudy.rawValue),
-        (name: "Shade", rawValue: WhiteBalanceMode.shade.rawValue),
-        (name: "Tungsten", rawValue: WhiteBalanceMode.tungsten.rawValue),
-        (name: "Color Temperature", rawValue: WhiteBalanceMode.colorTemperature.rawValue)
-    ]
+    /// The camera rejects As Shot (0) as a C-slot white balance with 0x201C.
+    private let whiteBalanceOptions = WhiteBalanceMode.allCases.filter { $0 != .asShot }
 }
 
 // MARK: - Interactive Tone Curve Radar Preview
 
 struct InteractiveToneRadarView: View {
-    let highlight: Int
-    let shadow: Int
-    let color: Int
-    let sharpness: Int
+    let tones: ToneTenths
     var accentColor: Color = Theme.fujiAmber
 
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                RadarCanvas(
-                    highlight: highlight,
-                    shadow: shadow,
-                    color: color,
-                    sharpness: sharpness,
-                    accentColor: accentColor
-                )
+                RadarCanvas(tones: tones, accentColor: accentColor)
                 .frame(width: 180, height: 180)
             }
             .padding(8)
@@ -465,22 +483,22 @@ struct InteractiveToneRadarView: View {
 
             // Real-Time Metric Badges
             HStack(spacing: 8) {
-                metricPill(label: "H", value: highlight)
-                metricPill(label: "S", value: shadow)
-                metricPill(label: "C", value: color)
-                metricPill(label: "Sh", value: sharpness)
+                metricPill(label: "H", tenths: tones.highlight)
+                metricPill(label: "S", tenths: tones.shadow)
+                metricPill(label: "C", tenths: tones.color)
+                metricPill(label: "Sh", tenths: tones.sharpness)
             }
         }
     }
 
-    private func metricPill(label: String, value: Int) -> some View {
+    private func metricPill(label: String, tenths value: Int32?) -> some View {
         HStack(spacing: 3) {
             Text(label)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Theme.textSecondary)
-            Text(value > 0 ? "+\(value)" : "\(value)")
+            Text(value.map(ToneTenths.text) ?? "·")
                 .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                .foregroundStyle(value == 0 ? Theme.textTertiary : (value > 0 ? accentColor : Theme.cyanAccent))
+                .foregroundStyle((value ?? 0) == 0 ? Theme.textTertiary : ((value ?? 0) > 0 ? accentColor : Theme.cyanAccent))
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
@@ -492,14 +510,15 @@ struct InteractiveToneRadarView: View {
 // MARK: - 120Hz ProMotion Radar Canvas
 
 struct RadarCanvas: View {
-    let highlight: Int
-    let shadow: Int
-    let color: Int
-    let sharpness: Int
+    let tones: ToneTenths
     let accentColor: Color
 
     var body: some View {
         Canvas { context, size in
+            let highlight = CGFloat(tones.highlight ?? 0) / 10
+            let shadow = CGFloat(tones.shadow ?? 0) / 10
+            let color = CGFloat(tones.color ?? 0) / 10
+            let sharpness = CGFloat(tones.sharpness ?? 0) / 10
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let maxR: CGFloat = min(size.width, size.height) / 2 - 18
             let neutralR: CGFloat = maxR * 0.45

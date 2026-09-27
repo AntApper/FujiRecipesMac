@@ -1,5 +1,5 @@
 /// White Balance mode values for PTP property 0x5005 / 0xD199.
-public enum WhiteBalanceMode: UInt32, Codable, Sendable {
+public enum WhiteBalanceMode: UInt32, CaseIterable, Codable, Sendable {
     case asShot = 0
     case auto = 2
     case daylight = 4

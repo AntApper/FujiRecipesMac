@@ -35,7 +35,7 @@ final class X100VIHelperRequestTests: XCTestCase {
         XCTAssertEqual(request["id"] as? String, "c4-regression")
         XCTAssertEqual(request["command"] as? String, "write_preset_slot")
         XCTAssertEqual(request["index"] as? Int, 4)
-        XCTAssertEqual(request["color_chrome_fx_blue"] as? Int, 2, "D197")
+        XCTAssertEqual(request["color_chrome_fx_blue"] as? Int, 3, "D197")
         XCTAssertEqual(request["high_iso_nr"] as? Int, 32_768, "D1A1")
     }
 

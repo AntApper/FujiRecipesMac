@@ -51,11 +51,11 @@
     "400": 400
   },
   "grainEffectEnum": {
-    "off": 0,
-    "weak_small": 1,
-    "strong_small": 2,
-    "weak_large": 3,
-    "strong_large": 4
+    "off": 1,
+    "weak_small": 2,
+    "strong_small": 3,
+    "weak_large": 4,
+    "strong_large": 5
   },
   "activeProperties": {
     "filmSimulation": {
@@ -178,7 +178,7 @@
     "grainEffect": {
       "property": "0xD195",
       "type": "uint32",
-      "description": "Grain: 1=Off, 2=Weak, 3=Strong"
+      "description": "Grain: 1=Off, 2=Weak Small, 3=Strong Small, 4=Weak Large, 5=Strong Large"
     },
     "colorChrome": {
       "property": "0xD196",
@@ -300,9 +300,9 @@
       "presetSettings": {
         "filmSimulation": 20,
         "dynamicRange": 200,
-        "grainEffect": 1,
+        "grainEffect": 2,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 0,
+        "colorChromeFxBlue": 1,
         "color": 40.0,
         "highlightTone": -10.0,
         "shadowTone": -10.0,
@@ -417,9 +417,9 @@
       "presetSettings": {
         "filmSimulation": 20,
         "dynamicRange": 400,
-        "grainEffect": 1,
+        "grainEffect": 2,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": 0.0,
         "highlightTone": -10.0,
         "shadowTone": 0.0,
@@ -529,8 +529,8 @@
         "filmSimulation": 20,
         "dynamicRange": 400,
         "grainEffect": 3,
-        "colorChromeEffect": 1,
-        "colorChromeFxBlue": 1,
+        "colorChromeEffect": 2,
+        "colorChromeFxBlue": 2,
         "color": -20.0,
         "highlightTone": -10.0,
         "sharpness": -10.0,
@@ -539,7 +539,8 @@
         "colorTemp": 5500,
         "wbShiftRed": -1.0,
         "wbShiftBlue": -1.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "shadowTone": -5
       },
       "sourceUrl": "https://fujixweekly.com/2024/09/18/fujicolor-film-fujifilm-x100vi-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -636,9 +637,9 @@
       "presetSettings": {
         "filmSimulation": 20,
         "dynamicRange": 400,
-        "grainEffect": 1,
-        "colorChromeEffect": 1,
-        "colorChromeFxBlue": 0,
+        "grainEffect": 2,
+        "colorChromeEffect": 2,
+        "colorChromeFxBlue": 1,
         "color": -10.0,
         "sharpness": -10.0,
         "clarity": -20.0,
@@ -646,7 +647,9 @@
         "colorTemp": 3100,
         "wbShiftRed": 8.0,
         "wbShiftBlue": -8.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "highlightTone": 5,
+        "shadowTone": 15
       },
       "sourceUrl": "https://fujixweekly.com/2024/04/05/fujicolor-100-industrial-fujifilm-x100vi-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -747,9 +750,9 @@
       "presetSettings": {
         "filmSimulation": 20,
         "dynamicRange": 400,
-        "grainEffect": 4,
+        "grainEffect": 5,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 2,
+        "colorChromeFxBlue": 3,
         "color": -20.0,
         "sharpness": -20.0,
         "clarity": -30.0,
@@ -757,7 +760,9 @@
         "colorTemp": 6700,
         "wbShiftRed": 1.0,
         "wbShiftBlue": 4.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "highlightTone": -15,
+        "shadowTone": 15
       },
       "sourceUrl": "https://fujixweekly.com/2024/12/31/kodak-gold-max-400-expired-fujifilm-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -860,9 +865,9 @@
       "presetSettings": {
         "filmSimulation": 19,
         "dynamicRange": 400,
-        "grainEffect": 2,
+        "grainEffect": 4,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": 40.0,
         "shadowTone": 0.0,
         "sharpness": 20.0,
@@ -871,7 +876,8 @@
         "colorTemp": 5200,
         "wbShiftRed": 2.0,
         "wbShiftBlue": -2.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "highlightTone": -15
       },
       "sourceUrl": "https://fujixweekly.com/2024/06/18/appalachian-negative-fujifilm-x100vi-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -977,8 +983,8 @@
         "filmSimulation": 16,
         "dynamicRange": 400,
         "grainEffect": 3,
-        "colorChromeEffect": 1,
-        "colorChromeFxBlue": 2,
+        "colorChromeEffect": 2,
+        "colorChromeFxBlue": 3,
         "color": 0.0,
         "highlightTone": 30.0,
         "sharpness": -10.0,
@@ -986,7 +992,8 @@
         "highIsoNr": 32768,
         "wbShiftRed": 4.0,
         "wbShiftBlue": -8.0,
-        "whiteBalance": 2
+        "whiteBalance": 2,
+        "shadowTone": 5
       },
       "sourceUrl": "https://fujixweekly.com/2026/05/02/summer-of-59-a-fujifilm-recipe-for-fifth-generation-cameras/",
       "sourceType": null,
@@ -1090,7 +1097,7 @@
         "dynamicRange": 200,
         "grainEffect": 3,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": 40.0,
         "highlightTone": -10.0,
         "shadowTone": -20.0,
@@ -1205,9 +1212,9 @@
       "presetSettings": {
         "filmSimulation": 19,
         "dynamicRange": 400,
-        "grainEffect": 1,
+        "grainEffect": 2,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": 40.0,
         "highlightTone": -20.0,
         "shadowTone": -10.0,
@@ -1329,7 +1336,7 @@
         "dynamicRange": 200,
         "grainEffect": 3,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": 40.0,
         "highlightTone": -20.0,
         "sharpness": -20.0,
@@ -1338,7 +1345,8 @@
         "colorTemp": 6500,
         "wbShiftRed": 2.0,
         "wbShiftBlue": -6.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "shadowTone": -5
       },
       "sourceUrl": "https://fujixweekly.com/2024/12/04/texas-sun-fujifilm-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -1441,9 +1449,9 @@
       "presetSettings": {
         "filmSimulation": 11,
         "dynamicRange": 100,
-        "grainEffect": 4,
-        "colorChromeEffect": 1,
-        "colorChromeFxBlue": 2,
+        "grainEffect": 5,
+        "colorChromeEffect": 2,
+        "colorChromeFxBlue": 3,
         "color": -30.0,
         "highlightTone": -20.0,
         "shadowTone": -20.0,
@@ -1561,8 +1569,8 @@
         "filmSimulation": 20,
         "dynamicRange": 400,
         "grainEffect": 3,
-        "colorChromeEffect": 0,
-        "colorChromeFxBlue": 2,
+        "colorChromeEffect": 1,
+        "colorChromeFxBlue": 3,
         "color": 10.0,
         "highlightTone": -20.0,
         "shadowTone": 0.0,
@@ -1642,7 +1650,7 @@
         "dynamicRange": "DR400",
         "grainEffect": "Strong, Small",
         "colorChromeEffect": "Strong",
-        "colorChromeFxBlue": "Strong (X-Trans IV), Weak (X-Trans V)",
+        "colorChromeFxBlue": "Weak",
         "whiteBalance": "5300K, 0 Red & -6 Blue",
         "highlight": "-0.5",
         "shadow": "-2",
@@ -1681,7 +1689,9 @@
         "colorTemp": 5300,
         "wbShiftRed": 0.0,
         "wbShiftBlue": -6.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "colorChromeFxBlue": 2,
+        "highlightTone": -5
       },
       "sourceUrl": "https://fujixweekly.com/2024/04/22/classic-color-fujifilm-x-t5-x-trans-v-and-x-e4-x-trans-iv-film-simulation-recipe/",
       "sourceType": null,
@@ -1782,9 +1792,9 @@
       "presetSettings": {
         "filmSimulation": 11,
         "dynamicRange": 200,
-        "grainEffect": 2,
+        "grainEffect": 4,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": -40.0,
         "sharpness": 10.0,
         "clarity": -20.0,
@@ -1792,7 +1802,9 @@
         "colorTemp": 3000,
         "wbShiftRed": 8.0,
         "wbShiftBlue": -8.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "highlightTone": 15,
+        "shadowTone": 25
       },
       "sourceUrl": "https://fujixweekly.com/2025/04/16/kodacolor-vr-200-fujifilm-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -1893,9 +1905,9 @@
       "presetSettings": {
         "filmSimulation": 16,
         "dynamicRange": 400,
-        "grainEffect": 4,
+        "grainEffect": 5,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 1,
+        "colorChromeFxBlue": 2,
         "color": 40.0,
         "highlightTone": 0.0,
         "shadowTone": 20.0,
@@ -1903,7 +1915,8 @@
         "clarity": -50.0,
         "highIsoNr": 32768,
         "wbShiftRed": -6.0,
-        "wbShiftBlue": -4.0
+        "wbShiftBlue": -4.0,
+        "whiteBalance": 32771
       },
       "sourceUrl": "https://fujixweekly.com/2024/04/16/cinestill-800t-fujifilm-x-trans-v-film-simulation-recipe/",
       "sourceType": null,
@@ -2008,7 +2021,7 @@
         "dynamicRange": 200,
         "grainEffect": 3,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 0,
+        "colorChromeFxBlue": 1,
         "color": 40.0,
         "highlightTone": 0.0,
         "shadowTone": 20.0,
@@ -2124,7 +2137,7 @@
         "dynamicRange": 400,
         "grainEffect": 3,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 0,
+        "colorChromeFxBlue": 1,
         "color": -10.0,
         "highlightTone": 30.0,
         "shadowTone": -20.0,
@@ -2201,10 +2214,10 @@
       "name": "Universal Negative - 14 Fujifilm X100VI (X-Trans V) Film Simulation Recipes (Yes, 14!!)",
       "source": "Fuji X Weekly",
       "sensorGeneration": "X-Trans V",
-      "filmSimulation": "Any (See Below)",
-      "filmSimEnum": null,
+      "filmSimulation": "Provia",
+      "filmSimEnum": 1,
       "settings": {
-        "filmSimulation": "Any (See Below)",
+        "filmSimulation": "Provia (any film simulation works; see source)",
         "dynamicRange": "DR400",
         "grainEffect": "Strong, Small",
         "colorChromeEffect": "Strong",
@@ -2239,7 +2252,7 @@
         "dynamicRange": 400,
         "grainEffect": 3,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 2,
+        "colorChromeFxBlue": 3,
         "color": -20.0,
         "highlightTone": 0.0,
         "shadowTone": -20.0,
@@ -2249,7 +2262,8 @@
         "colorTemp": 4000,
         "wbShiftRed": 0.0,
         "wbShiftBlue": -5.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "filmSimulation": 1
       },
       "sourceUrl": "https://fujixweekly.com/2025/03/28/universal-negative-14-fujifilm-x100vi-x-trans-v-film-simulation-recipes-yes-14/",
       "sourceType": null,
@@ -2348,9 +2362,9 @@
       "presetSettings": {
         "filmSimulation": 12,
         "dynamicRange": 200,
-        "grainEffect": 2,
+        "grainEffect": 4,
         "colorChromeEffect": 3,
-        "colorChromeFxBlue": 0,
+        "colorChromeFxBlue": 1,
         "highlightTone": -10.0,
         "shadowTone": 10.0,
         "sharpness": -10.0,
@@ -2452,15 +2466,17 @@
       "presetSettings": {
         "filmSimulation": 9,
         "dynamicRange": 200,
-        "grainEffect": 2,
-        "colorChromeEffect": 0,
-        "colorChromeFxBlue": 0,
+        "grainEffect": 4,
+        "colorChromeEffect": 1,
+        "colorChromeFxBlue": 1,
         "sharpness": -10.0,
         "clarity": -10.0,
         "highIsoNr": 32768,
         "wbShiftRed": -6.0,
         "wbShiftBlue": -3.0,
-        "whiteBalance": 4
+        "whiteBalance": 4,
+        "highlightTone": -5,
+        "shadowTone": 15
       },
       "sourceUrl": "https://fujixweekly.com/2024/10/07/kodak-t-max-100-soft-tone-a-film-simulation-recipe-for-fujifilm-x-trans-iv-x-trans-v-cameras-part-2/",
       "sourceType": null,
@@ -2560,15 +2576,17 @@
       "presetSettings": {
         "filmSimulation": 9,
         "dynamicRange": 200,
-        "grainEffect": 2,
-        "colorChromeEffect": 0,
-        "colorChromeFxBlue": 0,
+        "grainEffect": 4,
+        "colorChromeEffect": 1,
+        "colorChromeFxBlue": 1,
         "sharpness": -10.0,
         "clarity": -10.0,
         "highIsoNr": 32768,
         "wbShiftRed": -6.0,
         "wbShiftBlue": -3.0,
-        "whiteBalance": 4
+        "whiteBalance": 4,
+        "highlightTone": 5,
+        "shadowTone": 25
       },
       "sourceUrl": "https://fujixweekly.com/2024/10/04/kodak-t-max-100-hard-tone-a-film-simulation-recipe-for-fujifilm-x-trans-iv-x-trans-v-cameras-part-1/",
       "sourceType": null,
@@ -2673,16 +2691,17 @@
       "presetSettings": {
         "filmSimulation": 15,
         "dynamicRange": 200,
-        "grainEffect": 4,
-        "colorChromeEffect": 0,
-        "colorChromeFxBlue": 0,
+        "grainEffect": 5,
+        "colorChromeEffect": 1,
+        "colorChromeFxBlue": 1,
         "highlightTone": 30.0,
         "shadowTone": 40.0,
         "sharpness": 10.0,
         "clarity": 30.0,
         "highIsoNr": 32768,
         "wbShiftRed": -9.0,
-        "wbShiftBlue": 9.0
+        "wbShiftBlue": 9.0,
+        "whiteBalance": 6
       },
       "sourceUrl": "https://fujixweekly.com/2025/08/03/classic-bw-film-simulation-recipe/",
       "sourceType": null,
@@ -2759,6 +2778,7 @@
         "shadow": "+1",
         "color": "+2",
         "sharpness": "0",
+        "highIsoNr": "0",
         "clarity": "0"
       },
       "ptpSettings": {
@@ -2779,9 +2799,9 @@
       "presetSettings": {
         "filmSimulation": 20,
         "dynamicRange": 200,
-        "grainEffect": 1,
-        "colorChromeEffect": 1,
-        "colorChromeFxBlue": 1,
+        "grainEffect": 2,
+        "colorChromeEffect": 2,
+        "colorChromeFxBlue": 2,
         "color": 20.0,
         "highlightTone": 10.0,
         "shadowTone": 10.0,
@@ -2790,7 +2810,8 @@
         "colorTemp": 5800,
         "wbShiftRed": 2.0,
         "wbShiftBlue": -3.0,
-        "whiteBalance": 32775
+        "whiteBalance": 32775,
+        "highIsoNr": 8192
       },
       "sourceUrl": "https://www.mikechudley.com/blogs/x100vijpegs",
       "sourceType": "creator-owned public recipe page",

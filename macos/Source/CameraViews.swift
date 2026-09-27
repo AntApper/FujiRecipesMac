@@ -1261,13 +1261,7 @@ public struct RAFDarkroomView: View {
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .foregroundStyle(Theme.textTertiary)
 
-                    ToneCurveRadar(
-                        highlight: recipe.highlight,
-                        shadow: recipe.shadow,
-                        color: recipe.color,
-                        sharpness: recipe.sharpness,
-                        accentColor: simColor
-                    )
+                    ToneCurveRadar(tones: recipe.toneTenths, accentColor: simColor)
                 }
 
                 Spacer()

@@ -80,19 +80,8 @@ final class CSlotPresetEncoderTests: XCTestCase {
     }
 
     func testUniversalNegativeC4SourceRawValuesRoundTripThroughEncoder() throws {
-        // This is the production record selected in the C4 UI hardware
-        // validation. Its display text describes a multi-recipe article, but
-        // C-slot writes must preserve the normalized `presetSettings`.
-        let testFile = URL(fileURLWithPath: #filePath)
-        let repository = testFile
-            .deletingLastPathComponent() // FujiRecipesCoreTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // FujiRecipesCore
-            .deletingLastPathComponent() // repository root
-        let resource = repository
-            .appendingPathComponent("macos/Resources/recipes-data.json")
-        let database = try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
-        let source = try XCTUnwrap(database.recipes.first {
+        // This is the production record selected in the C4 UI hardware validation.
+        let source = try XCTUnwrap(bundledRecipeCatalog().recipes.first {
             $0.id == "universal-negative-14-fujifilm-x100vi-x-trans-v-film-simulation-recipes-yes-14"
         })
 
@@ -100,12 +89,12 @@ final class CSlotPresetEncoderTests: XCTestCase {
         let raw = try CSlotPresetEncoder.encode(recipe: recipe, slot: 4)
 
         XCTAssertEqual(source.settings["colorChromeFxBlue"], "Strong")
-        XCTAssertEqual(source.presetSettings["colorChromeFxBlue"], 2)
+        XCTAssertEqual(source.presetSettings["colorChromeFxBlue"], 3)
         XCTAssertEqual(source.settings["highIsoNr"], "-4")
         XCTAssertEqual(source.presetSettings["highIsoNr"], 32_768)
-        XCTAssertEqual(recipe.colorChromeFxBlue, .weak)
+        XCTAssertEqual(recipe.colorChromeFxBlue, .strong)
         XCTAssertEqual(recipe.highIsoNr, -4)
-        XCTAssertEqual(raw.colorChromeFxBlue, 2, "D197")
+        XCTAssertEqual(raw.colorChromeFxBlue, 3, "D197")
         XCTAssertEqual(raw.highIsoNr, 0x8000, "D1A1")
     }
 
@@ -152,20 +141,14 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -25), -2)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 10), 1)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -10), -1)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: 5), 1)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: -5), -1)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: 15), 2)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: -15), -2)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: 25), 3)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: -25), -3)
     }
 
     func testBundledHalfStepRecipesKeepExactToneTenths() throws {
-        let database = try bundledRecipeDatabase()
+        let database = try bundledRecipeCatalog()
         let kodachrome = try XCTUnwrap(database.recipes.first { $0.id == "kodachrome-64" })
         let recipe = RecipeLoader.recipe(from: kodachrome)
         XCTAssertEqual(kodachrome.settings["shadow"], "+0.5")
-        XCTAssertEqual(recipe.shadow, 1, "UI shadow rounds +0.5 to +1")
+        XCTAssertEqual(recipe.shadow, 0, "whole-step shadow truncates +0.5 to 0")
         XCTAssertEqual(recipe.sourceRawPreset?.shadow, 5)
         let encoded = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
         XCTAssertEqual(encoded.shadow, 5, "C-slot write keeps shadow +0.5")
@@ -174,8 +157,8 @@ final class CSlotPresetEncoderTests: XCTestCase {
         let amberRecipe = RecipeLoader.recipe(from: amber)
         XCTAssertEqual(amber.settings["highlight"], "-1.5")
         XCTAssertEqual(amber.settings["shadow"], "+2.5")
-        XCTAssertEqual(amberRecipe.highlight, -2)
-        XCTAssertEqual(amberRecipe.shadow, 3)
+        XCTAssertEqual(amberRecipe.highlight, -1)
+        XCTAssertEqual(amberRecipe.shadow, 2)
         let encodedAmber = try CSlotPresetEncoder.encode(recipe: amberRecipe, slot: 2)
         XCTAssertEqual(encodedAmber.highlight, -15, "C-slot write keeps highlight -1.5")
         XCTAssertEqual(encodedAmber.shadow, 25, "C-slot write keeps shadow +2.5")
@@ -417,7 +400,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
     }
 
     func testAllBundledRecipesEncodeSuccessfullyForCSlot() throws {
-        let database = try bundledRecipeDatabase()
+        let database = try bundledRecipeCatalog()
 
         XCTAssertEqual(database.recipes.count, 50, "Expected exactly 50 recipes in recipes-data.json")
 
@@ -449,7 +432,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: bundleURL) }
         try FileManager.default.copyItem(
-            at: bundledRecipeURL(),
+            at: bundledRecipeCatalogURL(),
             to: nested.appendingPathComponent("recipes-data.json")
         )
         let bundle = try XCTUnwrap(Bundle(url: bundleURL))
@@ -515,20 +498,6 @@ final class CSlotPresetEncoderTests: XCTestCase {
         } else {
             XCTAssertNil(encoded, "\(recipe) \(field)", file: file, line: line)
         }
-    }
-
-    private func bundledRecipeDatabase() throws -> RecipesData {
-        try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: bundledRecipeURL()))
-    }
-
-    private func bundledRecipeURL() -> URL {
-        let testFile = URL(fileURLWithPath: #filePath)
-        let repository = testFile
-            .deletingLastPathComponent() // FujiRecipesCoreTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // FujiRecipesCore
-            .deletingLastPathComponent() // repository root
-        return repository.appendingPathComponent("macos/Resources/recipes-data.json")
     }
 
     private func recipe(

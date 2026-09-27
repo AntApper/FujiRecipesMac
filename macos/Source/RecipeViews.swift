@@ -466,14 +466,7 @@ public struct RecipeListView: View {
                         isError: false
                     )
                 }
-                Task {
-                    try? await Task.sleep(for: .seconds(4))
-                    if activeHUDToast?.title.contains("C\(slot)") == true {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            activeHUDToast = nil
-                        }
-                    }
-                }
+                dismissToast(activeHUDToast, after: .seconds(4))
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     activeHUDToast = HUDToast(
@@ -500,13 +493,17 @@ public struct RecipeListView: View {
                     isError: false
                 )
             }
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                if activeHUDToast?.title.contains("Saved to Local") == true {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        activeHUDToast = nil
-                    }
-                }
+            dismissToast(activeHUDToast, after: .seconds(3))
+        }
+    }
+
+    private func dismissToast(_ toast: HUDToast?, after delay: Duration) {
+        guard let id = toast?.id else { return }
+        Task {
+            try? await Task.sleep(for: delay)
+            guard activeHUDToast?.id == id else { return }
+            withAnimation(.easeOut(duration: 0.3)) {
+                activeHUDToast = nil
             }
         }
     }
@@ -523,14 +520,7 @@ public struct RecipeListView: View {
                 isError: false
             )
         }
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            if activeHUDToast?.title.contains("Staged Top") == true {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    activeHUDToast = nil
-                }
-            }
-        }
+        dismissToast(activeHUDToast, after: .seconds(3))
     }
 
     private func cSlotWriteFailureMessage(_ error: PTPPresetSlotWriteRecoveryError) -> String {

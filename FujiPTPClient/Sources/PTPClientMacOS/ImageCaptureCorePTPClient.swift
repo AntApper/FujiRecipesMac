@@ -125,7 +125,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
 
         // 2. Write slot name if provided
         if !data.name.isEmpty {
-            try await writeRawProperty(0xD18D, payload: Self.ptpString(data.name))
+            try await writeRawProperty(0xD18D, payload: CameraPresetName.ptpPayload(for: data.name, slot: index))
         }
 
         // 3. Resolve effective modes for conditional field gating
@@ -355,22 +355,6 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             }
         }
         return String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func ptpString(_ value: String) -> Data {
-        let ascii = value
-            .precomposedStringWithCompatibilityMapping
-            .unicodeScalars
-            .filter { $0.value < 0x80 && $0.value >= 0x20 }
-            .prefix(15)
-        var result = Data([UInt8(ascii.count + 1)])
-        for scalar in ascii {
-            result.append(UInt8(scalar.value))
-            result.append(0)
-        }
-        result.append(0)
-        result.append(0)
-        return result
     }
 
     private func writeRawProperty(_ code: UInt16, payload: Data) async throws {

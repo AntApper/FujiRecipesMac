@@ -737,9 +737,12 @@ public struct SlotEditorSheet: View {
                             icon: "slider.horizontal.3",
                             accentColor: slotAccent(loadout.slot)
                         )
-                        TextField("Slot name", text: $form.name)
-                            .textFieldStyle(.roundedBorder)
-                            .focused($isNameFocused)
+                        VStack(alignment: .leading, spacing: 4) {
+                            TextField("Slot name", text: $form.name)
+                                .textFieldStyle(.roundedBorder)
+                                .focused($isNameFocused)
+                            cameraLabelPreview
+                        }
 
                         // Film Simulation Selector
                         VStack(alignment: .leading, spacing: 8) {
@@ -841,6 +844,25 @@ public struct SlotEditorSheet: View {
         }
         .frame(minWidth: 440, minHeight: 400)
         .defaultFocus($isNameFocused, true)
+    }
+
+    private var cameraLabelPreview: some View {
+        let label = CameraPresetName.label(for: form.name, slot: loadout.slot)
+        let limit = CameraPresetName.maximumCharacterCount
+        let showsTypedName = label == form.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return HStack {
+            Text("Camera will show: \(label)")
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer()
+            Text("\(label.count)/\(limit)")
+                .monospacedDigit()
+                .foregroundStyle(showsTypedName ? Theme.textTertiary : Theme.fujiAmber)
+        }
+        .font(.caption)
+        .foregroundStyle(Theme.textTertiary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Camera will show \(label), \(label.count) of \(limit) characters")
     }
 
     /// `range` is in whole UI steps; `tenths` and `step` are C-slot tenths.

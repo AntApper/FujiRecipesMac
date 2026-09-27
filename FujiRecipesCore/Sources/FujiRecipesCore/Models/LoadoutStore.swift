@@ -281,10 +281,14 @@ public final class LoadoutStore: ObservableObject {
 
             var loadout = loadouts[index]
             let cameraName = data.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            let slotLabel = cameraName.isEmpty ? "C\(data.slot)" : cameraName
-            loadout.name = slotLabel
-            loadout.recipeName = slotLabel
-            loadout.recipeID = nil
+            let cameraShowsRecipe = [loadout.recipeName, loadout.name]
+                .compactMap { $0 }
+                .contains { CameraPresetName.label(for: $0, slot: data.slot) == cameraName }
+            if !cameraShowsRecipe {
+                loadout.recipeName = nil
+                loadout.recipeID = nil
+            }
+            loadout.name = cameraName.isEmpty ? "C\(data.slot)" : cameraName
             loadout.imageQuality = data.imageQuality
             loadout.imageSize = data.imageSize
             loadout.filmSim = data.filmSimulation.flatMap(FilmSimulation.init(rawValue:))

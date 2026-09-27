@@ -156,7 +156,7 @@ public enum CSlotPresetEncoder {
 
         return PTPClientPresetData(
             slot: slot,
-            name: CameraPresetName.label(for: name),
+            name: CameraPresetName.label(for: name, slot: slot),
             imageQuality: rawPreset?.imageQuality ?? imageQuality,
             imageSize: rawPreset?.imageSize ?? imageSize,
             dynamicRange: rawPreset?.dynamicRange ?? dynamicRange.map(rawDynamicRange),

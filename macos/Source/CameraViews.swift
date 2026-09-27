@@ -1013,6 +1013,7 @@ public struct RAFDarkroomView: View {
                         }
                     }
                     .buttonStyle(GlassBorderedButtonStyle())
+                    .frame(width: 160)
                     .accessibilityIdentifier("browse-raf-button")
                 }
                 .frame(maxWidth: .infinity)

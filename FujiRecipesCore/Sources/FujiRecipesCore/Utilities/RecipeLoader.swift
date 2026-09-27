@@ -8,7 +8,6 @@ public struct RecipesData: Codable, Sendable {
     public let exportDate: String
     public let camera: CameraInfo
     public let filmSimulationEnum: [String: Int]
-    public let wbModeEnum: [String: Int]
     public let dynamicRangeEnum: [String: Int]
     public let grainEffectEnum: [String: Int]
     public let activeProperties: [String: PropertyInfo]
@@ -116,7 +115,7 @@ public enum RecipeLoader {
         func signed(_ key: String) -> Int32? { preset[key].flatMap { Int32(exactly: $0) } }
 
         let filmSim = jsonRecipe.filmSimEnum.flatMap { UInt32(exactly: $0) }.flatMap(FilmSimulation.init(rawValue:))
-        let wb = (jsonRecipe.ptpSettings["whiteBalance"] ?? preset["whiteBalance"])
+        let wb = (preset["whiteBalance"] ?? jsonRecipe.ptpSettings["whiteBalance"])
             .flatMap { UInt32(exactly: $0) }
             .flatMap(WhiteBalanceMode.init(rawValue:))
         let colorTemp = resolveColorTemperature(from: jsonRecipe, wb: wb)

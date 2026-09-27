@@ -16,6 +16,7 @@ public struct SidebarView: View {
     public var onToggleConnection: (() -> Void)? = nil
 
     @State private var slotToEdit: Loadout? = nil
+    @State private var slotPendingLocalClear: Int?
 
     public init(
         selection: Binding<AppTab>,
@@ -85,8 +86,21 @@ public struct SidebarView: View {
                                 isSelected: selection == .recipes && recipeStore.selectedFilterCategory == .myRecipes,
                                 count: recipeStore.customRecipes.recipes.count,
                                 onDropRecipe: { recipe in
-                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                                        try? recipeStore.customRecipes.save(recipe.duplicated())
+                                    do {
+                                        let copy = try withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                            try recipeStore.customRecipes.saveCopy(of: recipe)
+                                        }
+                                        showToast(
+                                            title: "Added to My Recipes",
+                                            message: "“\(copy.name)” is ready to edit in My Recipes.",
+                                            isError: false
+                                        )
+                                    } catch {
+                                        showToast(
+                                            title: "Couldn’t Add to My Recipes",
+                                            message: error.localizedDescription,
+                                            isError: true
+                                        )
                                     }
                                 }
                             ) {
@@ -167,11 +181,7 @@ public struct SidebarView: View {
                                         selectedDialSlot = slot
                                         slotToEdit = loadout ?? Loadout(slot: slot, name: "C\(slot)", filmSim: nil, dr: nil)
                                     },
-                                    onClear: {
-                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                            recipeStore.loadouts.clearLoadout(for: slot)
-                                        }
-                                    }
+                                    onClear: { slotPendingLocalClear = slot }
                                 )
                                 .accessibilityIdentifier("sidebar-slot-\(slot)")
                             }
@@ -245,6 +255,21 @@ public struct SidebarView: View {
                 )
             )
         }
+        .clearLocalDraftConfirmation(slot: $slotPendingLocalClear, loadouts: recipeStore.loadouts)
+    }
+
+    /// The only drag source is a recipe card, so the recipe list is on
+    /// screen to show the toast whenever a recipe is dropped here.
+    private func showToast(title: String, message: String, isError: Bool) {
+        NotificationCenter.default.post(
+            name: MacAppCommand.showToast,
+            object: nil,
+            userInfo: [
+                MacAppCommand.toastTitleKey: title,
+                MacAppCommand.toastMessageKey: message,
+                MacAppCommand.toastIsErrorKey: isError
+            ]
+        )
     }
 
     private func simShortcutRow(title: String, family: RecipeStore.FilmSimFamily) -> some View {
@@ -699,7 +724,7 @@ public struct SidebarDialRackRow: View {
             Button(role: .destructive) {
                 onClear()
             } label: {
-                Label("Clear Slot C\(slot)", systemImage: "trash")
+                Label("Clear Local Draft for C\(slot)…", systemImage: "trash")
             }
             .disabled(!hasSettings)
         }

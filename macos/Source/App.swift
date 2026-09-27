@@ -9,8 +9,12 @@ enum MacAppCommand {
     static let selectDialSlot = Notification.Name("com.ant.fuji-recipes.select-dial-slot")
     static let focusSearch = Notification.Name("com.ant.fuji-recipes.focus-search")
     static let toggleDebugHUD = Notification.Name("com.ant.fuji-recipes.toggle-debug-hud")
+    static let showToast = Notification.Name("com.ant.fuji-recipes.show-toast")
     static let tabKey = "tab"
     static let slotKey = "slot"
+    static let toastTitleKey = "title"
+    static let toastMessageKey = "message"
+    static let toastIsErrorKey = "isError"
 }
 
 /// Boundary for supplying a camera transport to macOS views. Tests and
@@ -240,6 +244,7 @@ public struct FujiRecipesMacRoot: View {
         .environmentObject(recipeStore)
         .environmentObject(cameraManager)
         .environment(\.cameraManager, cameraManager)
+        .dataRecoveryAlerts(library: recipeStore.customRecipes, loadouts: recipeStore.loadouts)
         .debugHUD(enabled: !MacAppLaunchConfiguration.isUITesting)
         .task {
             DebugLogger.log(.info, category: .app, "App appeared — Tab: \(selectedTab.rawValue)")

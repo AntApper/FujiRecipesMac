@@ -235,6 +235,181 @@ final class CustomRecipeLibraryTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testCorruptFileAtInitThenSaveKeepsTheOriginalFile() throws {
+        let unreadableFiles = [
+            Data("{\"version\": 1, \"recipes\": [".utf8),
+            try JSONEncoder().encode(CustomRecipeLibraryExport(version: 2, recipes: [recipe(id: "custom-future", name: "Future")]))
+        ]
+        for original in unreadableFiles {
+            let directory = try makeDirectory()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("custom-recipes-v1.json")
+            try original.write(to: url)
+
+            let library = CustomRecipeLibrary(storageURL: url)
+            XCTAssertThrowsError(try library.save(recipe(id: "custom-new", name: "New")))
+
+            XCTAssertEqual(try Data(contentsOf: url), original)
+            let backups = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.lastPathComponent != url.lastPathComponent }
+            XCTAssertEqual(try backups.map { try Data(contentsOf: $0) }, [original])
+        }
+    }
+
+    @MainActor
+    func testOneUnreadableRecipeDoesNotHideTheOthers() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let archive = CustomRecipeLibraryExport(recipes: [
+            recipe(id: "custom-good", name: "Good"),
+            recipe(id: "custom-bad", name: "Bad")
+        ])
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(archive)) as? [String: Any])
+        var recipes = try XCTUnwrap(json["recipes"] as? [[String: Any]])
+        recipes[1]["filmSimulation"] = 9999
+        json["recipes"] = recipes
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let library = CustomRecipeLibrary(storageURL: url)
+
+        XCTAssertEqual(library.recipes.map(\.name), ["Good"])
+    }
+
+    @MainActor
+    func testSavingTwoCopiesOfOneRecipeGivesEachAUniqueName() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let library = CustomRecipeLibrary(storageURL: url, loadOnInit: false)
+        let bundled = recipe(id: "kodak-portra-400", name: "Kodak Portra 400")
+
+        try library.saveCopy(of: bundled)
+        try library.saveCopy(of: bundled)
+
+        XCTAssertEqual(
+            CustomRecipeLibrary(storageURL: url).recipes.map(\.name),
+            ["Kodak Portra 400 (Custom 2)", "Kodak Portra 400 (Custom)"]
+        )
+    }
+
+    @MainActor
+    func testUnreadableLibraryBlocksSavingUntilTheIssueIsAcknowledged() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let original = Data("{\"version\": 1, \"recipes\": [".utf8)
+        try original.write(to: url)
+
+        let library = CustomRecipeLibrary(storageURL: url)
+        let issue = try XCTUnwrap(library.loadIssue)
+
+        XCTAssertEqual(issue.problem, .unreadableFile(reason: "The given data was not valid JSON"))
+        XCTAssertEqual(try error(from: { try library.save(recipe(id: "custom-new", name: "New")) }), .persistenceBlocked)
+        library.acknowledgeLoadIssue()
+        try library.save(recipe(id: "custom-new", name: "New"))
+
+        let backupURL = try XCTUnwrap(issue.backupURL)
+        XCTAssertNotNil(backupURL.lastPathComponent.range(
+            of: #"^custom-recipes-v1\.unreadable-\d{8}-\d{6}\.json$"#,
+            options: .regularExpression
+        ))
+        XCTAssertEqual(try Data(contentsOf: backupURL), original)
+        XCTAssertEqual(CustomRecipeLibrary(storageURL: url).recipes.map(\.name), ["New"])
+    }
+
+    @MainActor
+    func testUnreadableRecipeIsReportedAndBlocksSavingUntilAcknowledged() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let archive = CustomRecipeLibraryExport(recipes: [
+            recipe(id: "custom-good", name: "Good"),
+            recipe(id: "custom-bad", name: "Bad")
+        ])
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(archive)) as? [String: Any])
+        var recipes = try XCTUnwrap(json["recipes"] as? [[String: Any]])
+        recipes[1]["filmSimulation"] = 9999
+        json["recipes"] = recipes
+        let original = try JSONSerialization.data(withJSONObject: json)
+        try original.write(to: url)
+
+        let library = CustomRecipeLibrary(storageURL: url)
+        let issue = try XCTUnwrap(library.loadIssue)
+
+        XCTAssertEqual(issue.problem, .skippedRecipes([
+            .init(name: "Bad", reason: "filmSimulation: Cannot initialize FilmSimulation from invalid UInt32 value 9999")
+        ]))
+        XCTAssertEqual(try error(from: { try library.save(recipe(id: "custom-new", name: "New")) }), .persistenceBlocked)
+        XCTAssertEqual(try error(from: { try library.delete(id: "custom-good") }), .persistenceBlocked)
+        XCTAssertEqual(library.recipes.map(\.name), ["Good"])
+
+        library.acknowledgeLoadIssue()
+        try library.save(recipe(id: "custom-new", name: "New"))
+
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(issue.backupURL)), original)
+        XCTAssertEqual(CustomRecipeLibrary(storageURL: url).recipes.map(\.name), ["Good", "New"])
+    }
+
+    @MainActor
+    func testInvalidAndDuplicateStoredRecipesAreSkippedByName() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let archive = CustomRecipeLibraryExport(recipes: [
+            recipe(id: "custom-shared", name: "Good"),
+            recipe(id: "custom-shared", name: "Other"),
+            recipe(id: "custom-unnamed", name: "  ")
+        ])
+        try JSONEncoder().encode(archive).write(to: url)
+
+        let library = CustomRecipeLibrary(storageURL: url)
+
+        XCTAssertEqual(library.recipes.map(\.name), ["Good"])
+        XCTAssertEqual(library.loadIssue?.problem, .skippedRecipes([
+            .init(name: "Other", reason: "another recipe in the file already uses the ID “custom-shared”"),
+            .init(name: "Recipe 3", reason: "a name is required")
+        ]))
+    }
+
+    @MainActor
+    func testMissingLibraryFileLoadsEmptyWithoutAnIssue() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+
+        let library = CustomRecipeLibrary(storageURL: url)
+        XCTAssertNil(library.loadIssue)
+        try library.save(recipe(id: "custom-new", name: "New"))
+
+        XCTAssertEqual(CustomRecipeLibrary(storageURL: url).recipes.map(\.name), ["New"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["custom-recipes-v1.json"])
+    }
+
+    func testLoadIssueMessagesNameTheSkippedRecipesAndTheCopy() {
+        let skipped = CustomRecipeLibraryLoadIssue(
+            problem: .skippedRecipes([
+                .init(name: "Night Walk", reason: "a name is required"),
+                .init(name: "Recipe 4", reason: "filmSimulation: Cannot initialize FilmSimulation from invalid UInt32 value 9999")
+            ]),
+            backupURL: URL(fileURLWithPath: "/tmp/custom-recipes-v1.unreadable-20260927-012400.json")
+        )
+        let unreadable = CustomRecipeLibraryLoadIssue(
+            problem: .unreadableFile(reason: "The given data was not valid JSON"),
+            backupURL: nil
+        )
+
+        XCTAssertEqual(
+            skipped.message,
+            "2 custom recipes couldn’t be read and were left out: “Night Walk” (a name is required), “Recipe 4” (filmSimulation: Cannot initialize FilmSimulation from invalid UInt32 value 9999). The original file was copied to “custom-recipes-v1.unreadable-20260927-012400.json”. Changes to My Recipes won’t be saved until you dismiss this."
+        )
+        XCTAssertEqual(
+            unreadable.message,
+            "FujiRecipes couldn’t read your custom recipe library (The given data was not valid JSON). FujiRecipes couldn’t make a copy of the original file, so it was left untouched. Changes to My Recipes won’t be saved until you dismiss this."
+        )
+    }
+
     private func error(from operation: () throws -> Void) throws -> CustomRecipeLibraryError {
         do {
             try operation()

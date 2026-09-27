@@ -61,28 +61,7 @@ public struct LoadoutsView: View {
             .padding(16)
         }
         .navigationTitle("C1–C7 Preset Dial Matrix")
-        .confirmationDialog(
-            "Clear Local Draft?",
-            isPresented: Binding(
-                get: { slotPendingLocalClear != nil },
-                set: { if !$0 { slotPendingLocalClear = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Clear Local Draft", role: .destructive) {
-                if let slot = slotPendingLocalClear {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        loadouts.clearLoadout(for: slot)
-                    }
-                }
-                slotPendingLocalClear = nil
-            }
-            Button("Cancel", role: .cancel) { slotPendingLocalClear = nil }
-        } message: {
-            if let slot = slotPendingLocalClear {
-                Text("This removes only FujiRecipes’ local draft for C\(slot). It does not clear, reset, or otherwise change the physical camera slot.")
-            }
-        }
+        .clearLocalDraftConfirmation(slot: $slotPendingLocalClear, loadouts: loadouts)
         .sheet(item: $slotToEdit) { loadout in
             SlotEditorSheet(loadout: loadout, store: loadouts, cameraManager: cameraManager, isPresented: Binding(
                 get: { slotToEdit != nil },

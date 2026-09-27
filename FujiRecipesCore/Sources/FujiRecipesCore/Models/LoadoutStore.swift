@@ -1,5 +1,16 @@
 import Foundation
 
+/// Staged drafts that couldn't be read were copied aside and replaced with
+/// empty slots.
+public struct LoadoutRecoveryNotice: Equatable, Sendable {
+    public let backupKey: String
+    public let reason: String
+
+    public var message: String {
+        "FujiRecipes couldn’t read your staged C1–C7 drafts (\(reason)), so the slots start empty. The unreadable data was kept in the app’s preferences as “\(backupKey)”. Your camera wasn’t changed."
+    }
+}
+
 /// Manages C1-C7 preset slots locally with UserDefaults persistence.
 /// This is the offline/local version — camera sync is handled separately.
 @MainActor
@@ -10,6 +21,7 @@ public final class LoadoutStore: ObservableObject {
     @Published public private(set) var cameraEmptySlots: Set<Int> = []
     /// Slots changed locally since their last verified camera read/write.
     @Published public private(set) var dirtySlots: Set<Int> = []
+    @Published public private(set) var recoveryNotice: LoadoutRecoveryNotice?
     /// Bumped on every local edit to a slot, so a camera write can tell
     /// whether the user changed the slot since the write captured it.
     /// Camera syncs don't bump it. They only run while the camera gate is
@@ -17,30 +29,61 @@ public final class LoadoutStore: ObservableObject {
     private var revisions: [Int: Int] = [:]
     
     private let loadoutsKey = "com.ant.fuji-recipes.loadouts"
+    private let defaults: UserDefaults
     
-    public init() {
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadLoadouts()
+    }
+
+    public func acknowledgeRecoveryNotice() {
+        recoveryNotice = nil
     }
     
     // MARK: - Persistence
     
     private func loadLoadouts() {
-        if let data = UserDefaults.standard.data(forKey: loadoutsKey),
-           let loadouts = try? JSONDecoder().decode([Loadout].self, from: data) {
+        guard let data = defaults.data(forKey: loadoutsKey) else {
+            loadouts = Self.emptyLoadouts
+            print("✅ DEFAULT 7 empty loadouts")
+            return
+        }
+        do {
+            let loadouts = try JSONDecoder().decode([Loadout].self, from: data)
             self.loadouts = loadouts.sorted { $0.slot < $1.slot }
             // Only loadouts persist, so a draft staged in an earlier session
             // must be re-marked or the next camera sync would discard it.
             dirtySlots = Set(loadouts.filter { $0.provenance == .localDraft && $0.hasAnySettings }.map(\.slot))
             print("✅ LOADED \(loadouts.count) loadouts from UserDefaults")
-        } else {
-            self.loadouts = (1...7).map { Loadout(slot: $0, name: "C\($0)", filmSim: nil, dr: nil) }
-            print("✅ DEFAULT 7 empty loadouts")
+        } catch {
+            let backupKey = backUpUnreadableLoadouts(data)
+            loadouts = Self.emptyLoadouts
+            // Saving the empty slots now keeps the next launch from finding
+            // the same unreadable data and backing it up again.
+            saveLoadouts()
+            recoveryNotice = LoadoutRecoveryNotice(backupKey: backupKey, reason: storedDataFailureReason(error))
         }
+    }
+
+    private static var emptyLoadouts: [Loadout] {
+        (1...7).map { Loadout(slot: $0, name: "C\($0)", filmSim: nil, dr: nil) }
+    }
+
+    private func backUpUnreadableLoadouts(_ data: Data) -> String {
+        let baseKey = "\(loadoutsKey).unreadable-\(storedDataRecoveryTimestamp())"
+        var attempt = 1
+        var backupKey = baseKey
+        while defaults.object(forKey: backupKey) != nil {
+            attempt += 1
+            backupKey = "\(baseKey)-\(attempt)"
+        }
+        defaults.set(data, forKey: backupKey)
+        return backupKey
     }
     
     private func saveLoadouts() {
         if let data = try? JSONEncoder().encode(loadouts) {
-            UserDefaults.standard.set(data, forKey: loadoutsKey)
+            defaults.set(data, forKey: loadoutsKey)
         }
     }
     

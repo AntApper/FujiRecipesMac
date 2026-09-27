@@ -419,7 +419,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
     func testAllBundledRecipesEncodeSuccessfullyForCSlot() throws {
         let database = try bundledRecipeDatabase()
 
-        XCTAssertEqual(database.recipes.count, 40, "Expected exactly 40 recipes in recipes-data.json")
+        XCTAssertEqual(database.recipes.count, 50, "Expected exactly 50 recipes in recipes-data.json")
 
         let monochrome: Set<FilmSimulation> = [
             .monochrome, .monochromeY, .monochromeR, .monochromeG,

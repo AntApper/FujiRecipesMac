@@ -313,6 +313,25 @@ final class BatchStagingAndWritingTests: XCTestCase {
         XCTAssertEqual(store.loadout(for: 2)?.provenance, .cameraSynced)
     }
 
+    @MainActor
+    func testWriteAllStagedSlotsSkipsCameraSyncedAndClearedSlots() async {
+        let mockClient = seededCameraClient()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: mockClient, loadouts: store)
+        store.applyRecipe(
+            Recipe(id: "r2", name: "Staged Two", source: "test", sourceUrl: nil, filmSimulation: .velvia),
+            to: 2
+        )
+        store.clearLoadout(for: 5)
+        XCTAssertEqual(store.stagedSlots, [2])
+
+        let results = await manager.writeAllStagedSlots(from: store)
+
+        XCTAssertEqual(results.map(\.slot), [2])
+        XCTAssertEqual(mockClient.writtenSlots, [2])
+    }
+
     // MARK: - Helpers
 
     private func seededCameraClient() -> BatchMockPTPClient {

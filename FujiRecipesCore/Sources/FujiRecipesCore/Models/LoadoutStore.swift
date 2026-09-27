@@ -50,6 +50,15 @@ public final class LoadoutStore: ObservableObject {
         dirtySlots.contains(slot)
     }
 
+    /// Slots holding local settings the camera doesn't have yet. A cleared
+    /// draft has no settings, so it is never written over the camera slot.
+    public var stagedSlots: [Int] {
+        loadouts
+            .filter { $0.hasAnySettings && ($0.provenance != .cameraSynced || isDirty($0.slot)) }
+            .map(\.slot)
+            .sorted()
+    }
+
     private func update(_ slot: Int, save: Bool = true, _ mutate: (inout Loadout) -> Void) {
         guard let index = loadouts.firstIndex(where: { $0.slot == slot }) else { return }
         var loadout = loadouts[index]

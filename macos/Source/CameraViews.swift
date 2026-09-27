@@ -690,15 +690,11 @@ public struct CameraConnectionView: View {
     }
 
     private func writeSingleSlot(_ slot: Int) {
-        guard manager.status == .connected, let loadout = loadouts.loadout(for: slot) else { return }
+        guard manager.status == .connected else { return }
         Task {
             do {
                 writeStatusFeedback = "Writing C\(slot) to camera…"
-                let result = try await manager.writeLoadout(loadout, to: slot)
-                if let observed = result.observedSnapshot, observed.slot == slot {
-                    loadouts.syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
-                    loadouts.markCameraWriteVerified(slot: slot)
-                }
+                let result = try await manager.writeSlot(slot, from: loadouts)
                 let action = result.createdFromEmpty ? "Created & verified" : "Updated & verified"
                 let warnSuffix = result.warnings.isEmpty ? "" : " (warnings: \(result.warnings.joined(separator: ", ")))"
                 writeStatusFeedback = "✓ \(action) camera slot C\(slot)\(warnSuffix)."

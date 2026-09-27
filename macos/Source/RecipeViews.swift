@@ -436,9 +436,8 @@ public struct RecipeListView: View {
                 )
             }
             do {
-                let result = try await cameraManager.importRecipeToCState(recipe, slot: slot)
-                guard let observedSnapshot = result.observedSnapshot,
-                      observedSnapshot.slot == slot else {
+                let result = try await cameraManager.importRecipeToCState(recipe, slot: slot, updating: store.loadouts)
+                guard result.observedSnapshot?.slot == slot else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         activeHUDToast = HUDToast(
                             title: "C\(slot) Sync Incomplete",
@@ -447,14 +446,6 @@ public struct RecipeListView: View {
                         )
                     }
                     return
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                    store.loadouts.applyRecipe(recipe, to: slot)
-                    store.loadouts.syncFromCameraPresetData(
-                        [observedSnapshot],
-                        overwriteDirtyDrafts: true
-                    )
-                    store.loadouts.markCameraWriteVerified(slot: slot)
                 }
                 let warningSuffix = result.warnings.isEmpty
                     ? ""

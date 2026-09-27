@@ -135,14 +135,10 @@ public struct LoadoutsView: View {
     }
 
     private func writeSlot(_ slot: Int) {
-        guard cameraManager.status == .connected, let loadout = loadouts.loadout(for: slot) else { return }
+        guard cameraManager.status == .connected else { return }
         Task {
             do {
-                let result = try await cameraManager.writeLoadout(loadout, to: slot)
-                if let observed = result.observedSnapshot, observed.slot == slot {
-                    loadouts.syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
-                    loadouts.markCameraWriteVerified(slot: slot)
-                }
+                _ = try await cameraManager.writeSlot(slot, from: loadouts)
                 refreshMessage = "✓ Verified C\(slot) on camera."
             } catch {
                 refreshMessage = "Write failed for C\(slot): \(error.localizedDescription)"
@@ -972,17 +968,15 @@ public struct SlotEditorSheet: View {
         saveChanges()
         Task {
             do {
-                let result = try await cameraManager.writeLoadout(loadout, to: loadout.slot)
-                guard let observedSnapshot = result.observedSnapshot,
-                      observedSnapshot.slot == loadout.slot else {
+                let result = try await cameraManager.writeSlot(loadout.slot, from: store)
+                guard result.observedSnapshot?.slot == loadout.slot else {
                     writeMessage = "C\(loadout.slot) was sent to the camera, but the post-write camera readback was unavailable. This local draft remains unverified."
                     return
                 }
-                store.syncFromCameraPresetData(
-                    [observedSnapshot],
-                    overwriteDirtyDrafts: true
-                )
-                store.markCameraWriteVerified(slot: loadout.slot)
+                guard !store.isDirty(loadout.slot) else {
+                    writeMessage = "C\(loadout.slot) was written to the camera, but a newer local draft is still staged."
+                    return
+                }
                 if let observedLoadout = store.loadout(for: loadout.slot) {
                     loadout = observedLoadout
                 }

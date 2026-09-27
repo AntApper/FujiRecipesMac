@@ -107,6 +107,44 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertTrue(store.isDirty(3), "a slot edited during its write was marked verified")
         XCTAssertEqual(store.stagedSlots, [3])
     }
+
+    @MainActor
+    func testWriteSlotAdoptsReadbackForUntouchedSlot() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.applyRecipe(Recipe(id: "six", name: "Six", source: "test", sourceUrl: nil, filmSimulation: .velvia), to: 6)
+        XCTAssertTrue(store.isDirty(6))
+
+        let result = try await manager.writeSlot(6, from: store)
+
+        XCTAssertEqual(result.observedSnapshot?.name, "Six")
+        XCTAssertFalse(store.isDirty(6))
+        XCTAssertEqual(store.loadout(for: 6)?.provenance, .cameraSynced)
+        XCTAssertEqual(store.loadout(for: 6)?.filmSim, .velvia)
+        XCTAssertEqual(store.stagedSlots, [])
+    }
+
+    @MainActor
+    func testImportKeepsEditMadeWhileItWasWriting() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        let recipe = Recipe(id: "four", name: "Four", source: "test", sourceUrl: nil, filmSimulation: .eterna)
+
+        let importTask = Task { try await manager.importRecipeToCState(recipe, slot: 4, updating: store) }
+        await camera.waitUntilBusy()
+        store.setFilmSim(for: 4, filmSim: .acros)
+        let result = try await importTask.value
+
+        XCTAssertEqual(result.observedSnapshot?.name, "Four")
+        XCTAssertEqual(camera.slot(4).filmSimulation, FilmSimulation.eterna.rawValue)
+        XCTAssertEqual(store.loadout(for: 4)?.filmSim, .acros, "the import readback replaced an edit made during the write")
+        XCTAssertTrue(store.isDirty(4))
+        XCTAssertEqual(store.stagedSlots, [4])
+    }
 }
 
 // MARK: - Slot-register camera

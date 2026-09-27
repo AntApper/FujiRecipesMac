@@ -165,10 +165,16 @@ public final class CameraManager: ObservableObject {
         using client: PTPClientProtocol,
         gen: Int
     ) async -> SlotRefreshResult {
+        let revisions = loadouts.map { store in
+            Dictionary(uniqueKeysWithValues: (1...7).map { ($0, store.revision(of: $0)) })
+        }
         let result = await readSlots(using: client)
         lastSlotRefresh = result
-        if !result.presets.isEmpty {
-            loadouts?.syncFromCameraPresetData(result.presets, overwriteDirtyDrafts: overwriteDirtyDrafts)
+        if let loadouts, !result.presets.isEmpty {
+            let presets = overwriteDirtyDrafts
+                ? result.presets.filter { loadouts.revision(of: $0.slot) == revisions?[$0.slot] }
+                : result.presets
+            loadouts.syncFromCameraPresetData(presets, overwriteDirtyDrafts: overwriteDirtyDrafts)
         }
         if !result.failures.isEmpty {
             operation = .failed("Some camera slots could not be read")
@@ -200,16 +206,39 @@ public final class CameraManager: ObservableObject {
 
     // MARK: - Import Recipe to C-State
 
-    public func importRecipeToCState(_ recipe: Recipe, slot: Int) async throws -> PTPPresetSlotWriteResult {
+    /// When `loadouts` is given, the verified readback replaces the slot only
+    /// if the slot has not changed since this call, including while queued.
+    public func importRecipeToCState(
+        _ recipe: Recipe,
+        slot: Int,
+        updating loadouts: LoadoutStore? = nil
+    ) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
             throw PTPError.invalidResponse("Preset slot must be 1–7")
         }
+        let revision = loadouts?.revision(of: slot)
         return try await exclusive(nil) { client, gen in
-            try await writePreset(CSlotPresetEncoder.encode(recipe: recipe, slot: slot), to: slot, using: client, gen: gen)
+            let result = try await writePreset(CSlotPresetEncoder.encode(recipe: recipe, slot: slot), to: slot, using: client, gen: gen)
+            if let loadouts, let revision {
+                adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
+            }
+            return result
         }
     }
 
     // MARK: - Write Loadout
+
+    /// Writes the store's current draft for `slot`, captured once the camera
+    /// is free. The readback is adopted only if the draft did not change
+    /// during the write; callers can tell from `loadouts.isDirty(slot)`.
+    public func writeSlot(_ slot: Int, from loadouts: LoadoutStore) async throws -> PTPPresetSlotWriteResult {
+        guard (1...7).contains(slot) else {
+            throw PTPError.invalidResponse("Preset slot must be 1–7")
+        }
+        return try await exclusive(nil) { client, gen in
+            try await writeStoredSlot(slot, from: loadouts, using: client, gen: gen)
+        }
+    }
 
     public func writeLoadout(_ loadout: Loadout, to slot: Int) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
@@ -228,19 +257,10 @@ public final class CameraManager: ObservableObject {
                 var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
 
                 for slot in loadouts.stagedSlots {
-                    guard let loadout = loadouts.loadout(for: slot) else { continue }
+                    guard loadouts.stagedSlots.contains(slot) else { continue }
 
                     do {
-                        let writeResult = try await writePreset(
-                            CSlotPresetEncoder.encode(loadout: loadout, slot: slot),
-                            to: slot,
-                            using: client,
-                            gen: gen
-                        )
-                        if let snapshot = writeResult.observedSnapshot {
-                            loadouts.syncFromCameraPresetData([snapshot], overwriteDirtyDrafts: true)
-                        }
-                        loadouts.markCameraWriteVerified(slot: slot)
+                        let writeResult = try await writeStoredSlot(slot, from: loadouts, using: client, gen: gen)
                         results.append((slot: slot, result: .success(writeResult)))
                     } catch {
                         results.append((slot: slot, result: .failure(error)))
@@ -320,6 +340,32 @@ public final class CameraManager: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    private func writeStoredSlot(
+        _ slot: Int,
+        from loadouts: LoadoutStore,
+        using client: PTPClientProtocol,
+        gen: Int
+    ) async throws -> PTPPresetSlotWriteResult {
+        guard let loadout = loadouts.loadout(for: slot) else {
+            throw PTPError.invalidResponse("No local draft for C\(slot)")
+        }
+        let revision = loadouts.revision(of: slot)
+        let result = try await writePreset(CSlotPresetEncoder.encode(loadout: loadout, slot: slot), to: slot, using: client, gen: gen)
+        adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
+        return result
+    }
+
+    private func adopt(
+        _ result: PTPPresetSlotWriteResult,
+        for slot: Int,
+        into loadouts: LoadoutStore,
+        ifUnchangedSince revision: Int,
+        gen: Int
+    ) {
+        guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return }
+        loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision)
+    }
 
     private func writePreset(
         _ data: @autoclosure () throws -> PTPClientPresetData,

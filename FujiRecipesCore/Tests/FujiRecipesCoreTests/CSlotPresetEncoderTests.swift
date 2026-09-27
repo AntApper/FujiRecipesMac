@@ -387,7 +387,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
         let resource = repository.appendingPathComponent("macos/Resources/recipes-data.json")
         let database = try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
 
-        XCTAssertEqual(database.recipes.count, 40, "Expected exactly 40 recipes in recipes-data.json")
+        XCTAssertEqual(database.recipes.count, 50, "Expected exactly 50 recipes in recipes-data.json")
 
         for jsonRecipe in database.recipes {
             let recipe = RecipeLoader.recipe(from: jsonRecipe)

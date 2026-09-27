@@ -800,7 +800,9 @@ public struct RecipeListView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .padding(.trailing, scrollFadeWidth)
             }
+            .trailingScrollFade()
 
             HStack(spacing: 8) {
                 metadataFilterMenus
@@ -974,7 +976,9 @@ public struct RecipeListView: View {
                     }
                 }
                 .padding(.vertical, 2)
+                .padding(.trailing, scrollFadeWidth)
             }
+            .trailingScrollFade()
 
             if let onNavigateToCamera {
                 Button {
@@ -1138,6 +1142,23 @@ public struct RecipeListView: View {
 }
 
 // MARK: - Search Focus Helpers
+
+private let scrollFadeWidth: CGFloat = 24
+
+private extension View {
+    /// Fades the trailing edge of a horizontal scroll row so a clipped item
+    /// reads as more to scroll. Rows pad their content by `scrollFadeWidth`
+    /// so the last item can scroll clear of the fade.
+    func trailingScrollFade() -> some View {
+        mask {
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: scrollFadeWidth)
+            }
+        }
+    }
+}
 
 private struct SearchFocusModifier: ViewModifier {
     @FocusState.Binding var isSearchFocused: Bool
@@ -2226,7 +2247,9 @@ public struct RecipeQuickLookView: View {
                                                 .clipShape(Capsule())
                                         }
                                     }
+                                    .padding(.trailing, scrollFadeWidth)
                                 }
+                                .trailingScrollFade()
                                 .padding(.top, 2)
                             }
                         }

@@ -137,11 +137,6 @@ struct FujiRecipesMacApp: App {
             }
             CommandGroup(after: .pasteboard) {
                 Button("Find Recipes…") {
-                    NotificationCenter.default.post(
-                        name: MacAppCommand.selectTab,
-                        object: nil,
-                        userInfo: [MacAppCommand.tabKey: AppTab.recipes.rawValue]
-                    )
                     NotificationCenter.default.post(name: MacAppCommand.focusSearch, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: .command)
@@ -176,6 +171,7 @@ public struct FujiRecipesMacRoot: View {
     @StateObject private var cameraManager = CameraManager()
     @State private var selectedTab: AppTab = .recipes
     @State private var selectedDialSlot: Int = 1
+    @State private var isSearchFocusPending = false
     private let cameraSessionFactory: CameraSessionFactory
 
     public init(
@@ -208,6 +204,7 @@ public struct FujiRecipesMacRoot: View {
                             RecipeListView(
                                 store: recipeStore,
                                 cameraManager: cameraManager,
+                                isSearchFocusPending: $isSearchFocusPending,
                                 onNavigateToCamera: {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         selectedTab = .camera
@@ -279,6 +276,7 @@ public struct FujiRecipesMacRoot: View {
                     selectedTab = .recipes
                 }
             }
+            isSearchFocusPending = true
         }
         .accessibilityAction(named: "Show Recipes") { selectedTab = .recipes }
         .accessibilityAction(named: "Show Camera & Staging") { selectedTab = .camera }

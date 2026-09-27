@@ -53,14 +53,19 @@ public struct RecipeListView: View {
     }
 
     public var onNavigateToCamera: (() -> Void)? = nil
+    /// Set by Find Recipes… before this view may exist. The view focuses
+    /// search and clears it as soon as it appears or sees the change.
+    @Binding private var isSearchFocusPending: Bool
 
     public init(
         store: RecipeStore,
         cameraManager: CameraManager,
+        isSearchFocusPending: Binding<Bool> = .constant(false),
         onNavigateToCamera: (() -> Void)? = nil
     ) {
         self.store = store
         self.cameraManager = cameraManager
+        self._isSearchFocusPending = isSearchFocusPending
         self.onNavigateToCamera = onNavigateToCamera
     }
 
@@ -181,31 +186,13 @@ public struct RecipeListView: View {
         .navigationTitle("Fuji Recipes Studio")
         .searchable(text: $store.searchQuery, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
         .modifier(SearchFocusModifier(isSearchFocused: $isSearchFocused))
-        .onChange(of: isSearchFocused) { _, focused in
-            if focused {
-                DispatchQueue.main.async {
-                    if let window = NSApp.keyWindow ?? NSApp.mainWindow,
-                       let searchField = window.findSearchField() {
-                        window.makeFirstResponder(searchField)
-                    }
-                }
-            }
-        }
-        .background {
-            // Cmd+F shortcut to focus search bar
-            Button("Find in Recipes") {
-                focusSearchField()
-            }
-            .keyboardShortcut("f", modifiers: .command)
-            .opacity(0)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
         .onAppear {
-            isGridFocused = true
+            if !focusSearchIfRequested() {
+                isGridFocused = true
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
-            focusSearchField()
+        .onChange(of: isSearchFocusPending) {
+            focusSearchIfRequested()
         }
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.showToast)) { notification in
             guard
@@ -440,12 +427,23 @@ public struct RecipeListView: View {
         return .handled
     }
 
+    @discardableResult
+    private func focusSearchIfRequested() -> Bool {
+        guard isSearchFocusPending else { return false }
+        isSearchFocusPending = false
+        focusSearchField()
+        return true
+    }
+
     private func focusSearchField() {
-        isSearchFocused = true
-        DispatchQueue.main.async {
-            if let window = NSApp.keyWindow ?? NSApp.mainWindow,
-               let searchField = window.findSearchField() {
-                window.makeFirstResponder(searchField)
+        if #available(macOS 15.0, *) {
+            isSearchFocused = true
+        } else {
+            DispatchQueue.main.async {
+                if let window = NSApp.keyWindow ?? NSApp.mainWindow,
+                   let searchField = window.findSearchField() {
+                    window.makeFirstResponder(searchField)
+                }
             }
         }
     }
@@ -1146,8 +1144,10 @@ private struct SearchFocusModifier: ViewModifier {
 }
 
 private extension NSWindow {
+    /// The toolbar search field lives beside `contentView`, under the
+    /// window's frame view, so the search starts one level up.
     func findSearchField() -> NSSearchField? {
-        contentView?.findSearchField()
+        (contentView?.superview ?? contentView)?.findSearchField()
     }
 }
 

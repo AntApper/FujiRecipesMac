@@ -187,8 +187,8 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             // PTPClientProtocol intentionally exposes synchronous disconnect.
             // Keep that API stable while serialising a graceful JSON teardown
             // behind it; a following connect awaits this task before spawning.
-            // The task clears `shutdownTask` on `queue`, so store it in the
-            // same block: a dead helper's teardown can finish at once.
+            // The task clears `shutdownTask` on `queue`, and a dead helper's
+            // teardown can do that before a separate store runs, so assign it here.
             shutdownTask = Task { [weak self] in
                 guard let self else { return }
                 await self.shutdownHelperGracefully(process)
@@ -1022,7 +1022,7 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
 /// file. Foundation serializes `FileHandle.bytes` reads, so a read parked on
 /// the helper's idle stderr would stall its stdout replies.
 private final class LineReader: @unchecked Sendable {
-    /// `readabilityHandler` calls for one handle never overlap.
+    /// Needs no lock: `readabilityHandler` calls for one handle never overlap.
     private var pending = Data()
 
     static func start(_ handle: FileHandle, deliver: @escaping @Sendable (String?) -> Void) {

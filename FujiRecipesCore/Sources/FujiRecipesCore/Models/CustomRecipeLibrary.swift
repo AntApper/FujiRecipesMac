@@ -101,6 +101,13 @@ public final class CustomRecipeLibrary: ObservableObject {
         try persist()
     }
 
+    @discardableResult
+    public func saveCopy(of recipe: Recipe) throws -> Recipe {
+        let copy = recipe.duplicated()
+        try save(copy)
+        return copy
+    }
+
     public func delete(id: Recipe.ID) throws {
         recipes.removeAll { $0.id == id }
         try persist()

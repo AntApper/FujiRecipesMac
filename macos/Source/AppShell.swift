@@ -86,7 +86,7 @@ public struct SidebarView: View {
                                 count: recipeStore.customRecipes.recipes.count,
                                 onDropRecipe: { recipe in
                                     withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                                        try? recipeStore.customRecipes.save(recipe.duplicated())
+                                        try? recipeStore.customRecipes.saveCopy(of: recipe)
                                     }
                                 }
                             ) {

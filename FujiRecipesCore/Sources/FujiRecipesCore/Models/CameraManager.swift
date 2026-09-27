@@ -8,17 +8,6 @@ public final class CameraManager: ObservableObject {
 
     @Published public private(set) var status: CameraStatus = .disconnected
     @Published public private(set) var cameraInfo: PTPCameraInfo?
-    /// Explicitly describes whether this backend can read live active settings.
-    /// USB RAW mode exposes C-slot properties, but not the active-property
-    /// telemetry range; an empty dictionary would incorrectly suggest a valid
-    /// successful read with zero settings.
-    @Published public private(set) var activeSettingsState: ActiveSettingsState = .notRead
-    /// Compatibility projection for existing views. It is nil unless live
-    /// settings were actually available; callers needing the reason should use
-    /// `activeSettingsState`.
-    public var activeSettings: [String: AnyHashable]? {
-        activeSettingsState.settings
-    }
     @Published public var lastError: String?
     @Published public private(set) var operation: CameraOperation = .idle
     @Published public private(set) var lastSlotRefresh: SlotRefreshResult?
@@ -68,11 +57,6 @@ public final class CameraManager: ObservableObject {
                 model: info.model,
                 vendorExtensionId: info.vendorExtensionId
             )
-            // Active settings can fail for properties not supported in the current
-            // USB mode; don't let that fail the whole connection.
-            let activeSettings = await readAllActiveSettings(using: session)
-            guard gen == generation else { return }
-            activeSettingsState = activeSettings
 
             // Keep dirty drafts: anything staged while offline still needs writing.
             if let loadouts {
@@ -113,7 +97,6 @@ public final class CameraManager: ObservableObject {
         client = nil
         status = .disconnected
         cameraInfo = nil
-        activeSettingsState = .notRead
         lastError = nil
         operation = .idle
         lastSlotRefresh = nil
@@ -131,17 +114,6 @@ public final class CameraManager: ObservableObject {
                     self.disconnect()
                     break
                 }
-            }
-        }
-    }
-
-    // MARK: - Active Settings
-
-    public func readActiveSettings() async {
-        _ = try? await exclusive(nil) { client, gen in
-            let state = await readAllActiveSettings(using: client)
-            if gen == generation {
-                activeSettingsState = state
             }
         }
     }
@@ -476,71 +448,6 @@ public final class CameraManager: ObservableObject {
             rollback: rollback,
             failurePhase: phase
         )
-    }
-
-    private func readAllActiveSettings(using client: PTPClientProtocol) async -> ActiveSettingsState {
-        var settings: [String: AnyHashable] = [:]
-
-        let propertyCodes: [String: UInt16] = [
-            "FilmSim": 0xD001, "Color": 0xD002, "DR": 0xD007,
-            "WB": 0x5005, "WBRed": 0xD00B, "WBBlue": 0xD00C,
-            "ColorTemp": 0xD017, "HighIsoNr": 0xD01C,
-            "Grain": 0xD023, "Highlight": 0xD320, "Shadow": 0xD321,
-            "ISO": 0x500F, "Sharpness": 0x5015, "ExpoComp": 0x5010
-        ]
-
-        for (name, code) in propertyCodes {
-            do {
-                let response = try await client.readProperty(code)
-                switch response {
-                case .uint32(let value):
-                    settings[name] = value as AnyHashable
-                case .int32(let value):
-                    settings[name] = value as AnyHashable
-                case .string(let value):
-                    settings[name] = value as AnyHashable
-                case .data(let data):
-                    settings[name] = data as AnyHashable
-                case .unsupported, .error:
-                    DebugLogger.debug("Property 0x\(String(code, radix: 16)) unsupported or errored", category: .camera)
-                }
-            } catch {
-                DebugLogger.debug("Property 0x\(String(code, radix: 16)) read failed: \(error.localizedDescription)", category: .camera)
-            }
-        }
-
-        // The X100VI in USB RAW CONV mode rejects the active-property range
-        // (for example D001/D007). Treat an all-unavailable pass as a
-        // capability result, not as an apparently successful empty payload.
-        return settings.isEmpty
-            ? .unavailable(.unsupportedInUSBRAWMode)
-            : .available(settings)
-    }
-}
-
-/// Outcome of attempting to read the current, live camera settings.
-///
-/// This is deliberately separate from C-slot reads: the camera can support
-/// preset-slot inspection while declining active-property telemetry.
-public enum ActiveSettingsState: Equatable {
-    case notRead
-    case available([String: AnyHashable])
-    case unavailable(ActiveSettingsUnavailableReason)
-
-    public var settings: [String: AnyHashable]? {
-        guard case .available(let settings) = self else { return nil }
-        return settings
-    }
-}
-
-public enum ActiveSettingsUnavailableReason: String, Sendable, Equatable {
-    case unsupportedInUSBRAWMode
-
-    public var userFacingDescription: String {
-        switch self {
-        case .unsupportedInUSBRAWMode:
-            return "Live active settings are unavailable while the X100VI is in USB RAW mode."
-        }
     }
 }
 

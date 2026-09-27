@@ -42,7 +42,6 @@ final class CameraDisconnectAndResilienceTests: XCTestCase {
         XCTAssertTrue(didDisconnect, "Manager should transition to .disconnected when client triggers disconnect handler")
         XCTAssertEqual(manager.status, .disconnected)
         XCTAssertNil(manager.cameraInfo, "cameraInfo should be reset to nil on disconnect")
-        XCTAssertEqual(manager.activeSettingsState, .notRead, "activeSettingsState should be reset to .notRead")
         XCTAssertEqual(manager.operation, .idle, "operation should be reset to .idle")
         XCTAssertNil(manager.lastSlotRefresh, "lastSlotRefresh should be reset to nil")
     }

@@ -375,7 +375,6 @@ public struct SidebarView: View {
 
     private var statusFooter: some View {
         ViewThatFits(in: .horizontal) {
-            // Wide layout: full horizontal bar
             HStack(spacing: 8) {
                 openCameraButton {
                     HStack(spacing: 8) {

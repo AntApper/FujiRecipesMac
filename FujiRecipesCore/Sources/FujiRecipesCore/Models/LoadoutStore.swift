@@ -669,8 +669,6 @@ extension Loadout {
         return "C\(slot)"
     }
 
-    /// What the slot holds, for labels: its own name unless that is the
-    /// default "C3", else the recipe it was staged from. Nil when empty.
     public var contentName: String? {
         guard hasAnySettings else { return nil }
         if !name.isEmpty, name != "C\(slot)" { return name }

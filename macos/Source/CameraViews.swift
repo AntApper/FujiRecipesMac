@@ -675,14 +675,7 @@ public struct CameraConnectionView: View {
                     selectSlot(num)
                     return .handled
                 }
-                let move: GridNavigation.Move
-                switch keyPress.key {
-                case .leftArrow: move = .left
-                case .rightArrow: move = .right
-                case .upArrow: move = .up
-                case .downArrow: move = .down
-                default: return .ignored
-                }
+                guard let move = GridNavigation.Move(key: keyPress.key) else { return .ignored }
                 let index = GridNavigation.index(from: selectedDialSlot - 1, move: move, count: 7, columns: rackColumnCount)
                 selectSlot(index + 1)
                 return .handled

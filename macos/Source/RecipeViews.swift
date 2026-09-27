@@ -53,8 +53,7 @@ public struct RecipeListView: View {
     }
 
     public var onNavigateToCamera: (() -> Void)? = nil
-    /// Set by Find Recipes… before this view may exist. The view focuses
-    /// search and clears it as soon as it appears or sees the change.
+    /// Set by Find Recipes… before this view may exist.
     @Binding private var isSearchFocusPending: Bool
 
     public init(
@@ -73,13 +72,10 @@ public struct RecipeListView: View {
         ScrollViewReader { scrollProxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    // Sleek Floating Control Header
                     headerControlBar
 
-                    // Filter & Sort Pills
                     filterAndSortBar
 
-                    // Quick Dial Strip for 1-click drag & drop
                     quickDialBar
 
                     if store.loadingState == .loading {
@@ -89,7 +85,7 @@ public struct RecipeListView: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
 
-                    // Recipe Cards Grid
+                    // Stays mounted while recipes load so it keeps keyboard focus.
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(store.filteredRecipes) { recipe in
                             RecipeCard(
@@ -153,13 +149,8 @@ public struct RecipeListView: View {
                     .focusable()
                     .focusEffectDisabled()
                     .focused($isGridFocused)
-                    .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
-                        let move: GridNavigation.Move = switch press.key {
-                        case .leftArrow: .left
-                        case .rightArrow: .right
-                        case .upArrow: .up
-                        default: .down
-                        }
+                    .onKeyPress { press in
+                        guard let move = GridNavigation.Move(key: press.key) else { return .ignored }
                         return moveSelection(move, scrollProxy: scrollProxy)
                     }
                     .onKeyPress(.space) {
@@ -800,7 +791,6 @@ public struct RecipeListView: View {
                     }
                 }
                 .padding(.vertical, 2)
-                .padding(.trailing, scrollFadeWidth)
             }
             .trailingScrollFade()
 
@@ -976,7 +966,6 @@ public struct RecipeListView: View {
                     }
                 }
                 .padding(.vertical, 2)
-                .padding(.trailing, scrollFadeWidth)
             }
             .trailingScrollFade()
 
@@ -1141,24 +1130,35 @@ public struct RecipeListView: View {
     }
 }
 
-// MARK: - Search Focus Helpers
+// MARK: - Keyboard and Scroll Row Helpers
 
-private let scrollFadeWidth: CGFloat = 24
-
-private extension View {
-    /// Fades the trailing edge of a horizontal scroll row so a clipped item
-    /// reads as more to scroll. Rows pad their content by `scrollFadeWidth`
-    /// so the last item can scroll clear of the fade.
-    func trailingScrollFade() -> some View {
-        mask {
-            HStack(spacing: 0) {
-                Rectangle()
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: scrollFadeWidth)
-            }
+extension GridNavigation.Move {
+    init?(key: KeyEquivalent) {
+        switch key {
+        case .leftArrow: self = .left
+        case .rightArrow: self = .right
+        case .upArrow: self = .up
+        case .downArrow: self = .down
+        default: return nil
         }
     }
 }
+
+private extension ScrollView {
+    func trailingScrollFade() -> some View {
+        let width: CGFloat = 24
+        return contentMargins(.trailing, width, for: .scrollContent)
+            .mask {
+                HStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width)
+                }
+            }
+    }
+}
+
+// MARK: - Search Focus Helpers
 
 private struct SearchFocusModifier: ViewModifier {
     @FocusState.Binding var isSearchFocused: Bool
@@ -2247,7 +2247,6 @@ public struct RecipeQuickLookView: View {
                                                 .clipShape(Capsule())
                                         }
                                     }
-                                    .padding(.trailing, scrollFadeWidth)
                                 }
                                 .trailingScrollFade()
                                 .padding(.top, 2)

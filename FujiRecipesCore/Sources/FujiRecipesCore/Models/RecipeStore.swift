@@ -116,11 +116,6 @@ public final class RecipeStore: ObservableObject {
             if let recipes = try? RecipeLoader.loadRecipes(from: .main) {
                 return recipes
             }
-            #if SWIFT_PACKAGE && !SWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE
-            if let recipes = try? RecipeLoader.loadRecipes(from: Bundle.module) {
-                return recipes
-            }
-            #endif
             if let recipes = try? RecipeLoader.loadRecipes(from: Bundle(for: RecipeStore.self)) {
                 return recipes
             }

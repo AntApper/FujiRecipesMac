@@ -17,15 +17,17 @@ public final class LoadoutStore: ObservableObject {
     private var revisions: [Int: Int] = [:]
     
     private let loadoutsKey = "com.ant.fuji-recipes.loadouts"
+    private let defaults: UserDefaults
     
-    public init() {
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadLoadouts()
     }
     
     // MARK: - Persistence
     
     private func loadLoadouts() {
-        if let data = UserDefaults.standard.data(forKey: loadoutsKey),
+        if let data = defaults.data(forKey: loadoutsKey),
            let loadouts = try? JSONDecoder().decode([Loadout].self, from: data) {
             self.loadouts = loadouts.sorted { $0.slot < $1.slot }
             // Only loadouts persist, so a draft staged in an earlier session
@@ -40,7 +42,7 @@ public final class LoadoutStore: ObservableObject {
     
     private func saveLoadouts() {
         if let data = try? JSONEncoder().encode(loadouts) {
-            UserDefaults.standard.set(data, forKey: loadoutsKey)
+            defaults.set(data, forKey: loadoutsKey)
         }
     }
     

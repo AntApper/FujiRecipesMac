@@ -253,7 +253,7 @@ public struct Recipe: Identifiable, Codable, Sendable {
             whiteBalanceMode: resolvedWB,
             wbShiftRed: wbShiftRed ?? self.wbShiftRed,
             wbShiftBlue: wbShiftBlue ?? self.wbShiftBlue,
-            colorTempK: resolvedWB == .colorTemperature ? (resolvedKelvin ?? 5_600) : resolvedKelvin,
+            colorTempK: resolvedWB == .colorTemperature ? (resolvedKelvin ?? CSlotPresetEncoder.defaultColorTemperature) : resolvedKelvin,
             highlight: highlight ?? self.highlight,
             shadow: shadow ?? self.shadow,
             color: color ?? self.color,

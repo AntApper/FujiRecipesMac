@@ -23,7 +23,7 @@ public struct SlotEditorForm: Equatable, Sendable {
         dynamicRange = loadout.dr
         grain = loadout.grain
         whiteBalance = loadout.wb
-        colorTemperature = Int(loadout.colorTempK ?? 5600)
+        colorTemperature = Int(loadout.colorTempK ?? CSlotPresetEncoder.defaultColorTemperature)
         let tones = loadout.toneTenths
         highlight = tones.highlight ?? 0
         shadow = tones.shadow ?? 0
@@ -42,12 +42,12 @@ public struct SlotEditorForm: Equatable, Sendable {
         loadout.dr = dynamicRange
         loadout.grain = grain
         loadout.wb = whiteBalance
-        loadout.colorTempK = whiteBalance == .colorTemperature ? UInt32(colorTemperature) : nil
+        loadout.colorTempK = kelvin.map(UInt32.init)
         var raw = loadout.rawPreset ?? LoadoutRawPresetState()
-        raw.highlight = includesHighlight ? highlight : nil
-        raw.shadow = includesShadow ? shadow : nil
-        raw.color = includesColor ? color : nil
-        raw.sharpness = includesSharpness ? sharpness : nil
+        raw.highlight = highlightTenths
+        raw.shadow = shadowTenths
+        raw.color = colorTenths
+        raw.sharpness = sharpnessTenths
         loadout.rawPreset = raw.hasAnyValue ? raw : nil
         loadout.highlight = raw.highlight.map { $0 / 10 }
         loadout.shadow = raw.shadow.map { $0 / 10 }
@@ -55,6 +55,27 @@ public struct SlotEditorForm: Equatable, Sendable {
         loadout.sharpness = raw.sharpness.map { $0 / 10 }
         return loadout
     }
+
+    /// Equal forms write the same draft, so hidden Kelvin and switched-off
+    /// tone values don't count.
+    public static func == (lhs: SlotEditorForm, rhs: SlotEditorForm) -> Bool {
+        lhs.name == rhs.name
+            && lhs.filmSim == rhs.filmSim
+            && lhs.dynamicRange == rhs.dynamicRange
+            && lhs.grain == rhs.grain
+            && lhs.whiteBalance == rhs.whiteBalance
+            && lhs.kelvin == rhs.kelvin
+            && lhs.highlightTenths == rhs.highlightTenths
+            && lhs.shadowTenths == rhs.shadowTenths
+            && lhs.colorTenths == rhs.colorTenths
+            && lhs.sharpnessTenths == rhs.sharpnessTenths
+    }
+
+    private var kelvin: Int? { whiteBalance == .colorTemperature ? colorTemperature : nil }
+    private var highlightTenths: Int32? { includesHighlight ? highlight : nil }
+    private var shadowTenths: Int32? { includesShadow ? shadow : nil }
+    private var colorTenths: Int32? { includesColor ? color : nil }
+    private var sharpnessTenths: Int32? { includesSharpness ? sharpness : nil }
 }
 
 public struct SlotEditorSession: Sendable {

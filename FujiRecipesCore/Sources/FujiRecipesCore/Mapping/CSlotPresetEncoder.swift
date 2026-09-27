@@ -10,6 +10,8 @@ public enum CSlotPresetEncoder {
     /// rejects anything outside with 0x201C.
     public static let highlightShadowRange: ClosedRange<Int32> = -2...4
     public static let colorSharpnessRange: ClosedRange<Int32> = -4...4
+    /// Kelvin used when Color Temperature white balance has no stored value.
+    public static let defaultColorTemperature: UInt32 = 5_600
 
     /// Fuji's C-slot High ISO NR lookup, verified against FilmKit's raw preset
     /// mapping. These are UInt16 bit patterns, including the `0x8000` value.
@@ -136,7 +138,7 @@ public enum CSlotPresetEncoder {
         let rawWB = rawPreset?.whiteBalance ?? whiteBalance?.rawValue
         let rawColorTemp: UInt32?
         if rawWB == WhiteBalanceMode.colorTemperature.rawValue {
-            let resolvedColorTemp = rawPreset?.colorTemp ?? colorTemp ?? 5_500
+            let resolvedColorTemp = rawPreset?.colorTemp ?? colorTemp ?? defaultColorTemperature
             guard (2_500...10_000).contains(resolvedColorTemp) else {
                 throw CSlotPresetEncodingError.outOfRange(property: 0xD19C, value: Int64(resolvedColorTemp), valid: "2500...10000 K")
             }

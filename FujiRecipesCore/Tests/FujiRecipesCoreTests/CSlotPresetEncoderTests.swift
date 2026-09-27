@@ -180,10 +180,10 @@ final class CSlotPresetEncoderTests: XCTestCase {
         }
     }
 
-    func testColorTemperatureDefaultsTo5500WhenMissing() throws {
+    func testColorTemperatureDefaultsTo5600WhenMissing() throws {
         let preset = try CSlotPresetEncoder.encode(recipe: recipe(wb: .colorTemperature), slot: 1)
         XCTAssertEqual(preset.whiteBalance, 0x8007)
-        XCTAssertEqual(preset.colorTemp, 5_500)
+        XCTAssertEqual(preset.colorTemp, 5_600)
     }
 
     // MARK: - Objective 3: Extreme Kelvin Boundary Tests

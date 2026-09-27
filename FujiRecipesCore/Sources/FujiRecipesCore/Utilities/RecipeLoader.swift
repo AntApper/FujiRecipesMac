@@ -217,7 +217,7 @@ public enum RecipeLoader {
     /// 1. Checks `presetSettings["colorTemp"]`
     /// 2. Checks `ptpSettings["colorTemp"]`
     /// 3. Extracts Kelvin from `settings["whiteBalance"]` matching `(\d{4,5})\s*K`
-    /// 4. Defaults to 5500 if white balance is `.colorTemperature`
+    /// 4. Defaults to `CSlotPresetEncoder.defaultColorTemperature` if white balance is `.colorTemperature`
     static func resolveColorTemperature(from jsonRecipe: RecipeJSON, wb: WhiteBalanceMode?) -> UInt32? {
         if let temp = jsonRecipe.presetSettings["colorTemp"].flatMap({ UInt32(exactly: $0) }) {
             return temp
@@ -230,7 +230,7 @@ public enum RecipeLoader {
             return parsed
         }
         if wb == .colorTemperature {
-            return 5500
+            return CSlotPresetEncoder.defaultColorTemperature
         }
         return nil
     }

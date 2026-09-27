@@ -318,7 +318,7 @@ public struct LoadoutCard: View {
             return "Camera slot is currently empty"
         }
         if isCameraVerified {
-            return "Camera Slot: \(loadout?.name ?? "C\(slot)")"
+            return "Camera Slot: \(loadout?.contentName ?? "C\(slot)")"
         }
         if isDirty {
             return "Staged draft differs from camera"
@@ -408,16 +408,17 @@ public struct LoadoutCard: View {
     }
 
     private func configuredBody(_ loadout: Loadout) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let title = loadout.contentName ?? loadout.name
+        return VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(loadout.name)
+                Text(title)
                     .font(.system(size: 13, weight: .bold))
                     .glassPrimary()
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(height: 18, alignment: .leading)
 
-                if let recipeName = loadout.recipeName, !recipeName.isEmpty, recipeName != loadout.name {
+                if let recipeName = loadout.recipeName, !recipeName.isEmpty, recipeName != title {
                     Text("from recipe \(recipeName)")
                         .font(.caption2)
                         .foregroundStyle(Theme.textTertiary)

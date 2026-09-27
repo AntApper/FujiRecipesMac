@@ -1331,7 +1331,7 @@ private struct GallerySlotPill: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(isTargeted ? Theme.fujiAmber : (isFilled ? Color.white : Theme.textTertiary))
 
-            if isFilled, let name = loadout?.name, !name.isEmpty {
+            if let name = loadout?.contentName {
                 Text(name)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)

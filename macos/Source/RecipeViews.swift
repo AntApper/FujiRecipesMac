@@ -1235,8 +1235,8 @@ private struct CSlotPickerSheet: View {
             destination = loadouts.isCameraSlotEmpty(slot)
                 ? "Camera last read as empty"
                 : "Write and verify on camera"
-        } else if let loadout, loadout.hasAnySettings {
-            destination = "Local draft: \(loadout.displayLabel)"
+        } else if let name = loadout?.contentName {
+            destination = "Local draft: \(name)"
         } else {
             destination = "No local draft"
         }
@@ -1434,9 +1434,7 @@ private struct RecipeCard: View {
 
             Section("Stage to Camera Dial Slot") {
                 ForEach(1...7, id: \.self) { slot in
-                    let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
-                        ? "Empty"
-                        : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                    let slotName = loadouts.loadout(for: slot)?.contentName ?? "Empty"
                     Button {
                         onQuickLoadToSlot(slot)
                     } label: {
@@ -1518,9 +1516,7 @@ private struct RecipeCard: View {
                 Menu {
                     Section("Stage to Camera Dial Slot") {
                         ForEach(1...7, id: \.self) { slot in
-                            let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
-                                ? "Empty"
-                                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                            let slotName = loadouts.loadout(for: slot)?.contentName ?? "Empty"
                             Button {
                                 onQuickLoadToSlot(slot)
                             } label: {
@@ -2392,9 +2388,7 @@ public struct RecipeQuickLookView: View {
 
     private var stageSlotButtons: some View {
         ForEach(1...7, id: \.self) { slot in
-            let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
-                ? "Empty"
-                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+            let slotName = loadouts.loadout(for: slot)?.contentName ?? "Empty"
             Button {
                 onStageToSlot(slot)
             } label: {
@@ -2413,7 +2407,8 @@ public struct RecipeQuickLookView: View {
                     )
             }
             .buttonStyle(.plain)
-            .help("Stage to C\(slot): \(slotName)")
+            .help("Stage to C\(slot), currently \(slotName)")
+            .accessibilityLabel("Stage to C\(slot), currently \(slotName)")
             .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
         }
     }

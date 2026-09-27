@@ -496,6 +496,7 @@ public struct GlassPillToggle<Value: Hashable>: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
         .padding(2)
@@ -542,6 +543,15 @@ public struct ToneCurveRadar: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         )
+        .accessibilityRepresentation {
+            Text(spokenSummary)
+        }
+    }
+
+    private var spokenSummary: String {
+        let values = [("Highlight", tones.highlight), ("Shadow", tones.shadow), ("Color", tones.color), ("Sharpness", tones.sharpness)]
+            .map { name, tenths in "\(name) \(tenths.map(ToneTenths.text) ?? "not set")" }
+        return "Tone and detail: " + values.joined(separator: ", ")
     }
 
     private func toneBar(label: String, tenths: Int32?) -> some View {

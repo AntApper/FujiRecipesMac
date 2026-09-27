@@ -134,6 +134,11 @@ public struct CameraConnectionView: View {
                 feedback = nil
             }
         }
+        .onChange(of: feedback) { _, feedback in
+            if let feedback {
+                AccessibilityNotification.Announcement(feedback.text).post()
+            }
+        }
         .sheet(item: $slotToEdit) { loadout in
             SlotEditorSheet(
                 loadout: loadout,

@@ -194,6 +194,11 @@ public struct RecipeListView: View {
         .onChange(of: isSearchFocusPending) {
             focusSearchIfRequested()
         }
+        .onChange(of: activeHUDToast) { _, toast in
+            if let toast {
+                AccessibilityNotification.Announcement("\(toast.title). \(toast.message)").post()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.showToast)) { notification in
             guard
                 let title = notification.userInfo?[MacAppCommand.toastTitleKey] as? String,
@@ -367,6 +372,7 @@ public struct RecipeListView: View {
                             .background(Circle().fill(Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss message")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -917,6 +923,7 @@ public struct RecipeListView: View {
             .shadow(color: isSelected ? accent.opacity(0.35) : Color.clear, radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 
@@ -2161,6 +2168,7 @@ public struct RecipeQuickLookView: View {
                     }
                     .buttonStyle(.plain)
                     .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                    .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
                     .accessibilityIdentifier("recipe-quick-look-favorite")
 
                     // Close Button
@@ -2375,6 +2383,9 @@ public struct RecipeQuickLookView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .shadow(color: Color.black.opacity(0.7), radius: 36, y: 16)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Quick Look, \(recipe.name)")
+            .accessibilityAddTraits(.isModal)
             .accessibilityIdentifier("recipe-quick-look-modal")
             .padding(24)
         }

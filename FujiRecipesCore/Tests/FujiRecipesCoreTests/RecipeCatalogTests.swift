@@ -93,6 +93,25 @@ final class RecipeCatalogTests: XCTestCase {
         )
     }
 
+    func testDuplicateLeavesUnsetFieldsUnset() {
+        let sparse = Recipe(id: "sparse", name: "Sparse", source: "Test", sourceUrl: nil, grainEffect: .weakSmall, shadow: -1)
+
+        let copy = sparse.duplicated()
+
+        XCTAssertEqual(copy.grainEffect, .weakSmall)
+        XCTAssertEqual(copy.shadow, -1)
+        XCTAssertNil(copy.filmSimulation)
+        XCTAssertNil(copy.dynamicRange)
+        XCTAssertNil(copy.whiteBalanceMode)
+        XCTAssertNil(copy.wbShiftRed)
+        XCTAssertNil(copy.wbShiftBlue)
+        XCTAssertNil(copy.highlight)
+        XCTAssertNil(copy.color)
+        XCTAssertNil(copy.sharpness)
+        XCTAssertNil(copy.highIsoNr)
+        XCTAssertNil(copy.clarity)
+    }
+
     private func recipe(
         name: String,
         filmSimulation: FilmSimulation,

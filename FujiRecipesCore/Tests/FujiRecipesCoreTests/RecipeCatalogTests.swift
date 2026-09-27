@@ -93,6 +93,20 @@ final class RecipeCatalogTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testDynamicRangeFilterOffersAuto() throws {
+        let recipes = [
+            recipe(name: "Auto Range", filmSimulation: .classicChrome, dynamicRange: .auto),
+            recipe(name: "Wide Range", filmSimulation: .classicChrome, dynamicRange: .dr400)
+        ]
+        let store = RecipeStore(recipeLoading: { recipes })
+        store.loadRecipesSynchronously()
+
+        store.selectedDRFilter = try XCTUnwrap(RecipeStore.DRFilter(rawValue: "DR Auto"))
+
+        XCTAssertEqual(store.filteredRecipes.map(\.name), ["Auto Range"])
+    }
+
     func testDuplicateLeavesUnsetFieldsUnset() {
         let sparse = Recipe(id: "sparse", name: "Sparse", source: "Test", sourceUrl: nil, grainEffect: .weakSmall, shadow: -1)
 

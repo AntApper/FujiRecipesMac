@@ -207,6 +207,33 @@ final class CameraFeedbackTests: XCTestCase {
         )
     }
 
+    func testWriteAllSummaryForOneUnverifiedSlotIsThatSlotsSummary() {
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [(slot: 3, result: .success(PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect])))]),
+            "Wrote C3 with 1 difference: Grain."
+        )
+    }
+
+    func testRecoveryErrorEndsEachSentenceWithOnePeriod() {
+        let restored = PTPPresetSlotWriteRecoveryError(slot: 3, writeError: CameraError.notConnected, baseline: .emptySentinel, rollback: .restored)
+        let rollbackFailed = PTPPresetSlotWriteRecoveryError(
+            slot: 4,
+            writeError: PTPError.writeFailed(0xD192, "busy"),
+            baseline: .emptySentinel,
+            rollback: .failed("Camera not connected. Connect via USB-C to continue."),
+            failurePhase: .postWriteVerification
+        )
+
+        XCTAssertEqual(
+            restored.localizedDescription,
+            "C3 write failed before post-write verification: Camera not connected. Connect via USB-C to continue. Previous camera settings were restored."
+        )
+        XCTAssertEqual(
+            rollbackFailed.localizedDescription,
+            "C4 write completed, but post-write verification failed: Failed to write property 0xd192: busy. Recovery could not restore previous camera settings: Camera not connected. Connect via USB-C to continue."
+        )
+    }
+
     func testWriteAllSummaryForASingleFailedSlot() {
         XCTAssertEqual(
             WriteAllSummary.text(for: [(slot: 4, result: .failure(PTPError.writeFailed(0xD192, "busy")))]),

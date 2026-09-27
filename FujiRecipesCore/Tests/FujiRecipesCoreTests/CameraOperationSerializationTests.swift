@@ -126,8 +126,25 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertFalse(result.isVerified)
         XCTAssertEqual(
             WriteAllSummary.text(for: outcomes),
-            "Wrote 1 of 1 slot. Wrote C3. You edited it during the write, so the newer draft is still staged."
+            "Wrote C3. You edited it during the write, so the newer draft is still staged."
         )
+    }
+
+    @MainActor
+    func testClearingASlotDuringItsWriteSaysNothingIsStaged() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.applyRecipe(Recipe(id: "three", name: "Three", source: "test", sourceUrl: nil, filmSimulation: .eterna), to: 3)
+
+        let write = Task { try await manager.writeSlot(3, from: store) }
+        await camera.waitUntilBusy()
+        store.clearLoadout(for: 3)
+        let result = try await write.value
+
+        XCTAssertEqual(store.stagedSlots, [])
+        XCTAssertEqual(result.summary, "Wrote C3. You cleared its draft during the write, so nothing is staged.")
     }
 
     @MainActor

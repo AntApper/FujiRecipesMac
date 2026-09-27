@@ -770,45 +770,48 @@ public struct RecipeListView: View {
     }
 
     private var filterAndSortBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    // Film Sim Family Quick Filters
+                    ForEach(RecipeStore.FilmSimFamily.allCases) { family in
+                        let isSelected = store.selectedFilmSimFamily == family
+                        let accent = family == .all ? Theme.fujiAmber : Theme.filmSimColor(for: family.rawValue)
+                        filterPill(
+                            title: family.rawValue,
+                            icon: family.icon,
+                            isSelected: isSelected,
+                            accent: accent
+                        ) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                store.selectedFilmSimFamily = family
+                            }
+                        }
+                    }
+
+                    Divider()
+                        .frame(height: 16)
+                        .overlay(Theme.specularBorder)
+
+                    // DR Filter
+                    ForEach(RecipeStore.DRFilter.allCases) { dr in
+                        let isSelected = store.selectedDRFilter == dr
+                        filterPill(
+                            title: dr.rawValue,
+                            isSelected: isSelected,
+                            accent: Theme.emeraldGreen
+                        ) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                store.selectedDRFilter = dr
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
             HStack(spacing: 8) {
-                // Film Sim Family Quick Filters
-                ForEach(RecipeStore.FilmSimFamily.allCases) { family in
-                    let isSelected = store.selectedFilmSimFamily == family
-                    let accent = family == .all ? Theme.fujiAmber : Theme.filmSimColor(for: family.rawValue)
-                    filterPill(
-                        title: family.rawValue,
-                        icon: family.icon,
-                        isSelected: isSelected,
-                        accent: accent
-                    ) {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            store.selectedFilmSimFamily = family
-                        }
-                    }
-                }
-
-                Divider()
-                    .frame(height: 16)
-                    .overlay(Theme.specularBorder)
-
-                // DR Filter
-                ForEach(RecipeStore.DRFilter.allCases) { dr in
-                    let isSelected = store.selectedDRFilter == dr
-                    filterPill(
-                        title: dr.rawValue,
-                        isSelected: isSelected,
-                        accent: Theme.emeraldGreen
-                    ) {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            store.selectedDRFilter = dr
-                        }
-                    }
-                }
-
                 metadataFilterMenus
-
-                Spacer(minLength: 4)
 
                 // Sort Order Menu
                 Menu {
@@ -846,9 +849,11 @@ public struct RecipeListView: View {
                         Capsule().stroke(Theme.specularBorder, lineWidth: 0.8)
                     )
                 }
-                .menuStyle(.borderlessButton)
             }
-            .padding(.vertical, 2)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
         }
     }
 
@@ -871,10 +876,10 @@ public struct RecipeListView: View {
             } label: {
                 filterMenuLabel(
                     title: store.selectedWhiteBalance?.displayName ?? "White Balance",
-                    icon: "thermometer.medium"
+                    icon: "thermometer.medium",
+                    isActive: store.selectedWhiteBalance != nil
                 )
             }
-            .menuStyle(.borderlessButton)
 
             if !store.availableKeywords.isEmpty {
                 Menu {
@@ -893,10 +898,10 @@ public struct RecipeListView: View {
                 } label: {
                     filterMenuLabel(
                         title: store.selectedKeyword ?? "Keywords",
-                        icon: "tag"
+                        icon: "tag",
+                        isActive: store.selectedKeyword != nil
                     )
                 }
-                .menuStyle(.borderlessButton)
             }
         }
     }
@@ -929,21 +934,22 @@ public struct RecipeListView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 
-    private func filterMenuLabel(title: String, icon: String) -> some View {
+    private func filterMenuLabel(title: String, icon: String, isActive: Bool) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .semibold))
             Text(title)
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(isActive ? .semibold : .medium))
                 .lineLimit(1)
+                .frame(maxWidth: 120)
             Image(systemName: "chevron.down")
                 .font(.system(size: 8, weight: .bold))
         }
-        .foregroundStyle(Theme.textSecondary)
+        .foregroundStyle(isActive ? Color.black : Theme.textSecondary)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(Capsule().fill(Color.white.opacity(0.04)))
-        .overlay(Capsule().stroke(Theme.specularBorder, lineWidth: 0.8))
+        .background(Capsule().fill(isActive ? Theme.fujiAmber : Color.white.opacity(0.04)))
+        .overlay(Capsule().stroke(isActive ? Theme.fujiAmber : Theme.specularBorder, lineWidth: 0.8))
     }
 
     private var quickDialBar: some View {

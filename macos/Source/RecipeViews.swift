@@ -271,7 +271,7 @@ public struct RecipeListView: View {
             Text(recipeToDelete.map { "“\($0.name)” will be removed from My Recipes." } ?? "")
         }
         .confirmationDialog(
-            pendingStageTop.map { "Replace Local Drafts in \($0.replacedSlotList)?" } ?? "",
+            pendingStageTop.map { "Replace Local Draft\($0.replacedSlots.count == 1 ? "" : "s") in \($0.replacedSlotList)?" } ?? "",
             isPresented: Binding(
                 get: { pendingStageTop != nil },
                 set: { if !$0 { pendingStageTop = nil } }
@@ -284,7 +284,7 @@ public struct RecipeListView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { pending in
-            Text("Stage Top \(pending.recipes.count) replaces your unsynced drafts in \(pending.replacedSlotList) with the top filtered recipes. The camera isn’t changed.")
+            Text("Stage Top \(pending.recipes.count) replaces your unsynced draft\(pending.replacedSlots.count == 1 ? "" : "s") in \(pending.replacedSlotList) with the top filtered recipe\(pending.recipes.count == 1 ? "" : "s"). The camera isn’t changed.")
         }
         .sheet(item: $recipeToEdit) { recipe in
             CustomRecipeEditor(
@@ -554,8 +554,10 @@ public struct RecipeListView: View {
         let count = recipes.count
         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
             activeHUDToast = HUDToast(
-                title: "✓ Staged Top \(count) to Dial",
-                message: "Assigned recipes to slots C1–C\(count). Ready to write in Camera & Staging.",
+                title: count == 1 ? "✓ Staged 1 Recipe to Dial" : "✓ Staged Top \(count) to Dial",
+                message: count == 1
+                    ? "Assigned it to slot C1. Ready to write in Camera & Staging."
+                    : "Assigned recipes to slots C1–C\(count). Ready to write in Camera & Staging.",
                 isError: false
             )
         }
@@ -739,7 +741,7 @@ public struct RecipeListView: View {
                     .glassPrimary()
                     .lineLimit(1)
 
-                Text("\(store.filteredRecipes.count) RECIPES")
+                Text("\(store.filteredRecipes.count) RECIPE\(store.filteredRecipes.count == 1 ? "" : "S")")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(Theme.fujiAmber)
                     .padding(.horizontal, 7)

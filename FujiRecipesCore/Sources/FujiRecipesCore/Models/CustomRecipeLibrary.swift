@@ -72,8 +72,26 @@ public final class CustomRecipeLibrary: ObservableObject {
         recipes = try Self.decode(Data(contentsOf: storageURL))
     }
 
-    public func save(_ recipe: Recipe) throws {
+    public func conflictingRecipe(named name: String, excludingID: String? = nil) -> Recipe? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return recipes.first { existing in
+            existing.id != excludingID &&
+            existing.name.localizedCaseInsensitiveCompare(trimmed) == .orderedSame
+        }
+    }
+
+    public func validateNameUniqueness(for recipe: Recipe) throws {
+        if let conflict = conflictingRecipe(named: recipe.name, excludingID: recipe.id) {
+            throw CustomRecipeLibraryError.invalidRecipe("A recipe named “\(conflict.name)” already exists.")
+        }
+    }
+
+    public func save(_ recipe: Recipe, disallowNameCollision: Bool = false) throws {
         try Self.validate(recipe)
+        if disallowNameCollision {
+            try validateNameUniqueness(for: recipe)
+        }
         if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
             recipes[index] = recipe
         } else {

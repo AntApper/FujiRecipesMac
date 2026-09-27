@@ -138,6 +138,120 @@ public struct Recipe: Identifiable, Codable, Sendable {
         highIsoNr != nil &&
         clarity != nil
     }
+
+    /// Creates a customized copy of this recipe ready to be customized and saved into My Recipes.
+    public func duplicated(name customName: String? = nil, source customSource: String? = nil) -> Recipe {
+        let baseName = name.isEmpty ? "Recipe" : name
+        let targetName = customName ?? "\(baseName) (Custom)"
+        let targetSource = customSource ?? "Customized from \(baseName)"
+        var copiedSettings = settings ?? [:]
+        copiedSettings["source"] = targetSource
+
+        return Recipe(
+            id: "custom-\(UUID().uuidString.lowercased())",
+            name: targetName,
+            source: targetSource,
+            sourceUrl: sourceUrl,
+            previewImageUrl: previewImageUrl,
+            imageUrls: imageUrls,
+            date: Date(),
+            dateString: nil,
+            filmSimulation: filmSimulation ?? .provia,
+            dynamicRange: dynamicRange ?? .dr100,
+            grainEffect: grainEffect ?? .off,
+            colorChrome: colorChrome,
+            colorChromeFxBlue: colorChromeFxBlue,
+            smoothSkin: smoothSkin,
+            whiteBalanceMode: whiteBalanceMode ?? .auto,
+            wbShiftRed: wbShiftRed ?? 0,
+            wbShiftBlue: wbShiftBlue ?? 0,
+            colorTempK: colorTempK ?? (whiteBalanceMode == .colorTemperature ? 5_600 : nil),
+            highlight: highlight ?? 0,
+            shadow: shadow ?? 0,
+            color: color ?? 0,
+            sharpness: sharpness ?? 0,
+            highIsoNr: highIsoNr ?? 0,
+            clarity: clarity ?? 0,
+            iso: iso,
+            exposureCompensation: exposureCompensation,
+            settings: copiedSettings,
+            sensorGeneration: sensorGeneration ?? "X-Trans V",
+            compatibleCameras: compatibleCameras ?? ["X100VI"],
+            tags: ["My Recipes"],
+            parseStatus: .ok
+        )
+    }
+
+    /// Returns a new Recipe instance with the specified settings updated.
+    public func mutating(
+        name: String? = nil,
+        source: String? = nil,
+        filmSimulation: FilmSimulation? = nil,
+        dynamicRange: DynamicRange? = nil,
+        grainEffect: GrainEffect? = nil,
+        colorChrome: EffectIntensity? = nil,
+        colorChromeFxBlue: EffectIntensity? = nil,
+        smoothSkin: EffectIntensity? = nil,
+        whiteBalanceMode: WhiteBalanceMode? = nil,
+        wbShiftRed: Int32? = nil,
+        wbShiftBlue: Int32? = nil,
+        colorTempK: UInt32? = nil,
+        highlight: Int32? = nil,
+        shadow: Int32? = nil,
+        color: Int32? = nil,
+        sharpness: Int32? = nil,
+        highIsoNr: Int32? = nil,
+        clarity: Int32? = nil
+    ) -> Recipe {
+        var newSettings = settings ?? [:]
+        if let sim = filmSimulation ?? self.filmSimulation { newSettings["filmSimulation"] = sim.displayName }
+        if let dr = dynamicRange ?? self.dynamicRange { newSettings["dynamicRange"] = dr.displayName }
+        if let grain = grainEffect ?? self.grainEffect { newSettings["grainEffect"] = grain.displayName }
+        if let wb = whiteBalanceMode ?? self.whiteBalanceMode { newSettings["whiteBalance"] = wb.displayName }
+        if let h = highlight ?? self.highlight { newSettings["highlight"] = h > 0 ? "+\(h)" : "\(h)" }
+        if let s = shadow ?? self.shadow { newSettings["shadow"] = s > 0 ? "+\(s)" : "\(s)" }
+        if let c = color ?? self.color { newSettings["color"] = c > 0 ? "+\(c)" : "\(c)" }
+        if let sh = sharpness ?? self.sharpness { newSettings["sharpness"] = sh > 0 ? "+\(sh)" : "\(sh)" }
+        if let nr = highIsoNr ?? self.highIsoNr { newSettings["highIsoNr"] = nr > 0 ? "+\(nr)" : "\(nr)" }
+        if let cl = clarity ?? self.clarity { newSettings["clarity"] = cl > 0 ? "+\(cl)" : "\(cl)" }
+
+        let resolvedWB = whiteBalanceMode ?? self.whiteBalanceMode
+        let resolvedKelvin = colorTempK ?? self.colorTempK
+
+        return Recipe(
+            id: id,
+            name: name ?? self.name,
+            source: source ?? self.source,
+            sourceUrl: sourceUrl,
+            previewImageUrl: previewImageUrl,
+            imageUrls: imageUrls,
+            date: date,
+            dateString: dateString,
+            filmSimulation: filmSimulation ?? self.filmSimulation,
+            dynamicRange: dynamicRange ?? self.dynamicRange,
+            grainEffect: grainEffect ?? self.grainEffect,
+            colorChrome: colorChrome ?? self.colorChrome,
+            colorChromeFxBlue: colorChromeFxBlue ?? self.colorChromeFxBlue,
+            smoothSkin: smoothSkin ?? self.smoothSkin,
+            whiteBalanceMode: resolvedWB,
+            wbShiftRed: wbShiftRed ?? self.wbShiftRed,
+            wbShiftBlue: wbShiftBlue ?? self.wbShiftBlue,
+            colorTempK: resolvedWB == .colorTemperature ? (resolvedKelvin ?? 5_600) : resolvedKelvin,
+            highlight: highlight ?? self.highlight,
+            shadow: shadow ?? self.shadow,
+            color: color ?? self.color,
+            sharpness: sharpness ?? self.sharpness,
+            highIsoNr: highIsoNr ?? self.highIsoNr,
+            clarity: clarity ?? self.clarity,
+            iso: iso,
+            exposureCompensation: exposureCompensation,
+            settings: newSettings,
+            sensorGeneration: sensorGeneration,
+            compatibleCameras: compatibleCameras,
+            tags: tags,
+            parseStatus: parseStatus
+        )
+    }
 }
 
 #if canImport(CoreTransferable) && canImport(UniformTypeIdentifiers)

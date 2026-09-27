@@ -105,6 +105,10 @@ public struct RecipeListView: View {
                                 },
                                 onDelete: {
                                     recipeToDelete = recipe
+                                },
+                                onDuplicate: {
+                                    selectedRecipeID = recipe.id
+                                    recipeToEdit = recipe.duplicated()
                                 }
                             )
                             .transition(.asymmetric(
@@ -341,6 +345,13 @@ public struct RecipeListView: View {
                     },
                     onSelectPhoto: { url in
                         selectedPhotoUrl = url
+                    },
+                    onDuplicate: {
+                        let duplicated = recipe.duplicated()
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            quickLookRecipe = nil
+                        }
+                        recipeToEdit = duplicated
                     }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
@@ -1306,6 +1317,7 @@ private struct RecipeCard: View {
     let onSelectPhoto: (String) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onDuplicate: () -> Void
 
     @State private var isHovered = false
 
@@ -1371,6 +1383,15 @@ private struct RecipeCard: View {
                 onQuickLook?()
             }
             .keyboardShortcut(.space, modifiers: [])
+
+            Divider()
+
+            Button {
+                onDuplicate()
+            } label: {
+                Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+            }
+            .accessibilityIdentifier("recipe-duplicate-menu-\(recipe.id)")
 
             Divider()
 
@@ -1530,6 +1551,25 @@ private struct RecipeCard: View {
                 .accessibilityIdentifier("send-to-dial-\(recipe.id)")
 
                 HStack(spacing: 8) {
+                    // Duplicate to My Recipes Button
+                    Button {
+                        onDuplicate()
+                    } label: {
+                        Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+                    }
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textTertiary)
+                    .padding(6)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.06))
+                    )
+                    .buttonStyle(.plain)
+                    .help("Duplicate & Customize recipe formula into My Recipes")
+                    .accessibilityLabel("Duplicate to My Recipes")
+                    .accessibilityIdentifier("recipe-duplicate-\(recipe.id)")
+
                     // Quick Look eye button
                     Button(action: {
                         onSelect?()
@@ -1663,15 +1703,23 @@ private struct RecipeCard: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-                if isCustomRecipe {
-                    HStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button {
+                        onDuplicate()
+                    } label: {
+                        Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+                    }
+                    .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 26))
+                    .accessibilityIdentifier("recipe-duplicate-expanded-\(recipe.id)")
+
+                    if isCustomRecipe {
                         Button("Edit", action: onEdit)
                             .accessibilityIdentifier("custom-recipe-edit-\(recipe.id)")
                         Button("Delete", role: .destructive, action: onDelete)
                             .accessibilityIdentifier("custom-recipe-delete-\(recipe.id)")
                     }
-                    .font(.caption)
                 }
+                .font(.caption)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 10)
@@ -1993,6 +2041,29 @@ public struct RecipeQuickLookView: View {
     public let onDismiss: () -> Void
     public let onStageToSlot: (Int) -> Void
     public let onSelectPhoto: (String) -> Void
+    public var onDuplicate: (() -> Void)? = nil
+
+    public init(
+        recipe: Recipe,
+        isFavorite: Bool,
+        loadouts: LoadoutStore,
+        isCameraConnected: Bool,
+        onToggleFavorite: @escaping () -> Void,
+        onDismiss: @escaping () -> Void,
+        onStageToSlot: @escaping (Int) -> Void,
+        onSelectPhoto: @escaping (String) -> Void,
+        onDuplicate: (() -> Void)? = nil
+    ) {
+        self.recipe = recipe
+        self.isFavorite = isFavorite
+        self.loadouts = loadouts
+        self.isCameraConnected = isCameraConnected
+        self.onToggleFavorite = onToggleFavorite
+        self.onDismiss = onDismiss
+        self.onStageToSlot = onStageToSlot
+        self.onSelectPhoto = onSelectPhoto
+        self.onDuplicate = onDuplicate
+    }
 
     private var simName: String {
         recipe.filmSimulation?.displayName ?? recipe.settings?["filmSimulation"] ?? "Custom Sim"
@@ -2033,6 +2104,21 @@ public struct RecipeQuickLookView: View {
                     )
 
                     Spacer()
+
+                    // Duplicate & Customize Button
+                    if let onDuplicate = onDuplicate {
+                        Button(action: onDuplicate) {
+                            Image(systemName: "plus.square.on.square")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Theme.textSecondary)
+                                .padding(6)
+                                .background(Circle().fill(Color.white.opacity(0.08)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Duplicate & Customize recipe formula into My Recipes")
+                        .accessibilityLabel("Duplicate to My Recipes")
+                        .accessibilityIdentifier("recipe-quick-look-duplicate-header")
+                    }
 
                     // Favorite Button
                     Button(action: onToggleFavorite) {
@@ -2240,6 +2326,16 @@ public struct RecipeQuickLookView: View {
                     }
 
                     Spacer()
+
+                    if let onDuplicate = onDuplicate {
+                        Button {
+                            onDuplicate()
+                        } label: {
+                            Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+                        }
+                        .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
+                        .accessibilityIdentifier("recipe-quick-look-duplicate")
+                    }
 
                     Button("Done") {
                         onDismiss()

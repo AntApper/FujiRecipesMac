@@ -1001,11 +1001,14 @@ public struct RecipeListView: View {
                     .glassSecondary()
             }
 
-            if !store.searchQuery.isEmpty
-                || store.selectedFilmSimFamily != .all
-                || store.selectedDRFilter != .all
-                || store.selectedWhiteBalance != nil
-                || store.selectedKeyword != nil {
+            if store.loadingState == .failed {
+                Button("Try Loading Recipes Again") {
+                    Task { await store.loadRecipes() }
+                }
+                .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 32))
+                .frame(width: 220)
+                .padding(.top, 6)
+            } else if hasActiveFilters {
                 Button("Reset Filters") {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                         store.searchQuery = ""
@@ -1013,18 +1016,10 @@ public struct RecipeListView: View {
                         store.selectedDRFilter = .all
                         store.selectedWhiteBalance = nil
                         store.selectedKeyword = nil
-                        store.selectedFilterCategory = nil
                     }
                 }
                 .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 32))
                 .frame(width: 140)
-                .padding(.top, 6)
-            } else if store.loadingState == .failed {
-                Button("Try Loading Recipes Again") {
-                    Task { await store.loadRecipes() }
-                }
-                .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 32))
-                .frame(width: 220)
                 .padding(.top, 6)
             }
         }
@@ -1033,8 +1028,23 @@ public struct RecipeListView: View {
         .glassCard(tint: Color.white.opacity(0.02))
     }
 
+    private var hasSearchText: Bool {
+        !store.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var hasActiveFilters: Bool {
+        hasSearchText
+            || store.selectedFilmSimFamily != .all
+            || store.selectedDRFilter != .all
+            || store.selectedWhiteBalance != nil
+            || store.selectedKeyword != nil
+    }
+
     private var emptyIcon: String {
-        if !store.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+        if store.loadingState == .failed {
+            return "film.stack"
+        }
+        if hasActiveFilters {
             return "magnifyingglass"
         }
         switch store.selectedFilterCategory {
@@ -1045,7 +1055,10 @@ public struct RecipeListView: View {
     }
 
     private var emptyTitle: String {
-        if !store.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+        if store.loadingState == .failed {
+            return "No recipes found"
+        }
+        if hasActiveFilters {
             return "No matching recipes"
         }
         switch store.selectedFilterCategory {
@@ -1056,11 +1069,14 @@ public struct RecipeListView: View {
     }
 
     private var emptyMessage: String {
-        if !store.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "Try searching for a different film sim, Kelvin value, or tag."
-        }
         if store.loadingState == .failed {
             return "The bundled recipe library could not be loaded. Try again or reinstall the app if this persists."
+        }
+        if hasSearchText {
+            return "Try searching for a different film sim, Kelvin value, or tag."
+        }
+        if hasActiveFilters {
+            return "No recipe matches every selected filter. Remove one or reset them all."
         }
         switch store.selectedFilterCategory {
         case .favorites:
@@ -1068,7 +1084,7 @@ public struct RecipeListView: View {
         case .myRecipes:
             return "Create custom recipes or import a recipe collection from the My Recipes menu."
         case nil:
-            return "Ensure recipes-data.json is loaded."
+            return "The recipe library is empty."
         }
     }
 

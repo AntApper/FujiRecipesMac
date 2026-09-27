@@ -236,6 +236,7 @@ public struct RecipeListView: View {
                 if let recipe = recipeToDelete {
                     do {
                         try store.customRecipes.delete(id: recipe.id)
+                        store.favorites.removeFavorite(recipe.id)
                     } catch {
                         customRecipeMessage = error.localizedDescription
                     }

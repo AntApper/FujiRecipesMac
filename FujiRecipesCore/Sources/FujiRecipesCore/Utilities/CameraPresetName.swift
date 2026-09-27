@@ -9,11 +9,12 @@ import Foundation
 public enum CameraPresetName {
     public static let maximumCharacterCount = 25
 
-    /// Folds a name into the label sent to `0xD18D`: ASCII transliteration,
-    /// collapsed whitespace, and a cut on a word boundary. A name with nothing
-    /// printable becomes the slot's own label, such as "C3".
+    /// Folds a name into the label sent to `0xD18D`: Latin letters and
+    /// punctuation folded to ASCII, collapsed whitespace, and a cut on a word
+    /// boundary. A name with nothing printable left, such as one in another
+    /// script, becomes the slot's own label, such as "C3".
     public static func label(for name: String, slot: Int) -> String {
-        let folded = name.applyingTransform(StringTransform("Any-Latin; Latin-ASCII"), reverse: false) ?? name
+        let folded = name.applyingTransform(StringTransform("Latin-ASCII"), reverse: false) ?? name
         let printable = String(String.UnicodeScalarView(folded.unicodeScalars.map {
             (0x20...0x7E).contains($0.value) ? $0 : " "
         }))

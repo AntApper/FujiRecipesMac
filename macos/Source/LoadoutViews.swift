@@ -628,11 +628,8 @@ public struct SlotEditorSheet: View {
         }
         .frame(minWidth: 440, minHeight: 400)
         .defaultFocus($isNameFocused, true)
-        .onChange(of: store.loadout(for: slot).map(SlotEditorForm.init)) { _, _ in
-            if let current = store.loadout(for: slot) {
-                session.follow(current)
-            }
-        }
+        .onChange(of: store.loadout(for: slot).map(SlotEditorForm.init)) { _, _ in followStore() }
+        .onChange(of: session.isEdited) { _, _ in followStore() }
         .confirmationDialog(
             "C\(slot) changed while you were editing",
             isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }),
@@ -728,6 +725,12 @@ public struct SlotEditorSheet: View {
             stepperRow(title: title, tenths: tenths, range: range, step: step)
                 .disabled(!included.wrappedValue)
                 .opacity(included.wrappedValue ? 1 : 0.45)
+        }
+    }
+
+    private func followStore() {
+        if let current = store.loadout(for: slot) {
+            session.follow(current)
         }
     }
 

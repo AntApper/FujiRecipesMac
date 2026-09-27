@@ -117,6 +117,12 @@ public struct CameraConnectionView: View {
         .sheet(isPresented: $showTroubleshooting) {
             TroubleshootingView(isPresented: $showTroubleshooting)
         }
+        .onChange(of: manager.status) { _, status in
+            if status != .connected {
+                slotRefreshMessage = nil
+                writeStatusFeedback = nil
+            }
+        }
         .sheet(item: $slotToEdit) { loadout in
             SlotEditorSheet(
                 loadout: loadout,
@@ -480,8 +486,8 @@ public struct CameraConnectionView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isWritingAll
                         ? (writeAllProgress ?? "Writing to Camera…")
-                        : (isConnected && stagedCount == 0
-                            ? "All 7 Slots Synced with Camera"
+                        : (stagedCount == 0
+                            ? (isConnected ? "All 7 Slots Synced with Camera" : "No Staged Changes")
                             : "Write \(stagedCount) Staged Slot\(stagedCount == 1 ? "" : "s") to Camera"))
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(canWrite ? Color.black : (isConnected && stagedCount == 0 ? Theme.emeraldGreen : Theme.textTertiary))

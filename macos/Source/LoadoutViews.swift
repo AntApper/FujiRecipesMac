@@ -493,6 +493,17 @@ public struct LoadoutCard: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Theme.emeraldGreen.opacity(0.14), in: Capsule())
+            } else if loadout?.provenance == .cameraSynced && !isDirty {
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark.seal")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("LAST SYNCED")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                }
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.white.opacity(0.06), in: Capsule())
             } else {
                 HStack(spacing: 3) {
                     Image(systemName: "arrow.triangle.2.circlepath")
@@ -545,6 +556,9 @@ public struct LoadoutCard: View {
 
     private var cameraStateDescription: String {
         guard isCameraConnected else {
+            if loadout?.provenance == .cameraSynced && !isDirty {
+                return "Last synced • Camera offline"
+            }
             return isConfigured ? "Draft staged • Connect USB to write" : "Camera offline"
         }
         if isCameraSlotEmpty {

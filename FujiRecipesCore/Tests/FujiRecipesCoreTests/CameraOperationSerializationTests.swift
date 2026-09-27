@@ -87,6 +87,26 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertEqual(camera.writeOrder, [2, 3, 5])
         XCTAssertEqual(camera.maxConcurrentOperations, 1)
     }
+
+    // MARK: - Item 14: edits made during a write survive it
+
+    @MainActor
+    func testEditMadeWhileSlotIsWritingStaysDirty() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.applyRecipe(Recipe(id: "three", name: "Three", source: "test", sourceUrl: nil, filmSimulation: .eterna), to: 3)
+
+        let writeAll = Task { await manager.writeAllStagedSlots(from: store) }
+        await camera.waitUntilBusy()
+        store.setHighlight(for: 3, highlight: 2)
+        _ = await writeAll.value
+
+        XCTAssertEqual(store.loadout(for: 3)?.highlight, 2, "the post-write sync discarded an edit made during the write")
+        XCTAssertTrue(store.isDirty(3), "a slot edited during its write was marked verified")
+        XCTAssertEqual(store.stagedSlots, [3])
+    }
 }
 
 // MARK: - Slot-register camera

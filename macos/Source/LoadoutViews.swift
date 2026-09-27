@@ -749,9 +749,6 @@ public struct SlotEditorSheet: View {
                         writeMessage = "C\(slot) was sent to the camera, but the post-write camera readback was unavailable. This local draft remains unverified."
                         return
                     }
-                    if !result.draftEditedDuringWrite, let observed = store.loadout(for: slot) {
-                        session.reload(from: observed)
-                    }
                     writeMessage = result.summary
                 } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
                     writeMessage = cSlotWriteFailureMessage(recoveryError)

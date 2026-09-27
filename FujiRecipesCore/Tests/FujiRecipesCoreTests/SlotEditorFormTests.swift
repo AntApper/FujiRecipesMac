@@ -106,6 +106,25 @@ final class SlotEditorFormTests: XCTestCase {
         XCTAssertFalse(session.conflicts(with: written))
     }
 
+    func testAnEditMadeDuringTheEditorsOwnWriteSurvivesTheReadback() throws {
+        let store = storeWithCameraSyncedC3()
+        var session = SlotEditorSession(try XCTUnwrap(store.loadout(for: 3)))
+        session.form.filmSim = .classicChrome
+        store.save(&session)
+        XCTAssertTrue(store.adoptCameraWrite(PTPClientPresetData(slot: 3, name: "Appalachian Neg", dynamicRange: 400, filmSimulation: FilmSimulation.classicChrome.rawValue, grainEffect: 2, colorChrome: 3, colorChromeFxBlue: 1, smoothSkin: 1, whiteBalance: 4, wbShiftRed: 2, wbShiftBlue: -2, colorTemp: 5600, highlight: 0, shadow: 0, color: 40, sharpness: 20, highIsoNr: 0x8000, clarity: 0), ifUnchangedSince: store.revision(of: 3)))
+        session.form.name = "Evening Neg"
+        let readback = try XCTUnwrap(store.loadout(for: 3))
+
+        session.follow(readback)
+
+        XCTAssertEqual(session.form.name, "Evening Neg")
+        XCTAssertFalse(session.conflicts(with: readback))
+        store.save(&session)
+        XCTAssertTrue(store.isDirty(3))
+        XCTAssertEqual(store.loadout(for: 3)?.name, "Evening Neg")
+        XCTAssertEqual(store.loadout(for: 3)?.filmSim, .classicChrome)
+    }
+
     func testSwitchingToColorTemperatureAndBackLeavesTheSlotClean() throws {
         let store = storeWithCameraSyncedC3()
         var session = SlotEditorSession(try XCTUnwrap(store.loadout(for: 3)))

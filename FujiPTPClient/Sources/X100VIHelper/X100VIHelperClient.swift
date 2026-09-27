@@ -175,26 +175,25 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     }
 
     public func disconnect() {
-        let processToStop: Process? = queue.sync {
-            guard shutdownTask == nil else { return nil }
+        queue.sync {
+            guard shutdownTask == nil else { return }
             isConnectedFlag = false
             lifecycle = .disconnecting
             guard let process else {
                 lifecycle = .idle
-                return nil
+                return
             }
-            return process
-        }
-        guard let processToStop else { return }
 
-        // PTPClientProtocol intentionally exposes synchronous disconnect.
-        // Keep that API stable while serialising a graceful JSON teardown
-        // behind it; a following connect awaits this task before spawning.
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await self.shutdownHelperGracefully(processToStop)
+            // PTPClientProtocol intentionally exposes synchronous disconnect.
+            // Keep that API stable while serialising a graceful JSON teardown
+            // behind it; a following connect awaits this task before spawning.
+            // The task clears `shutdownTask` on `queue`, so store it in the
+            // same block: a dead helper's teardown can finish at once.
+            shutdownTask = Task { [weak self] in
+                guard let self else { return }
+                await self.shutdownHelperGracefully(process)
+            }
         }
-        queue.sync { shutdownTask = task }
     }
 
     public func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {

@@ -19,7 +19,7 @@ final class RecipeCatalogTests: XCTestCase {
                 name: "Night Walk",
                 filmSimulation: .classicChrome,
                 dynamicRange: .dr400,
-                whiteBalance: .tungsten,
+                whiteBalance: .incandescent,
                 tags: ["Night photography"]
             ),
             recipe(
@@ -32,7 +32,7 @@ final class RecipeCatalogTests: XCTestCase {
         ])
         var filters = RecipeCatalog.Filters()
         filters.dynamicRange = .dr400
-        filters.whiteBalance = .tungsten
+        filters.whiteBalance = .incandescent
         filters.keyword = "Night photography"
 
         XCTAssertEqual(catalog.recipes(matching: filters).map(\.name), ["Night Walk"])

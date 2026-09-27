@@ -40,7 +40,7 @@ final class LoadoutPresetStateTests: XCTestCase {
             colorChrome: 3,
             colorChromeFxBlue: 2,
             smoothSkin: 1,
-            whiteBalance: WhiteBalanceMode.colorTemperature.actualPTPValue,
+            whiteBalance: WhiteBalanceMode.colorTemperature.rawValue,
             wbShiftRed: -4,
             wbShiftBlue: 5,
             colorTemp: 5_600,

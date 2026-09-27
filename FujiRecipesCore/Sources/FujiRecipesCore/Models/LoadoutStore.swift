@@ -152,15 +152,16 @@ public final class LoadoutStore: ObservableObject {
             loadout.highIsoNr = recipe.highIsoNr
             loadout.clarity = recipe.clarity
             // A recipe is an explicit desired state, not a camera observation.
-            // Dropping the snapshot prevents unrelated old camera values from
-            // being written alongside a recipe that does not specify them.
+            // Drop camera-only fields so an old snapshot is not written alongside
+            // a recipe that does not specify them. Keep half-step tone tenths
+            // from the recipe; those are part of the desired preset.
             loadout.imageQuality = nil
             loadout.imageSize = nil
             loadout.monoWarmCool = nil
             loadout.monoMagentaGreen = nil
             loadout.longExpNr = nil
             loadout.colorSpace = nil
-            loadout.rawPreset = nil
+            loadout.rawPreset = recipe.sourceRawPreset
         }
     }
 
@@ -473,6 +474,39 @@ public struct LoadoutRawPresetState: Codable, Sendable, Equatable {
     public var clarity: Int32?
     public var longExpNr: UInt32?
     public var colorSpace: UInt32?
+
+    /// Preserves selected raw C-slot fields, such as half-step tone tenths,
+    /// without requiring a camera read.
+    public init(
+        highlight: Int32? = nil,
+        shadow: Int32? = nil,
+        color: Int32? = nil,
+        sharpness: Int32? = nil,
+        clarity: Int32? = nil
+    ) {
+        self.imageQuality = nil
+        self.imageSize = nil
+        self.dynamicRange = nil
+        self.filmSimulation = nil
+        self.monoWarmCool = nil
+        self.monoMagentaGreen = nil
+        self.grainEffect = nil
+        self.colorChrome = nil
+        self.colorChromeFxBlue = nil
+        self.smoothSkin = nil
+        self.whiteBalance = nil
+        self.wbShiftRed = nil
+        self.wbShiftBlue = nil
+        self.colorTemp = nil
+        self.highlight = highlight
+        self.shadow = shadow
+        self.color = color
+        self.sharpness = sharpness
+        self.highIsoNr = nil
+        self.clarity = clarity
+        self.longExpNr = nil
+        self.colorSpace = nil
+    }
 
     public init(_ data: PTPClientPresetData) {
         imageQuality = data.imageQuality

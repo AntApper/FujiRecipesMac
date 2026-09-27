@@ -151,7 +151,36 @@ public enum RecipeLoader {
             sensorGeneration: jsonRecipe.sensorGeneration,
             compatibleCameras: jsonRecipe.compatibleCameras,
             tags: jsonRecipe.tags,
-            parseStatus: .ok
+            parseStatus: .ok,
+            sourceRawPreset: halfStepRawPreset(from: jsonRecipe.presetSettings)
+        )
+    }
+
+    /// Whole UI steps round-trip through `uiTone` and `rawTenths`. Half steps
+    /// such as `+0.5` (raw `5`) and `-1.5` (raw `-15`) do not, so keep the
+    /// original tenths for the encoder's raw-preset path.
+    static func halfStepRawPreset(from preset: [String: Double]) -> LoadoutRawPresetState? {
+        func fractionalTenths(_ key: String) -> Int32? {
+            guard let value = preset[key] else { return nil }
+            let raw = Int32(value.rounded(.towardZero))
+            guard raw % 10 != 0 else { return nil }
+            return raw
+        }
+
+        let highlight = fractionalTenths("highlightTone")
+        let shadow = fractionalTenths("shadowTone")
+        let color = fractionalTenths("color")
+        let sharpness = fractionalTenths("sharpness")
+        let clarity = fractionalTenths("clarity")
+        guard highlight != nil || shadow != nil || color != nil || sharpness != nil || clarity != nil else {
+            return nil
+        }
+        return LoadoutRawPresetState(
+            highlight: highlight,
+            shadow: shadow,
+            color: color,
+            sharpness: sharpness,
+            clarity: clarity
         )
     }
 

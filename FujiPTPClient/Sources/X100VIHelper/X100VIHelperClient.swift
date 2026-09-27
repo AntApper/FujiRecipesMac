@@ -536,7 +536,7 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             try await writeProperty(0xD198, value: Int32(smoothSkin.rawValue))
         }
         if let wb = recipe.whiteBalanceMode {
-            try await writeProperty(0xD199, value: Int32(wb.actualPTPValue))
+            try await writeProperty(0xD199, value: Int32(wb.rawValue))
         }
         if let ct = recipe.colorTempK {
             try await writeProperty(0xD19C, value: Int32(ct))

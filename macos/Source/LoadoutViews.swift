@@ -776,7 +776,7 @@ public struct SlotEditorSheet: View {
 
                         pickerSection("DYNAMIC RANGE", selection: $form.dynamicRange, values: [.auto, .dr100, .dr200, .dr400]) { $0.displayName }
                         pickerSection("GRAIN EFFECT", selection: $form.grain, values: [.off, .weakSmall, .strongSmall, .weakLarge, .strongLarge]) { $0.displayName }
-                        pickerSection("WHITE BALANCE", selection: $form.whiteBalance, values: [.asShot, .auto, .daylight, .cloudy, .tungsten, .fluorescent1, .fluorescent2, .fluorescent3, .shade, .colorTemperature, .ambiencePriority, .underwater]) { $0.displayName }
+                        pickerSection("WHITE BALANCE", selection: $form.whiteBalance, values: WhiteBalanceMode.cameraModes) { $0.displayName }
 
                         // Kelvin Temperature Slider & Stepper (when White Balance is Color Temperature)
                         if form.whiteBalance == .colorTemperature {

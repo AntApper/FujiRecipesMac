@@ -133,9 +133,9 @@ public enum CSlotPresetEncoder {
         let isMonochrome = resolvedFilmSimulation
             .flatMap(FilmSimulation.init(rawValue:))
             .map(isMonochrome) ?? false
-        let rawWB = rawPreset?.whiteBalance ?? whiteBalance.map { UInt32($0.actualPTPValue) }
+        let rawWB = rawPreset?.whiteBalance ?? whiteBalance?.rawValue
         let rawColorTemp: UInt32?
-        if rawWB == WhiteBalanceMode.colorTemperature.actualPTPValue {
+        if rawWB == WhiteBalanceMode.colorTemperature.rawValue {
             let resolvedColorTemp = rawPreset?.colorTemp ?? colorTemp ?? 5_500
             guard (2_500...10_000).contains(resolvedColorTemp) else {
                 throw CSlotPresetEncodingError.outOfRange(property: 0xD19C, value: Int64(resolvedColorTemp), valid: "2500...10000 K")

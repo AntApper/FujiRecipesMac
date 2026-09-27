@@ -373,7 +373,7 @@ public final class MacOSSession: PTPClientProtocol, @unchecked Sendable {
             try await writeProperty(PTPProperty.grainEffect, value: Int32(grain.rawValue))
         }
         if let wb = recipe.whiteBalanceMode {
-            try await writeProperty(PTPProperty.whiteBalance, value: Int32(wb.actualPTPValue))
+            try await writeProperty(PTPProperty.whiteBalance, value: Int32(wb.rawValue))
         }
         if let color = recipe.color {
             try await writeProperty(PTPProperty.color, value: color)

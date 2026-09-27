@@ -256,7 +256,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             try await writeProperty(0xD198, value: Int32(value.rawValue))
         }
         if let value = recipe.whiteBalanceMode {
-            try await writeProperty(0xD199, value: Int32(value.actualPTPValue))
+            try await writeProperty(0xD199, value: Int32(value.rawValue))
         }
         if let value = recipe.colorTempK {
             try await writeProperty(0xD19C, value: Int32(value))

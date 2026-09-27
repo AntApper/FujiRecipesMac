@@ -158,13 +158,14 @@ public final class CustomRecipeLibrary: ObservableObject {
         if disallowNameCollision {
             try validateNameUniqueness(for: recipe)
         }
-        if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
-            recipes[index] = recipe
-        } else {
-            recipes.append(recipe)
+        try persistChange { recipes in
+            if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
+                recipes[index] = recipe
+            } else {
+                recipes.append(recipe)
+            }
+            recipes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
-        recipes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        try persist()
     }
 
     @discardableResult
@@ -190,8 +191,9 @@ public final class CustomRecipeLibrary: ObservableObject {
 
     public func delete(id: Recipe.ID) throws {
         try ensurePersistenceAllowed()
-        recipes.removeAll { $0.id == id }
-        try persist()
+        try persistChange { recipes in
+            recipes.removeAll { $0.id == id }
+        }
     }
 
     /// Merges an exported library by stable ID, replacing matching local recipes.
@@ -199,15 +201,16 @@ public final class CustomRecipeLibrary: ObservableObject {
     public func `import`(_ data: Data) throws -> Int {
         try ensurePersistenceAllowed()
         let imported = try Self.decode(data)
-        for recipe in imported {
-            if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
-                recipes[index] = recipe
-            } else {
-                recipes.append(recipe)
+        try persistChange { recipes in
+            for recipe in imported {
+                if let index = recipes.firstIndex(where: { $0.id == recipe.id }) {
+                    recipes[index] = recipe
+                } else {
+                    recipes.append(recipe)
+                }
             }
+            recipes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
-        recipes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        try persist()
         return imported.count
     }
 
@@ -236,6 +239,17 @@ public final class CustomRecipeLibrary: ObservableObject {
             if loadIssue != nil {
                 throw CustomRecipeLibraryError.persistenceBlocked
             }
+        }
+    }
+
+    private func persistChange(_ change: (inout [Recipe]) -> Void) throws {
+        let previous = recipes
+        change(&recipes)
+        do {
+            try persist()
+        } catch {
+            recipes = previous
+            throw error
         }
     }
 

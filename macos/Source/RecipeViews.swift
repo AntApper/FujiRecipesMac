@@ -37,6 +37,7 @@ public struct RecipeListView: View {
     @State private var gridWidth: Double = 0
     @FocusState private var isSearchFocused: Bool
     @FocusState private var isGridFocused: Bool
+    @State private var isSearchPresented = false
 
     private var columnCount: Int {
         GridNavigation.columnCount(width: gridWidth, minimum: 330, spacing: 14)
@@ -175,8 +176,13 @@ public struct RecipeListView: View {
             }
         }
         .navigationTitle("Fuji Recipes Studio")
-        .searchable(text: $store.searchQuery, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
+        .searchable(text: $store.searchQuery, isPresented: $isSearchPresented, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
         .modifier(SearchFocusModifier(isSearchFocused: $isSearchFocused))
+        .onChange(of: isSearchPresented) { _, isPresented in
+            if !isPresented {
+                isGridFocused = true
+            }
+        }
         .onAppear {
             if !focusSearchIfRequested() {
                 isGridFocused = true
@@ -276,12 +282,8 @@ public struct RecipeListView: View {
                 recipe: recipe,
                 existingRecipes: store.customRecipes.recipes
             ) { edited in
-                do {
-                    try store.customRecipes.save(edited)
-                    recipeToEdit = nil
-                } catch {
-                    customRecipeMessage = error.localizedDescription
-                }
+                try store.customRecipes.save(edited)
+                recipeToEdit = nil
             }
         }
         .sheet(isPresented: Binding(
@@ -658,8 +660,11 @@ public struct RecipeListView: View {
             .padding(.vertical, 5)
             .background(Capsule().fill(Color.white.opacity(0.05)))
             .overlay(Capsule().stroke(Theme.specularBorder, lineWidth: 0.8))
+            .accessibilityElement(children: .combine)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .accessibilityIdentifier("custom-recipe-library-menu")
     }
 
@@ -1463,14 +1468,19 @@ private struct RecipeCard: View {
         }
     }
 
+    /// The second click of a double-click belongs to Quick Look, so it must
+    /// not toggle the card a second time.
+    private func toggleExpandOnClick() {
+        guard (NSApp.currentEvent?.clickCount ?? 1) < 2 else { return }
+        onSelect?()
+        onToggleExpand()
+    }
+
     private var headerWithActions: some View {
         HStack(alignment: .top, spacing: 12) {
             // Recipe Thumbnail (clean, completely unobstructed)
             previewThumbnail
-                .onTapGesture {
-                    onSelect?()
-                    onToggleExpand()
-                }
+                .onTapGesture(perform: toggleExpandOnClick)
 
             // Recipe Details (Tappable to expand formula)
             VStack(alignment: .leading, spacing: 4) {
@@ -1510,10 +1520,7 @@ private struct RecipeCard: View {
                 toneAndKelvinCluster
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect?()
-                onToggleExpand()
-            }
+            .onTapGesture(perform: toggleExpandOnClick)
 
             Spacer(minLength: 4)
 
@@ -1555,8 +1562,11 @@ private struct RecipeCard: View {
                             .stroke(isHovered ? Theme.fujiAmber.opacity(0.55) : Color.white.opacity(0.14), lineWidth: 1)
                     )
                     .foregroundStyle(isHovered ? Theme.fujiAmber : Color.white)
+                    .accessibilityElement(children: .combine)
                 }
-                .menuStyle(.borderlessButton)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
                 .help("Stage \"\(recipe.name)\" to custom dial slot (C1–C7)")
                 .accessibilityIdentifier("send-to-dial-\(recipe.id)")
 

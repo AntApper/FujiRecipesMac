@@ -673,6 +673,9 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
 
     private enum HelperRequestPhase {
         case handshake
+        /// The helper's stale-session recovery waits out a 10 s OpenSession
+        /// read before it reopens the device. Measured 11.5 s on an X100VI.
+        case sessionOpen
         case shutdown
         case property
         case preset
@@ -682,6 +685,7 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
         var timeout: TimeInterval {
             switch self {
             case .handshake: 10
+            case .sessionOpen: 15
             case .shutdown: 3
             case .property: 15
             case .preset: 30
@@ -692,7 +696,8 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
 
         static func forCommand(_ command: String) -> Self {
             switch command {
-            case "ping", "connect", "reconnect": .handshake
+            case "ping": .handshake
+            case "connect", "reconnect": .sessionOpen
             case "disconnect", "exit": .shutdown
             case "read_preset_slot", "write_preset_slot": .preset
             case "load_raf", "get_profile", "set_profile", "wait_result": .transfer

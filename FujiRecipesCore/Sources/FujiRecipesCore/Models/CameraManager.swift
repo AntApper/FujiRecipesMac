@@ -177,20 +177,29 @@ public final class CameraManager: ObservableObject {
     }
 
     private func readSlots(using client: PTPClientProtocol) async -> SlotRefreshResult {
-        var presetData: [PTPClientPresetData] = []
-        var failures: [SlotRefreshFailure] = []
+        var order = Array(1...7)
+        // Reading a slot selects it on the camera, so the slot it was on is read last.
+        if case .uint32(let value)? = try? await client.readProperty(PTPProperty.presetSlot),
+           let selectedIndex = order.firstIndex(of: Int(value)) {
+            order.append(order.remove(at: selectedIndex))
+        }
 
-        for slot in 1...7 {
+        var presetData: [Int: PTPClientPresetData] = [:]
+        var failures: [Int: SlotRefreshFailure] = [:]
+
+        for slot in order {
             do {
-                let data = try await client.readPresetSlot(slot)
-                presetData.append(data)
+                presetData[slot] = try await client.readPresetSlot(slot)
             } catch {
                 DebugLogger.warning("Failed to read preset slot \(slot): \(error.localizedDescription)", category: .camera)
-                failures.append(SlotRefreshFailure(slot: slot, message: error.localizedDescription))
+                failures[slot] = SlotRefreshFailure(slot: slot, message: error.localizedDescription)
             }
         }
 
-        return SlotRefreshResult(presets: presetData, failures: failures)
+        return SlotRefreshResult(
+            presets: (1...7).compactMap { presetData[$0] },
+            failures: (1...7).compactMap { failures[$0] }
+        )
     }
 
     // MARK: - Import Recipe to C-State

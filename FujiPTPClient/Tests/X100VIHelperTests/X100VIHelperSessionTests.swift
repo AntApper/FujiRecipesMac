@@ -59,6 +59,18 @@ final class X100VIHelperSessionTests: XCTestCase {
         XCTAssertEqual(value(of: response), 0xD192)
     }
 
+    func testConnectWaitsOutTheHelpersStaleSessionRecovery() async throws {
+        try installFakeHelper(extraCases: """
+            *'"command":"connect"'*) sleep 11.5 ;;
+        """)
+        let client = X100VIHelperClient()
+
+        try await client.connect()
+
+        XCTAssertTrue(client.isConnected)
+        client.disconnect()
+    }
+
     func testDisconnectFailsARequestQueuedBehindAHelperThatExited() async throws {
         // Code 1 makes the helper exit without a reply while a child keeps
         // its stdout open, so the worker still holds the first request when

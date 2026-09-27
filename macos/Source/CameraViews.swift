@@ -1221,8 +1221,11 @@ public struct RAFDarkroomView: View {
                 .padding(.vertical, 8)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.specularBorder, lineWidth: 0.8))
+                .accessibilityElement(children: .combine)
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
             .accessibilityLabel("Select recipe to apply for RAW development")
 
             // Compact Recipe Parameter Card

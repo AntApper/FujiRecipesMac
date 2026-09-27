@@ -7,9 +7,10 @@ import FujiRecipesCore
 struct CustomRecipeEditor: View {
     let recipe: Recipe
     let existingRecipes: [Recipe]
-    let onSave: (Recipe) -> Void
+    let onSave: (Recipe) throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var saveError: String?
     @State private var name: String
     @State private var source: String
     @State private var filmSimulation: UInt32?
@@ -30,7 +31,7 @@ struct CustomRecipeEditor: View {
     init(
         recipe: Recipe,
         existingRecipes: [Recipe] = [],
-        onSave: @escaping (Recipe) -> Void
+        onSave: @escaping (Recipe) throws -> Void
     ) {
         self.recipe = recipe
         self.existingRecipes = existingRecipes
@@ -299,12 +300,24 @@ struct CustomRecipeEditor: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
-                    onSave(makeRecipe())
+                    do {
+                        try onSave(makeRecipe())
+                    } catch {
+                        saveError = error.localizedDescription
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isValid)
                 .accessibilityIdentifier("custom-recipe-save")
             }
+        }
+        .alert("Couldn’t Save Recipe", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
         }
     }
 

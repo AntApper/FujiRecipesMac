@@ -172,6 +172,10 @@ private struct RotaryDialStripItem: View {
 
     private var isFilled: Bool { loadout?.hasAnySettings ?? false }
     private var accent: Color { slotAccent(slot) }
+    private var slotName: String? {
+        guard isFilled, let name = loadout?.name, !name.isEmpty, name != "C\(slot)" else { return nil }
+        return name
+    }
 
     var body: some View {
         Button(action: onSelect) {
@@ -186,7 +190,7 @@ private struct RotaryDialStripItem: View {
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundStyle((isSelected || isDropTargeted) ? Color.black : (isFilled ? Color.white : Theme.textTertiary))
 
-                if let name = loadout?.recipeName, !name.isEmpty {
+                if let name = slotName {
                     Text(name)
                         .font(.caption2.weight(.medium))
                         .foregroundStyle((isSelected || isDropTargeted) ? Color.black.opacity(0.8) : Theme.textSecondary)
@@ -221,8 +225,8 @@ private struct RotaryDialStripItem: View {
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isSelected)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isFilled)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isDropTargeted)
-        .help(isDropTargeted ? "Drop recipe to apply to C\(slot)" : (loadout?.recipeName ?? "C\(slot)"))
-        .accessibilityLabel("Quick dial C\(slot), \(isFilled ? (loadout?.recipeName ?? "configured") : "empty")")
+        .help(isDropTargeted ? "Drop recipe to apply to C\(slot)" : (slotName ?? "C\(slot)"))
+        .accessibilityLabel("Quick dial C\(slot), \(isFilled ? (slotName ?? "configured") : "empty")")
         .accessibilityHint("Selects slot C\(slot), or drop a recipe here to stage it.")
     }
 }
@@ -635,14 +639,23 @@ public struct LoadoutCard: View {
 
     private func configuredBody(_ loadout: Loadout) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Recipe Title: If camera-synced, display the verified camera name.
-            // If local draft, display the staged draft recipe name.
-            Text(isCameraVerified ? loadout.name : (loadout.recipeName ?? loadout.name))
-                .font(.system(size: 13, weight: .bold))
-                .glassPrimary()
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(height: 18, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(loadout.name)
+                    .font(.system(size: 13, weight: .bold))
+                    .glassPrimary()
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(height: 18, alignment: .leading)
+
+                if let recipeName = loadout.recipeName, !recipeName.isEmpty, recipeName != loadout.name {
+                    Text("from recipe \(recipeName)")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(height: 32, alignment: .topLeading)
 
             // Film Sim Badge + Dynamic Range + White Balance
             HStack(spacing: 4) {
@@ -694,7 +707,7 @@ public struct LoadoutCard: View {
                 .glassTertiary()
                 .lineLimit(2)
         }
-        .frame(height: 86, alignment: .leading)
+        .frame(height: 100, alignment: .leading)
     }
 
     private var syncStateLabel: String {

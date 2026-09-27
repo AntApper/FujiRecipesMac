@@ -23,13 +23,10 @@
 
 #define FUJI_VENDOR       0x04CB
 #define X100VI_PRODUCT    0x0305
-/* X100VI has a camera-verified safe D18D label length of 15 printable ASCII
- * characters. Its readback is a 41-byte PTP field, but that field capacity is
- * not the writable label limit. `C4 PTP VERIFY B` (15 characters) was
- * accepted; the 17-character app title `PRO Negative 160C` was rejected with
- * 0x201C. Keep this proven-safe limit until a hardware boundary test checks
- * whether 16 characters are accepted. */
-#define FUJI_PRESET_NAME_MAX_CHARACTERS 15
+/* The X100VI (firmware 1.31) accepts a D18D label of 0 to 25 printable ASCII
+ * characters and rejects 26 or more with 0x201C, measured by write and
+ * readback on C3. CameraPresetName.maximumCharacterCount is the same limit. */
+#define FUJI_PRESET_NAME_MAX_CHARACTERS 25
 
 /* ── PTP Property Definitions ─────────────────────────────────────────── */
 

@@ -556,24 +556,23 @@ public struct RecipeListView: View {
     }
 
     private var headerControlBar: some View {
-        ViewThatFits(in: .horizontal) {
-            // Full horizontal layout for spacious windows
-            HStack(alignment: .center, spacing: 14) {
-                headerTextCluster
-                Spacer(minLength: 12)
-                topActionButtons
-                customRecipeLibraryMenu
-                headerFilterToggle
-            }
-            // Vertical stacked layout for compact windows
-            VStack(alignment: .leading, spacing: 10) {
-                headerTextCluster
-                topActionButtons
-                HStack {
-                    customRecipeLibraryMenu
-                    Spacer()
-                    headerFilterToggle
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 14) {
+                    headerTextCluster
+                    Spacer(minLength: 12)
+                    topActionButtons
                 }
+                VStack(alignment: .leading, spacing: 8) {
+                    headerTextCluster
+                    topActionButtons
+                }
+            }
+
+            HStack {
+                customRecipeLibraryMenu
+                Spacer()
+                headerFilterToggle
             }
         }
         .glassPanel(padding: 14, radius: Glass.panelRadius, accentColor: Theme.fujiAmber)
@@ -748,34 +747,16 @@ public struct RecipeListView: View {
                 ForEach(RecipeStore.FilmSimFamily.allCases) { family in
                     let isSelected = store.selectedFilmSimFamily == family
                     let accent = family == .all ? Theme.fujiAmber : Theme.filmSimColor(for: family.rawValue)
-
-                    Button {
+                    filterPill(
+                        title: family.rawValue,
+                        icon: family.icon,
+                        isSelected: isSelected,
+                        accent: accent
+                    ) {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                             store.selectedFilmSimFamily = family
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: family.icon)
-                                .font(.system(size: 11, weight: .semibold))
-                            Text(family.rawValue)
-                                .font(.caption.weight(isSelected ? .semibold : .medium))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(isSelected ? Color.black : Theme.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? accent : Color.white.opacity(0.05))
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(isSelected ? accent : Theme.specularBorder, lineWidth: 0.8)
-                        )
-                        .shadow(color: isSelected ? accent.opacity(0.35) : Color.clear, radius: 6, y: 2)
                     }
-                    .buttonStyle(.plain)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
                 }
 
                 Divider()
@@ -785,26 +766,15 @@ public struct RecipeListView: View {
                 // DR Filter
                 ForEach(RecipeStore.DRFilter.allCases) { dr in
                     let isSelected = store.selectedDRFilter == dr
-                    Button {
+                    filterPill(
+                        title: dr.rawValue,
+                        isSelected: isSelected,
+                        accent: Theme.emeraldGreen
+                    ) {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                             store.selectedDRFilter = dr
                         }
-                    } label: {
-                        Text(dr.rawValue)
-                            .font(.caption.weight(isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? Color.black : Theme.textSecondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule().fill(isSelected ? Theme.emeraldGreen : Color.white.opacity(0.04))
-                            )
-                            .overlay(
-                                Capsule().stroke(isSelected ? Theme.emeraldGreen : Theme.specularBorder, lineWidth: 0.8)
-                            )
-                            .shadow(color: isSelected ? Theme.emeraldGreen.opacity(0.35) : Color.clear, radius: 6, y: 2)
                     }
-                    .buttonStyle(.plain)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
                 }
 
                 metadataFilterMenus
@@ -900,6 +870,34 @@ public struct RecipeListView: View {
                 .menuStyle(.borderlessButton)
             }
         }
+    }
+
+    private func filterPill(
+        title: String,
+        icon: String? = nil,
+        isSelected: Bool,
+        accent: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                Text(title)
+                    .font(.caption.weight(isSelected ? .semibold : .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isSelected ? Color.black : Theme.textSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(isSelected ? accent : Color.white.opacity(0.05)))
+            .overlay(Capsule().stroke(isSelected ? accent : Theme.specularBorder, lineWidth: 0.8))
+            .shadow(color: isSelected ? accent.opacity(0.35) : Color.clear, radius: 6, y: 2)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 
     private func filterMenuLabel(title: String, icon: String) -> some View {
@@ -1465,37 +1463,7 @@ private struct RecipeCard: View {
                     .minimumScaleFactor(0.88)
 
                 // Tone Curve Radar & Kelvin Swatch
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) {
-                        ToneCurveRadar(
-                            highlight: recipe.highlight,
-                            shadow: recipe.shadow,
-                            color: recipe.color,
-                            sharpness: recipe.sharpness,
-                            accentColor: accent
-                        )
-
-                        KelvinChip(
-                            kelvin: recipe.colorTempK,
-                            modeName: recipe.whiteBalanceMode?.displayName ?? recipe.settings?["whiteBalance"]
-                        )
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        ToneCurveRadar(
-                            highlight: recipe.highlight,
-                            shadow: recipe.shadow,
-                            color: recipe.color,
-                            sharpness: recipe.sharpness,
-                            accentColor: accent
-                        )
-
-                        KelvinChip(
-                            kelvin: recipe.colorTempK,
-                            modeName: recipe.whiteBalanceMode?.displayName ?? recipe.settings?["whiteBalance"]
-                        )
-                    }
-                }
-                .padding(.top, 2)
+                toneAndKelvinCluster
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -1673,6 +1641,37 @@ private struct RecipeCard: View {
             )
     }
 
+    private var toneAndKelvinCluster: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                radarView
+                kelvinView
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                radarView
+                kelvinView
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private var radarView: some View {
+        ToneCurveRadar(
+            highlight: recipe.highlight,
+            shadow: recipe.shadow,
+            color: recipe.color,
+            sharpness: recipe.sharpness,
+            accentColor: accent
+        )
+    }
+
+    private var kelvinView: some View {
+        KelvinChip(
+            kelvin: recipe.colorTempK,
+            modeName: recipe.whiteBalanceMode?.displayName ?? recipe.settings?["whiteBalance"]
+        )
+    }
+
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Divider()
@@ -1751,7 +1750,7 @@ private struct RecipeCard: View {
             .lineLimit(1)
         }
         .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
-        .accessibilityIdentifier("send-to-dial-\(recipe.id)")
+        .accessibilityIdentifier("send-to-dial-expanded-\(recipe.id)")
     }
 
     private var samplePhotosSection: some View {
@@ -1788,7 +1787,7 @@ private struct RecipeCard: View {
                 .padding(.horizontal, 12)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 6)], spacing: 6) {
-                ForEach(settingRows, id: \.label) { item in
+                ForEach(recipe.formulaSettingItems, id: \.label) { item in
                     HStack(spacing: 6) {
                         Text(item.label)
                             .font(.system(size: 10))
@@ -1844,37 +1843,6 @@ private struct RecipeCard: View {
             }
             .padding(.horizontal, 12)
         }
-    }
-
-    private var settingRows: [FormulaSettingItem] {
-        var items: [FormulaSettingItem] = []
-        let raw = recipe.settings ?? [:]
-
-        func add(_ key: String, display: String) {
-            if let val = raw[key], !val.isEmpty {
-                items.append(FormulaSettingItem(label: display, value: val))
-            }
-        }
-
-        add("filmSimulation", display: "Film Sim")
-        add("dynamicRange", display: "Dynamic Range")
-        add("grainEffect", display: "Grain")
-        add("colorChromeEffect", display: "Color Chrome")
-        add("colorChromeFxBlue", display: "Chrome FX Blue")
-        add("whiteBalance", display: "White Balance")
-        if let r = recipe.wbShiftRed, let b = recipe.wbShiftBlue {
-            items.append(FormulaSettingItem(label: "WB Shift", value: "R:\(r.formatValue) B:\(b.formatValue)"))
-        }
-        add("highlight", display: "Highlight")
-        add("shadow", display: "Shadow")
-        add("color", display: "Color")
-        add("sharpness", display: "Sharpness")
-        add("highIsoNr", display: "Noise Reduction")
-        add("clarity", display: "Clarity")
-        add("iso", display: "ISO")
-        add("exposureCompensation", display: "Exp. Comp")
-
-        return items
     }
 }
 
@@ -1977,6 +1945,39 @@ private struct SampleThumbnailButton: View {
 fileprivate struct FormulaSettingItem {
     let label: String
     let value: String
+}
+
+extension Recipe {
+    fileprivate var formulaSettingItems: [FormulaSettingItem] {
+        var items: [FormulaSettingItem] = []
+        let raw = settings ?? [:]
+
+        func add(_ key: String, display: String) {
+            if let val = raw[key], !val.isEmpty {
+                items.append(FormulaSettingItem(label: display, value: val))
+            }
+        }
+
+        add("filmSimulation", display: "Film Sim")
+        add("dynamicRange", display: "Dynamic Range")
+        add("grainEffect", display: "Grain")
+        add("colorChromeEffect", display: "Color Chrome")
+        add("colorChromeFxBlue", display: "Chrome FX Blue")
+        add("whiteBalance", display: "White Balance")
+        if let r = wbShiftRed, let b = wbShiftBlue {
+            items.append(FormulaSettingItem(label: "WB Shift", value: "R:\(r.formatValue) B:\(b.formatValue)"))
+        }
+        add("highlight", display: "Highlight")
+        add("shadow", display: "Shadow")
+        add("color", display: "Color")
+        add("sharpness", display: "Sharpness")
+        add("highIsoNr", display: "Noise Reduction")
+        add("clarity", display: "Clarity")
+        add("iso", display: "ISO")
+        add("exposureCompensation", display: "Exp. Comp")
+
+        return items
+    }
 }
 
 // MARK: - Lightbox Image Modal
@@ -2237,7 +2238,7 @@ public struct RecipeQuickLookView: View {
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                                     .foregroundStyle(Theme.textTertiary)
 
-                                let items = settingRows.prefix(6)
+                                let items = recipe.formulaSettingItems.prefix(6)
                                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
                                     ForEach(Array(items), id: \.label) { item in
                                         HStack {
@@ -2265,7 +2266,7 @@ public struct RecipeQuickLookView: View {
                                 .foregroundStyle(Theme.textTertiary)
 
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
-                                ForEach(settingRows, id: \.label) { item in
+                                ForEach(recipe.formulaSettingItems, id: \.label) { item in
                                     HStack(spacing: 6) {
                                         Text(item.label)
                                             .font(.system(size: 11))
@@ -2369,37 +2370,6 @@ public struct RecipeQuickLookView: View {
             .accessibilityIdentifier("recipe-quick-look-modal")
             .padding(24)
         }
-    }
-
-    private var settingRows: [FormulaSettingItem] {
-        var items: [FormulaSettingItem] = []
-        let raw = recipe.settings ?? [:]
-
-        func add(_ key: String, display: String) {
-            if let val = raw[key], !val.isEmpty {
-                items.append(FormulaSettingItem(label: display, value: val))
-            }
-        }
-
-        add("filmSimulation", display: "Film Sim")
-        add("dynamicRange", display: "Dynamic Range")
-        add("grainEffect", display: "Grain")
-        add("colorChromeEffect", display: "Color Chrome")
-        add("colorChromeFxBlue", display: "Chrome FX Blue")
-        add("whiteBalance", display: "White Balance")
-        if let r = recipe.wbShiftRed, let b = recipe.wbShiftBlue {
-            items.append(FormulaSettingItem(label: "WB Shift", value: "R:\(r.formatValue) B:\(b.formatValue)"))
-        }
-        add("highlight", display: "Highlight")
-        add("shadow", display: "Shadow")
-        add("color", display: "Color")
-        add("sharpness", display: "Sharpness")
-        add("highIsoNr", display: "Noise Reduction")
-        add("clarity", display: "Clarity")
-        add("iso", display: "ISO")
-        add("exposureCompensation", display: "Exp. Comp")
-
-        return items
     }
 }
 

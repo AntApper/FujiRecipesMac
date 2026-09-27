@@ -263,40 +263,6 @@ public extension View {
             .shadow(color: Color.black.opacity(0.4), radius: 22, x: 0, y: 8)
     }
 
-    /// High-tech floating HUD readout badge / capsule
-    func glassCapsule(
-        padding: Edge.Set = .horizontal,
-        paddingAmount: CGFloat = 14,
-        tint: Color = Theme.glassInteractiveBg
-    ) -> some View {
-        self
-            .padding(padding, paddingAmount)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(tint)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Theme.specularBorder, Color.white.opacity(0.05)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: Glass.strokeWidth
-                            )
-                            .blendMode(.plusLighter)
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.24), radius: 8, x: 0, y: 3)
-    }
-
-    /// Subtle colored glow on hover or active state
-    func glassGlow(color: Color, radius: CGFloat = 12, opacity: Double = 0.4) -> some View {
-        self.shadow(color: color.opacity(opacity), radius: radius, x: 0, y: 0)
-    }
-
     /// Primary text formatting
     func glassPrimary() -> some View {
         self.foregroundStyle(Theme.textPrimary)
@@ -310,38 +276,6 @@ public extension View {
     /// Tertiary / muted text formatting
     func glassTertiary() -> some View {
         self.foregroundStyle(Theme.textTertiary)
-    }
-
-    /// Subtle floating drift
-    func ambientDrift(amount: CGFloat = 8, duration: Double = 12) -> some View {
-        self.modifier(AmbientDriftModifier(amount: amount, duration: duration))
-    }
-}
-
-public struct AmbientDriftModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let amount: CGFloat
-    let duration: Double
-    @State private var phase: Bool = false
-
-    public func body(content: Content) -> some View {
-        content
-            .offset(
-                x: phase ? amount : -amount,
-                y: phase ? -amount * 0.5 : amount * 0.5
-            )
-            .scaleEffect(phase ? 1.01 : 0.99)
-            .animation(
-                reduceMotion ? .default : .easeInOut(duration: duration).repeatForever(autoreverses: true),
-                value: phase
-            )
-            .onAppear {
-                guard !reduceMotion else { return }
-                phase = true
-            }
-            .onChange(of: reduceMotion) { _, enabled in
-                phase = !enabled
-            }
     }
 }
 
@@ -427,67 +361,6 @@ public struct GlassBorderedButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.75), value: configuration.isPressed)
-    }
-}
-
-public struct GlassIconButton: View {
-    let systemImage: String
-    var title: String? = nil
-    var tint: Color = Theme.textSecondary
-    var activeColor: Color = Theme.fujiAmber
-    var isActive: Bool = false
-    var size: CGFloat = 32
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    public init(
-        systemImage: String,
-        title: String? = nil,
-        tint: Color = Theme.textSecondary,
-        activeColor: Color = Theme.fujiAmber,
-        isActive: Bool = false,
-        size: CGFloat = 32,
-        action: @escaping () -> Void
-    ) {
-        self.systemImage = systemImage
-        self.title = title
-        self.tint = tint
-        self.activeColor = activeColor
-        self.isActive = isActive
-        self.size = size
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: systemImage)
-                    .font(.system(size: size * 0.42, weight: .semibold))
-                if let title {
-                    Text(title)
-                        .font(.caption.weight(.medium))
-                        .lineLimit(1)
-                }
-            }
-            .foregroundStyle(isActive ? activeColor : (isHovered ? Color.white : tint))
-            .frame(minWidth: size, minHeight: size)
-            .padding(.horizontal, title != nil ? 8 : 0)
-            .background(
-                RoundedRectangle(cornerRadius: size / 3, style: .continuous)
-                    .fill(isActive ? activeColor.opacity(0.18) : (isHovered ? Color.white.opacity(0.12) : Color.white.opacity(0.04)))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: size / 3, style: .continuous)
-                    .stroke(isActive ? activeColor.opacity(0.4) : (isHovered ? Color.white.opacity(0.2) : Color.clear), lineWidth: 0.8)
-                    .blendMode(.plusLighter)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title ?? systemImage)
-        .onHover { isHovered = $0 }
-        .scaleEffect(isHovered ? 1.04 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered || isActive)
     }
 }
 

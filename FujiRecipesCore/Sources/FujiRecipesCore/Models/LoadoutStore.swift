@@ -50,14 +50,16 @@ public final class LoadoutStore: ObservableObject {
         dirtySlots.contains(slot)
     }
 
-    private func update(_ slot: Int, _ mutate: (inout Loadout) -> Void) {
+    private func update(_ slot: Int, save: Bool = true, _ mutate: (inout Loadout) -> Void) {
         guard let index = loadouts.firstIndex(where: { $0.slot == slot }) else { return }
         var loadout = loadouts[index]
         mutate(&loadout)
         loadout.provenance = .localDraft
         loadouts[index] = loadout
         dirtySlots.insert(slot)
-        saveLoadouts()
+        if save {
+            saveLoadouts()
+        }
     }
     
     public func updateName(for slot: Int, name: String) {
@@ -120,18 +122,20 @@ public final class LoadoutStore: ObservableObject {
         }
     }
     
-    public func clearLoadout(for slot: Int) {
+    public func clearLoadout(for slot: Int, save: Bool = true) {
         if let index = loadouts.firstIndex(where: { $0.slot == slot }) {
             var cleared = Loadout(slot: slot, name: "C\(slot)", filmSim: nil, dr: nil)
             cleared.provenance = .localDraft
             loadouts[index] = cleared
             dirtySlots.insert(slot)
-            saveLoadouts()
+            if save {
+                saveLoadouts()
+            }
         }
     }
     
-    public func applyRecipe(_ recipe: Recipe, to slot: Int) {
-        update(slot) { loadout in
+    public func applyRecipe(_ recipe: Recipe, to slot: Int, save: Bool = true) {
+        update(slot, save: save) { loadout in
             loadout.name = recipe.name
             loadout.recipeName = recipe.name
             loadout.recipeID = recipe.id
@@ -169,15 +173,17 @@ public final class LoadoutStore: ObservableObject {
     public func stageAll(recipes: [Recipe]) {
         for (index, recipe) in recipes.prefix(7).enumerated() {
             let slot = index + 1
-            applyRecipe(recipe, to: slot)
+            applyRecipe(recipe, to: slot, save: false)
         }
+        saveLoadouts()
     }
 
     /// Clears local drafts for all 7 slots.
     public func clearAllStaged() {
         for slot in 1...7 {
-            clearLoadout(for: slot)
+            clearLoadout(for: slot, save: false)
         }
+        saveLoadouts()
     }
     
     public func loadoutCountWithSettings() -> Int {

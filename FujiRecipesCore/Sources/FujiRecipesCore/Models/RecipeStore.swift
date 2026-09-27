@@ -131,7 +131,19 @@ public final class RecipeStore: ObservableObject {
         loadoutsSubscription = loadouts.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+        rebuildGallery()
     }
+
+    private struct FilterKey: Equatable {
+        let filters: RecipeCatalog.Filters
+        let filmSimFamily: FilmSimFamily
+        let filterCategory: FilterCategory?
+        let galleryVersion: Int
+    }
+
+    private var galleryVersion: Int = 0
+    private var cachedFilterKey: FilterKey?
+    private var cachedFilteredList: [Recipe] = []
 
     public var filteredRecipes: [Recipe] {
         var filters = RecipeCatalog.Filters()
@@ -143,6 +155,17 @@ public final class RecipeStore: ObservableObject {
         filters.searchText = searchQuery
         filters.sortOrder = sortOrder.catalogSortOrder
 
+        let key = FilterKey(
+            filters: filters,
+            filmSimFamily: selectedFilmSimFamily,
+            filterCategory: selectedFilterCategory,
+            galleryVersion: galleryVersion
+        )
+
+        if let cached = cachedFilterKey, cached == key {
+            return cachedFilteredList
+        }
+
         var result = catalog.recipes(matching: filters)
             .filter { selectedFilmSimFamily.matches($0.filmSimulation) }
 
@@ -151,6 +174,8 @@ public final class RecipeStore: ObservableObject {
             result = result.filter { customIDs.contains($0.id) }
         }
 
+        cachedFilterKey = key
+        cachedFilteredList = result
         return result
     }
 
@@ -190,6 +215,8 @@ public final class RecipeStore: ObservableObject {
         let localIDs = Set(customRecipes.recipes.map(\.id))
         recipes = bundledRecipes.filter { !localIDs.contains($0.id) } + customRecipes.recipes
         catalog = RecipeCatalog(recipes: recipes)
+        galleryVersion += 1
+        cachedFilterKey = nil
     }
 }
 

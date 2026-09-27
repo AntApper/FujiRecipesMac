@@ -205,13 +205,24 @@ public enum RecipeLoader {
         return compatibleCameras.contains("X100VI")
     }
 
-    private static func date(from string: String?) -> Date? {
-        guard let string else { return nil }
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "MMMM d, yyyy"
-        return formatter.date(from: string)
+        return formatter
+    }()
+    private static let dateLock = NSLock()
+
+    private static let kelvinRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: #"(\d{4,5})\s*K"#, options: .caseInsensitive)
+    }()
+
+    private static func date(from string: String?) -> Date? {
+        guard let string else { return nil }
+        dateLock.lock()
+        defer { dateLock.unlock() }
+        return dateFormatter.date(from: string)
     }
 
     /// Resolves the color temperature in Kelvin for a recipe:
@@ -238,10 +249,7 @@ public enum RecipeLoader {
 
     /// Parses a 4-5 digit Kelvin value from a white balance description string (e.g. "10000K, +9 Red", "5600 K").
     static func extractKelvin(from string: String) -> UInt32? {
-        let pattern = #"(\d{4,5})\s*K"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
-            return nil
-        }
+        guard let regex = kelvinRegex else { return nil }
         let range = NSRange(string.startIndex..<string.endIndex, in: string)
         guard let match = regex.firstMatch(in: string, options: [], range: range),
               match.numberOfRanges > 1,

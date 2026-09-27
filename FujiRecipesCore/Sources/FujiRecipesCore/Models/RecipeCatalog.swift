@@ -39,10 +39,27 @@ public struct RecipeCatalog: Sendable {
         let normalizedKeywords: Set<String>
     }
 
+    private static let invertedAlphanumerics: CharacterSet = .alphanumerics.inverted
+
+    private static let ignoredKeywords: Set<String> = Set([
+        "camera blog", "camera settings", "film simulation",
+        "film simulation recipe", "film simulation recipes",
+        "film simulation settings", "fuji blog", "fuji x weekly",
+        "fuji x weekly blog", "fuji x weekly film simulation",
+        "fujifilm", "fujifilm blog", "fujifilm blogger",
+        "fujifilm camera blog", "fujifilm camera settings",
+        "fujifilm film simulation", "fujifilm recipes",
+        "photography blog"
+    ].map(RecipeCatalog.normalize))
+
     private let indexedRecipes: [IndexedRecipe]
+    public let filmSimulations: [FilmSimulation]
+    public let dynamicRanges: [DynamicRange]
+    public let whiteBalances: [WhiteBalanceMode]
+    public let keywords: [Keyword]
 
     public init(recipes: [Recipe]) {
-        indexedRecipes = recipes.map { recipe in
+        let indexed = recipes.map { recipe -> IndexedRecipe in
             let keywords = Set(recipe.tags ?? [])
             let searchableParts = [
                 recipe.name,
@@ -63,50 +80,24 @@ public struct RecipeCatalog: Sendable {
                 normalizedKeywords: Set(keywords.map(Self.normalize))
             )
         }
-    }
-
-    public var count: Int { indexedRecipes.count }
-
-    public var filmSimulations: [FilmSimulation] {
-        Array(Set(indexedRecipes.compactMap(\.recipe.filmSimulation)))
+        self.indexedRecipes = indexed
+        self.filmSimulations = Array(Set(indexed.compactMap(\.recipe.filmSimulation)))
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-    }
-
-    public var dynamicRanges: [DynamicRange] {
-        Array(Set(indexedRecipes.compactMap(\.recipe.dynamicRange)))
+        self.dynamicRanges = Array(Set(indexed.compactMap(\.recipe.dynamicRange)))
             .sorted { $0.rawValue < $1.rawValue }
-    }
-
-    public var whiteBalances: [WhiteBalanceMode] {
-        Array(Set(indexedRecipes.compactMap(\.recipe.whiteBalanceMode)))
+        self.whiteBalances = Array(Set(indexed.compactMap(\.recipe.whiteBalanceMode)))
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-    }
-
-    /// Source keywords suitable for browse filters. Generic collection and
-    /// publisher labels are removed, but all remaining terms originate in the
-    /// imported source data.
-    public var keywords: [Keyword] {
-        let ignored = Set([
-            "camera blog", "camera settings", "film simulation",
-            "film simulation recipe", "film simulation recipes",
-            "film simulation settings", "fuji blog", "fuji x weekly",
-            "fuji x weekly blog", "fuji x weekly film simulation",
-            "fujifilm", "fujifilm blog", "fujifilm blogger",
-            "fujifilm camera blog", "fujifilm camera settings",
-            "fujifilm film simulation", "fujifilm recipes",
-            "photography blog"
-        ].map(Self.normalize))
 
         var names: [String: (name: String, count: Int)] = [:]
-        for indexed in indexedRecipes {
-            for tag in indexed.recipe.tags ?? [] {
+        for item in indexed {
+            for tag in item.recipe.tags ?? [] {
                 let normalized = Self.normalize(tag)
-                guard !normalized.isEmpty, !ignored.contains(normalized) else { continue }
+                guard !normalized.isEmpty, !Self.ignoredKeywords.contains(normalized) else { continue }
                 let current = names[normalized] ?? (tag, 0)
                 names[normalized] = (current.name, current.count + 1)
             }
         }
-        return names.values
+        self.keywords = names.values
             .map { Keyword(name: $0.name, count: $0.count) }
             .sorted {
                 $0.count == $1.count
@@ -114,6 +105,8 @@ public struct RecipeCatalog: Sendable {
                     : $0.count > $1.count
             }
     }
+
+    public var count: Int { indexedRecipes.count }
 
     public func recipes(matching filters: Filters) -> [Recipe] {
         let queryTerms = Self.searchTerms(filters.searchText)
@@ -160,7 +153,7 @@ public struct RecipeCatalog: Sendable {
     public static func normalize(_ text: String) -> String {
         text
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .components(separatedBy: invertedAlphanumerics)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }

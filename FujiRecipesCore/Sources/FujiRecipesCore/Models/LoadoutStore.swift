@@ -3,7 +3,6 @@ import Foundation
 /// Staged drafts that couldn't be read were copied aside and replaced with
 /// empty slots.
 public struct LoadoutRecoveryNotice: Equatable, Sendable {
-    /// The preferences key that still holds the unreadable data.
     public let backupKey: String
     public let reason: String
 

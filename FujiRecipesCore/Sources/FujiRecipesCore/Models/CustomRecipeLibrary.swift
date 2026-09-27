@@ -39,8 +39,7 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
     }
 }
 
-/// Why the stored library didn't load in full. The original file is copied
-/// aside before anything can overwrite it.
+/// Why the stored library didn't load in full.
 public struct CustomRecipeLibraryLoadIssue: Equatable, Sendable {
     public struct SkippedRecipe: Equatable, Sendable {
         /// The stored name when it is readable, otherwise “Recipe N” by file position.

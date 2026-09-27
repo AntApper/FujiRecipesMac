@@ -22,7 +22,6 @@ func reasonClause(_ reason: String) -> String {
     reason.hasSuffix(".") ? String(reason.dropLast()) : reason
 }
 
-/// Names the copy of unreadable data, for example `20260927-012400`.
 func storedDataRecoveryTimestamp(_ date: Date = Date()) -> String {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")

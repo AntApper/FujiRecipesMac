@@ -331,7 +331,7 @@ public struct CameraConnectionView: View {
             }
         }
         .buttonStyle(GlassProminentButtonStyle(color: manager.status == .connected ? Theme.fujiRed : Theme.emeraldGreen, height: 36))
-        .disabled(isConnectionInFlight)
+        .disabled(isConnectionInFlight || manager.isBusy)
         .accessibilityLabel(manager.status == .connected ? "Disconnect camera" : "Connect camera")
         .accessibilityHint(manager.status == .connected
             ? "Ends the current USB camera session."
@@ -459,7 +459,7 @@ public struct CameraConnectionView: View {
     private var writeAllButton: some View {
         let stagedCount = loadouts.stagedSlots.count
         let isConnected = manager.status == .connected
-        let canWrite = isConnected && stagedCount > 0 && !isWritingAll
+        let canWrite = isConnected && stagedCount > 0 && !manager.isBusy
 
         return Button {
             confirmWriteAll = true
@@ -552,7 +552,7 @@ public struct CameraConnectionView: View {
             .foregroundStyle(Color.white)
         }
         .buttonStyle(.plain)
-        .disabled(manager.status != .connected || manager.operation == .readingSlots || isWritingAll)
+        .disabled(manager.status != .connected || manager.isBusy)
         .help("Reads physical slots C1–C7 from the connected camera")
     }
 
@@ -573,7 +573,7 @@ public struct CameraConnectionView: View {
             .foregroundStyle(Theme.textSecondary)
         }
         .buttonStyle(.plain)
-        .disabled(loadouts.loadoutCountWithSettings() == 0 || isWritingAll)
+        .disabled(loadouts.loadoutCountWithSettings() == 0 || manager.isBusy)
         .help("Clears all 7 local recipe drafts")
     }
 
@@ -613,6 +613,7 @@ public struct CameraConnectionView: View {
                         isCameraConnected: manager.status == .connected,
                         isCameraSlotEmpty: loadouts.isCameraSlotEmpty(slot),
                         isWriting: manager.operation == .writingSlot(slot),
+                        isCameraBusy: manager.isBusy,
                         onSelect: { selectedDialSlot = slot },
                         onClear: { slotPendingLocalClear = slot },
                         onEdit: { slotToEdit = loadout },
@@ -1376,7 +1377,7 @@ public struct RAFDarkroomView: View {
                             }
                         }
                         .buttonStyle(GlassProminentButtonStyle(color: Theme.cyanAccent, height: 34))
-                        .disabled(isConnectingCamera || manager.status == .connecting)
+                        .disabled(isConnectingCamera || manager.status == .connecting || manager.isBusy)
                         .accessibilityIdentifier("darkroom-connect-camera-button")
                     }
                 }
@@ -1417,7 +1418,7 @@ public struct RAFDarkroomView: View {
                             }
                         }
                         .buttonStyle(GlassProminentButtonStyle(color: Theme.cyanAccent, height: 40))
-                        .disabled(selectedRAFURL == nil)
+                        .disabled(selectedRAFURL == nil || manager.isBusy)
                         .accessibilityIdentifier("develop-raf-button")
 
                         if selectedRAFURL == nil {

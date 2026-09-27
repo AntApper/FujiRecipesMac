@@ -26,6 +26,7 @@ final class CameraOperationSerializationTests: XCTestCase {
         var five = try XCTUnwrap(store.loadout(for: 5))
         five.name = "Five"
         five.filmSim = .acros
+        five.rawPreset?.filmSimulation = nil
 
         let writeAll = Task { await manager.writeAllStagedSlots(from: store) }
         await camera.waitUntilBusy()
@@ -61,6 +62,31 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertEqual(camera.crossSlotAccesses, [])
         XCTAssertEqual(result.presets.map(\.name), ["Camera 1", "Camera 2", "Three", "Camera 4", "Camera 5", "Camera 6", "Camera 7"])
     }
+
+    @MainActor
+    func testWriteQueuedBehindWriteAllRunsAfterItAndIsBusyTracksTheGate() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        XCTAssertFalse(manager.isBusy)
+        store.applyRecipe(Recipe(id: "two", name: "Two", source: "test", sourceUrl: nil, filmSimulation: .velvia), to: 2)
+        store.applyRecipe(Recipe(id: "three", name: "Three", source: "test", sourceUrl: nil, filmSimulation: .eterna), to: 3)
+        var five = try XCTUnwrap(store.loadout(for: 5))
+        five.name = "Five"
+        five.filmSim = .acros
+
+        let writeAll = Task { await manager.writeAllStagedSlots(from: store) }
+        await camera.waitUntilBusy()
+        XCTAssertTrue(manager.isBusy)
+        let writeFive = Task { try await manager.writeLoadout(five, to: 5) }
+        _ = await writeAll.value
+        _ = try await writeFive.value
+
+        XCTAssertFalse(manager.isBusy)
+        XCTAssertEqual(camera.writeOrder, [2, 3, 5])
+        XCTAssertEqual(camera.maxConcurrentOperations, 1)
+    }
 }
 
 // MARK: - Slot-register camera
@@ -76,6 +102,7 @@ private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
     private var operationsInFlight = 0
     private var _maxConcurrentOperations = 0
     private var _crossSlotAccesses: [String] = []
+    private var _writeOrder: [Int] = []
     private var handler: (@Sendable () -> Void)?
 
     let cameraInfo = PTPCameraInfo(model: "X100VI")
@@ -89,6 +116,7 @@ private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
     var isConnected: Bool { lock.withLock { connected } }
     var maxConcurrentOperations: Int { lock.withLock { _maxConcurrentOperations } }
     var crossSlotAccesses: [String] { lock.withLock { _crossSlotAccesses } }
+    var writeOrder: [Int] { lock.withLock { _writeOrder } }
     func slot(_ index: Int) -> PTPClientPresetData { lock.withLock { slots[index]! } }
 
     func connect() async throws { lock.withLock { connected = true } }
@@ -121,6 +149,7 @@ private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
     func writePresetSlot(_ index: Int, data: PTPClientPresetData) async throws -> PTPPresetSlotWriteResult {
         try begin()
         defer { end() }
+        lock.withLock { _writeOrder.append(index) }
         try await select(index)
         if !data.name.isEmpty {
             try await mutate(expecting: index) { $0 = PTPClientPresetData(slot: $0.slot, name: data.name, filmSimulation: $0.filmSimulation) }

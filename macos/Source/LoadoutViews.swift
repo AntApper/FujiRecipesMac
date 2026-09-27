@@ -42,6 +42,7 @@ public struct LoadoutsView: View {
                             isCameraConnected: cameraManager.status == .connected,
                             isCameraSlotEmpty: loadouts.isCameraSlotEmpty(slot),
                             isWriting: cameraManager.operation == .writingSlot(slot),
+                            isCameraBusy: cameraManager.isBusy,
                             onSelect: { selectedDialSlot = slot },
                             onClear: { slotPendingLocalClear = slot },
                             onEdit: { slotToEdit = loadout },
@@ -115,7 +116,7 @@ public struct LoadoutsView: View {
                 if loadouts.dirtySlots.isEmpty { refreshCameraSlots(overwriteDrafts: false) }
                 else { showOverwriteDrafts = true }
             }
-            .disabled(cameraManager.status != .connected || cameraManager.operation == .readingSlots)
+            .disabled(cameraManager.status != .connected || cameraManager.isBusy)
             if cameraManager.operation == .readingSlots { ProgressView().controlSize(.small) }
         }
         if let refreshMessage {
@@ -276,6 +277,7 @@ public struct LoadoutCard: View {
     public var isCameraConnected: Bool = false
     public var isCameraSlotEmpty: Bool = false
     public var isWriting: Bool = false
+    public var isCameraBusy: Bool = false
     public var onSelect: () -> Void = {}
     public var onClear: () -> Void = {}
     public var onEdit: () -> Void = {}
@@ -299,6 +301,7 @@ public struct LoadoutCard: View {
         isCameraConnected: Bool = false,
         isCameraSlotEmpty: Bool = false,
         isWriting: Bool = false,
+        isCameraBusy: Bool = false,
         onSelect: @escaping () -> Void = {},
         onClear: @escaping () -> Void = {},
         onEdit: @escaping () -> Void = {},
@@ -312,6 +315,7 @@ public struct LoadoutCard: View {
         self.isCameraConnected = isCameraConnected
         self.isCameraSlotEmpty = isCameraSlotEmpty
         self.isWriting = isWriting
+        self.isCameraBusy = isCameraBusy
         self.onSelect = onSelect
         self.onClear = onClear
         self.onEdit = onEdit
@@ -651,7 +655,7 @@ public struct LoadoutCard: View {
     }
 
     private var canWriteToCamera: Bool {
-        isCameraConnected && isConfigured
+        isCameraConnected && isConfigured && !isCameraBusy
     }
 
     private func configuredBody(_ loadout: Loadout) -> some View {
@@ -868,7 +872,7 @@ public struct SlotEditorSheet: View {
                         }
                         Button("Write C\(loadout.slot) to Camera") { writeToCamera() }
                             .buttonStyle(GlassProminentButtonStyle(color: Theme.emeraldGreen, height: 34))
-                            .disabled(cameraManager.status != .connected || cameraManager.operation == .writingSlot(loadout.slot))
+                            .disabled(cameraManager.status != .connected || cameraManager.isBusy)
                     }
                     .padding(16)
                 }

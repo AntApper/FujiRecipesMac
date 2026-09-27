@@ -4,80 +4,6 @@
 import Foundation
 import FujiRecipesCore
 
-#if !canImport(Darwin)
-extension FileHandle {
-    struct LinuxAsyncBytes: AsyncSequence {
-        typealias Element = UInt8
-        let handle: FileHandle
-
-        struct AsyncIterator: AsyncIteratorProtocol {
-            let handle: FileHandle
-            var buffer = Data()
-            var index = 0
-
-            mutating func next() async throws -> UInt8? {
-                if index < buffer.count {
-                    let byte = buffer[index]
-                    index += 1
-                    return byte
-                }
-                buffer = handle.readData(ofLength: 4096)
-                index = 0
-                if buffer.isEmpty { return nil }
-                let byte = buffer[index]
-                index += 1
-                return byte
-            }
-        }
-
-        func makeAsyncIterator() -> AsyncIterator {
-            AsyncIterator(handle: handle)
-        }
-
-        var lines: LinuxAsyncLineSequence<LinuxAsyncBytes> {
-            LinuxAsyncLineSequence(self)
-        }
-    }
-
-    var bytes: LinuxAsyncBytes {
-        LinuxAsyncBytes(handle: self)
-    }
-}
-
-struct LinuxAsyncLineSequence<Base: AsyncSequence>: AsyncSequence where Base.Element == UInt8 {
-    typealias Element = String
-    let base: Base
-
-    init(_ base: Base) {
-        self.base = base
-    }
-
-    struct AsyncIterator: AsyncIteratorProtocol {
-        var baseIterator: Base.AsyncIterator
-
-        mutating func next() async throws -> String? {
-            var lineBytes: [UInt8] = []
-            while let byte = try await baseIterator.next() {
-                if byte == UInt8(ascii: "\n") {
-                    return String(decoding: lineBytes, as: UTF8.self)
-                }
-                if byte != UInt8(ascii: "\r") {
-                    lineBytes.append(byte)
-                }
-            }
-            if !lineBytes.isEmpty {
-                return String(decoding: lineBytes, as: UTF8.self)
-            }
-            return nil
-        }
-    }
-
-    func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(baseIterator: base.makeAsyncIterator())
-    }
-}
-#endif
-
 /// PTPClientProtocol implementation that spawns the x100vi_helper C executable.
 /// The C helper uses libusb to send PTP containers directly to the X100VI.
 ///
@@ -94,7 +20,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     private var lineIterator: AsyncThrowingStream<String, any Error>.Iterator?
     private var requestStreamContinuation: AsyncStream<PendingRequest>.Continuation?
     private var requestProcessorTask: Task<Void, Never>?
-    private var stderrReaderTask: Task<Void, Never>?
     private var stderrTail = ""
     private var terminationSummary: String?
     private var isConnectedFlag = false
@@ -185,32 +110,15 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
 
         try process.run()
 
-        // Build an async line iterator over the helper's stdout.  We bridge
-        // FileHandle's bytes.lines into an AsyncThrowingStream so the iterator
-        // type is simple and Sendable-friendly.
         let (lines, linesContinuation) = AsyncThrowingStream<String, any Error>.makeStream()
-        Task {
-            do {
-                for try await rawLine in stdoutPipe.fileHandleForReading.bytes.lines {
-                    linesContinuation.yield(String(rawLine))
-                }
-                linesContinuation.finish()
-            } catch {
-                linesContinuation.finish(throwing: error)
-            }
+        LineReader.start(stdoutPipe.fileHandleForReading) { line in
+            if let line { linesContinuation.yield(line) } else { linesContinuation.finish() }
         }
-
-        // The helper emits useful libusb/PTP diagnostics on stderr.  Drain it
-        // continuously (to avoid a full pipe stalling a long write) and retain
-        // only a small tail for an actionable error if the child terminates.
-        let stderrReader = Task { [weak self] in
-            do {
-                for try await rawLine in stderrPipe.fileHandleForReading.bytes.lines {
-                    self?.appendHelperStderr(String(rawLine))
-                }
-            } catch {
-                self?.appendHelperStderr("stderr reader failed: \(error.localizedDescription)")
-            }
+        // The helper emits libusb/PTP diagnostics on stderr. Drain it so a
+        // full pipe cannot stall a long write, and keep a small tail for an
+        // actionable error if the child terminates.
+        LineReader.start(stderrPipe.fileHandleForReading) { [weak self] line in
+            if let line { self?.appendHelperStderr(line) }
         }
 
         let (requestStream, requestContinuation) = AsyncStream<PendingRequest>.makeStream()
@@ -221,7 +129,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             self.errorPipe = stderrPipe
             self.lineIterator = lines.makeAsyncIterator()
             self.requestStreamContinuation = requestContinuation
-            self.stderrReaderTask = stderrReader
             self.stderrTail = ""
             self.terminationSummary = nil
         }
@@ -1018,8 +925,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             requestStreamContinuation = nil
             requestProcessorTask?.cancel()
             requestProcessorTask = nil
-            stderrReaderTask?.cancel()
-            stderrReaderTask = nil
             inputPipe = nil
             errorPipe = nil
             lineIterator = nil
@@ -1117,6 +1022,32 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
         #endif
 
         return nil
+    }
+}
+
+/// Passes each line read from a handle to `deliver`, then `nil` at end of
+/// file. Foundation serializes `FileHandle.bytes` reads, so a read parked on
+/// the helper's idle stderr would stall its stdout replies.
+private final class LineReader: @unchecked Sendable {
+    /// `readabilityHandler` calls for one handle never overlap.
+    private var pending = Data()
+
+    static func start(_ handle: FileHandle, deliver: @escaping @Sendable (String?) -> Void) {
+        let reader = LineReader()
+        handle.readabilityHandler = { handle in
+            let data = handle.availableData
+            reader.pending.append(data)
+            while let newline = reader.pending.firstIndex(of: UInt8(ascii: "\n")) {
+                deliver(String(decoding: reader.pending[..<newline], as: UTF8.self))
+                reader.pending.removeSubrange(...newline)
+            }
+            guard data.isEmpty else { return }
+            handle.readabilityHandler = nil
+            if !reader.pending.isEmpty {
+                deliver(String(decoding: reader.pending, as: UTF8.self))
+            }
+            deliver(nil)
+        }
     }
 }
 

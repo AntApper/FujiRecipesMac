@@ -235,6 +235,48 @@ final class CustomRecipeLibraryTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testCorruptFileAtInitThenSaveKeepsTheOriginalFile() throws {
+        let unreadableFiles = [
+            Data("{\"version\": 1, \"recipes\": [".utf8),
+            try JSONEncoder().encode(CustomRecipeLibraryExport(version: 2, recipes: [recipe(id: "custom-future", name: "Future")]))
+        ]
+        for original in unreadableFiles {
+            let directory = try makeDirectory()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("custom-recipes-v1.json")
+            try original.write(to: url)
+
+            let library = CustomRecipeLibrary(storageURL: url)
+            XCTAssertThrowsError(try library.save(recipe(id: "custom-new", name: "New")))
+
+            XCTAssertEqual(try Data(contentsOf: url), original)
+            let backups = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.lastPathComponent != url.lastPathComponent }
+            XCTAssertEqual(try backups.map { try Data(contentsOf: $0) }, [original])
+        }
+    }
+
+    @MainActor
+    func testOneUnreadableRecipeDoesNotHideTheOthers() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let archive = CustomRecipeLibraryExport(recipes: [
+            recipe(id: "custom-good", name: "Good"),
+            recipe(id: "custom-bad", name: "Bad")
+        ])
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(archive)) as? [String: Any])
+        var recipes = try XCTUnwrap(json["recipes"] as? [[String: Any]])
+        recipes[1]["filmSimulation"] = 9999
+        json["recipes"] = recipes
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let library = CustomRecipeLibrary(storageURL: url)
+
+        XCTAssertEqual(library.recipes.map(\.name), ["Good"])
+    }
+
     private func error(from operation: () throws -> Void) throws -> CustomRecipeLibraryError {
         do {
             try operation()

@@ -70,11 +70,7 @@ public enum SnapshotRenderer {
             return URL(fileURLWithPath: arguments[flagIndex + 1], isDirectory: true)
         }
 
-        return FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        )[0]
-        .appendingPathComponent("FujiRecipes/Snapshots", isDirectory: true)
+        return AppSupportDirectory.current.appendingPathComponent("Snapshots", isDirectory: true)
     }
 
     private static func makeFramedWindow<Content: View>(

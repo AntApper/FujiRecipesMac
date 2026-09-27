@@ -11,8 +11,8 @@ public final class LoadoutStore: ObservableObject {
     /// Slots changed locally since their last verified camera read/write.
     @Published public private(set) var dirtySlots: Set<Int> = []
     /// Bumped on every local edit to a slot, so a camera write can tell
-    /// whether the user changed the slot after the write was requested.
-    /// Camera syncs don't bump it: they only run while the camera gate is
+    /// whether the user changed the slot since the write captured it.
+    /// Camera syncs don't bump it. They only run while the camera gate is
     /// held, and a sync must not make a queued import reject its own readback.
     private var revisions: [Int: Int] = [:]
     
@@ -288,9 +288,6 @@ public final class LoadoutStore: ObservableObject {
         saveLoadouts()
     }
 
-    /// Adopts a verified write's readback only if the slot has not changed
-    /// since `revision` was captured. Otherwise the newer draft stays dirty
-    /// and staged, and only the camera's empty-slot fact is recorded.
     @discardableResult
     public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int) -> Bool {
         guard self.revision(of: observed.slot) == revision else {

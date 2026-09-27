@@ -14,7 +14,7 @@ final class CameraOperationSerializationTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Item 13: one camera operation at a time
+    // MARK: - One camera operation at a time
 
     @MainActor
     func testWriteDuringWriteAllNeverLandsInAnotherSlot() async throws {
@@ -88,7 +88,7 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertEqual(camera.maxConcurrentOperations, 1)
     }
 
-    // MARK: - Item 14: edits made during a write survive it
+    // MARK: - Edits made during a write survive it
 
     @MainActor
     func testEditMadeWhileSlotIsWritingStaysDirty() async throws {
@@ -166,7 +166,7 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertFalse(store.isDirty(4))
     }
 
-    // MARK: - Item 15: disconnect during connect
+    // MARK: - Connect and disconnect
 
     @MainActor
     func testConnectReportsSlotReadAsItsOwnStep() async {

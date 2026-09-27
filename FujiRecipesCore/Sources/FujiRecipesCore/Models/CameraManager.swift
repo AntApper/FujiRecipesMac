@@ -426,7 +426,8 @@ public final class CameraManager: ObservableObject {
                 warnings: helperResult.warnings,
                 baseline: baseline,
                 rollback: .notNeeded,
-                observedSnapshot: observedSnapshot
+                observedSnapshot: observedSnapshot,
+                differences: data.differences(from: observedSnapshot)
             )
         } catch {
             throw await recoverPresetSlotWrite(

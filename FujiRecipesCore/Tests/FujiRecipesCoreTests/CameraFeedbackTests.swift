@@ -70,6 +70,55 @@ final class CameraFeedbackTests: XCTestCase {
 
         XCTAssertNil(manager.lastError, "a complete refresh left the partial-refresh banner up")
     }
+
+    // MARK: - Write readback comparison
+
+    @MainActor
+    func testRewritingASlotThatReadsGrainSixReportsNoDifference() async throws {
+        let camera = ScriptedCamera()
+        camera.rejectedGrain = [6]
+        camera.setSlot(PTPClientPresetData(slot: 5, name: "California Summ", filmSimulation: 19, grainEffect: 6, whiteBalance: 0x8007, colorTemp: 6700))
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.updateName(for: 5, name: "California Sun")
+
+        let result = try await manager.writeSlot(5, from: store)
+
+        XCTAssertEqual(result.differences, [])
+        XCTAssertEqual(result.summary, "Wrote and verified C5.")
+        XCTAssertEqual(camera.slot(5).grainEffect, 6)
+    }
+
+    @MainActor
+    func testCopyingGrainSixIntoAnotherSlotReportsTheGrainDifference() async throws {
+        let camera = ScriptedCamera()
+        camera.rejectedGrain = [6]
+        let manager = CameraManager()
+        await manager.connect(using: camera)
+        var raw = LoadoutRawPresetState()
+        raw.grainEffect = 6
+        let copy = Loadout(slot: 3, name: "California Summ", filmSim: .nostalgicNegative, rawPreset: raw)
+
+        let result = try await manager.writeLoadout(copy, to: 3)
+
+        XCTAssertEqual(result.differences, [.grainEffect])
+        XCTAssertEqual(result.summary, "Wrote C3 with 1 difference: Grain.")
+    }
+
+    @MainActor
+    func testUnsetFieldsAndMonochromeTonesUnderAColorFilmAreNotDifferences() async throws {
+        let camera = ScriptedCamera()
+        camera.setSlot(PTPClientPresetData(slot: 3, name: "Camera 3", filmSimulation: 12, monoWarmCool: 10, grainEffect: 5, whiteBalance: 2, colorTemp: 6500, color: 20))
+        let manager = CameraManager()
+        await manager.connect(using: camera)
+        let colorRecipe = Loadout(slot: 3, name: "Chrome", filmSim: .classicChrome, wb: .auto, monoWarmCool: 0)
+
+        let result = try await manager.writeLoadout(colorRecipe, to: 3)
+
+        XCTAssertEqual(camera.slot(3).monoWarmCool, 10)
+        XCTAssertEqual(result.differences, [])
+    }
 }
 
 /// Stores every C-slot field. A write applies each field it sets unless the
@@ -145,15 +194,17 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
                 grain = old.grainEffect
                 warnings.append("0xD195: 0x201C")
             }
+            let film = data.filmSimulation ?? old.filmSimulation
+            let monochrome = film.flatMap(FilmSimulation.init(rawValue:)).map(CSlotPresetEncoder.isMonochrome) ?? false
             slots[index] = PTPClientPresetData(
                 slot: index,
                 name: data.name.isEmpty ? old.name : data.name,
                 imageQuality: data.imageQuality ?? old.imageQuality,
                 imageSize: data.imageSize ?? old.imageSize,
                 dynamicRange: data.dynamicRange ?? old.dynamicRange,
-                filmSimulation: data.filmSimulation ?? old.filmSimulation,
-                monoWarmCool: data.monoWarmCool ?? old.monoWarmCool,
-                monoMagentaGreen: data.monoMagentaGreen ?? old.monoMagentaGreen,
+                filmSimulation: film,
+                monoWarmCool: monochrome ? data.monoWarmCool ?? old.monoWarmCool : old.monoWarmCool,
+                monoMagentaGreen: monochrome ? data.monoMagentaGreen ?? old.monoMagentaGreen : old.monoMagentaGreen,
                 grainEffect: grain,
                 colorChrome: data.colorChrome ?? old.colorChrome,
                 colorChromeFxBlue: data.colorChromeFxBlue ?? old.colorChromeFxBlue,

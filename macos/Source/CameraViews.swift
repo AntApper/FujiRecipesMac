@@ -701,9 +701,7 @@ public struct CameraConnectionView: View {
                     writeStatusFeedback = "Wrote C\(slot) to the camera. You edited it during the write, so the newer draft is still staged."
                     return
                 }
-                let action = result.createdFromEmpty ? "Created & verified" : "Updated & verified"
-                let warnSuffix = result.warnings.isEmpty ? "" : " (warnings: \(result.warnings.joined(separator: ", ")))"
-                writeStatusFeedback = "✓ \(action) camera slot C\(slot)\(warnSuffix)."
+                writeStatusFeedback = result.differences.isEmpty ? "✓ \(result.summary)" : result.summary
             } catch {
                 writeStatusFeedback = "Failed to write C\(slot): \(error.localizedDescription)"
             }

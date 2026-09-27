@@ -117,10 +117,10 @@ public struct LoadoutsView: View {
         guard cameraManager.status == .connected else { return }
         Task {
             do {
-                _ = try await cameraManager.writeSlot(slot, from: loadouts)
+                let result = try await cameraManager.writeSlot(slot, from: loadouts)
                 refreshMessage = loadouts.isDirty(slot)
                     ? "Wrote C\(slot). A newer local draft is still staged."
-                    : "✓ Verified C\(slot) on camera."
+                    : result.summary
             } catch {
                 refreshMessage = "Write failed for C\(slot): \(error.localizedDescription)"
             }
@@ -961,10 +961,7 @@ public struct SlotEditorSheet: View {
                 if let observedLoadout = store.loadout(for: loadout.slot) {
                     loadout = observedLoadout
                 }
-                let action = result.createdFromEmpty ? "Created and verified" : "Updated and verified"
-                writeMessage = result.warnings.isEmpty
-                    ? "\(action) camera slot C\(loadout.slot)."
-                    : "\(action) C\(loadout.slot) with warnings: \(result.warnings.joined(separator: ", "))"
+                writeMessage = result.summary
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
                 writeMessage = cSlotWriteFailureMessage(recoveryError)
             } catch {

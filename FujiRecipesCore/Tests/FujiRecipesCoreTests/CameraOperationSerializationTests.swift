@@ -251,7 +251,9 @@ final class CameraOperationSerializationTests: XCTestCase {
 
         XCTAssertEqual(manager.operation, .idle, "an abandoned Write All kept marking slots as writing")
         XCTAssertEqual(manager.status, .disconnected)
-        XCTAssertLessThanOrEqual(results.count, 1, "Write All kept going after the disconnect")
+        XCTAssertEqual(results.map(\.slot), [2, 3, 4], "Write All left unwritten slots out of its report")
+        XCTAssertTrue(results.allSatisfy { if case .failure = $0.result { true } else { false } })
+        XCTAssertEqual(camera.writeOrder.count, 0, "Write All kept writing after the disconnect")
         XCTAssertEqual(store.stagedSlots, [2, 3, 4])
     }
 

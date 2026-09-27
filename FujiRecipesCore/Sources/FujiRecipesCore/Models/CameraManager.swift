@@ -244,8 +244,11 @@ public final class CameraManager: ObservableObject {
                 var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
 
                 for slot in loadouts.stagedSlots {
-                    guard gen == generation else { break }
                     guard loadouts.stagedSlots.contains(slot) else { continue }
+                    guard gen == generation else {
+                        results.append((slot: slot, result: .failure(CameraError.notConnected)))
+                        continue
+                    }
 
                     do {
                         let writeResult = try await writeStoredSlot(slot, from: loadouts, using: client, gen: gen)

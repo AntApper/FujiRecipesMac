@@ -295,6 +295,18 @@ final class CustomRecipeLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testDuplicatingARecipeTwiceOffersTheNextFreeName() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("custom-recipes-v1.json"), loadOnInit: false)
+        let bundled = recipe(id: "kodak-portra-400", name: "Kodak Portra 400")
+
+        try library.save(library.uniquelyNamedCopy(of: bundled), disallowNameCollision: true)
+
+        XCTAssertEqual(library.uniquelyNamedCopy(of: bundled).name, "Kodak Portra 400 (Custom 2)")
+    }
+
+    @MainActor
     func testUnreadableLibraryBlocksSavingUntilTheIssueIsAcknowledged() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

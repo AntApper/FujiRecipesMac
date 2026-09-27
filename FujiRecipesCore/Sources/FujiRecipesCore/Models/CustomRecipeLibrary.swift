@@ -170,6 +170,14 @@ public final class CustomRecipeLibrary: ObservableObject {
     @discardableResult
     public func saveCopy(of recipe: Recipe) throws -> Recipe {
         try ensurePersistenceAllowed()
+        let copy = uniquelyNamedCopy(of: recipe)
+        try save(copy, disallowNameCollision: true)
+        return copy
+    }
+
+    /// An unsaved copy named “X (Custom)”, or “X (Custom N)” with the lowest
+    /// N still free in the library.
+    public func uniquelyNamedCopy(of recipe: Recipe) -> Recipe {
         let baseName = recipe.name.isEmpty ? "Recipe" : recipe.name
         var copy = recipe.duplicated()
         var number = 1
@@ -177,7 +185,6 @@ public final class CustomRecipeLibrary: ObservableObject {
             number += 1
             copy = recipe.duplicated(name: "\(baseName) (Custom \(number))")
         }
-        try save(copy, disallowNameCollision: true)
         return copy
     }
 

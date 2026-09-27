@@ -133,7 +133,7 @@ public struct RecipeListView: View {
                                 },
                                 onDuplicate: {
                                     select(recipe)
-                                    recipeToEdit = recipe.duplicated()
+                                    recipeToEdit = store.customRecipes.uniquelyNamedCopy(of: recipe)
                                 }
                             )
                             .id(recipe.id)
@@ -321,7 +321,7 @@ public struct RecipeListView: View {
                         selectedPhotoUrl = url
                     },
                     onDuplicate: {
-                        let duplicated = recipe.duplicated()
+                        let duplicated = store.customRecipes.uniquelyNamedCopy(of: recipe)
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                             quickLookRecipe = nil
                         }

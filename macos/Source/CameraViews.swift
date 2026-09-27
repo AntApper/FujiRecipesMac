@@ -648,6 +648,43 @@ public struct CameraConnectionView: View {
                         }
                     )
                     .id("slot-\(slot)")
+                    .accessibilityIdentifier("slot-\(slot)")
+                }
+            }
+            .background {
+                // Keyboard navigation for C1–C7 slots (⌥1..⌥7)
+                ForEach(1...7, id: \.self) { slot in
+                    Button("Select C\(slot)") {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            selectedDialSlot = slot
+                        }
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
+                    .opacity(0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            }
+            .onKeyPress { keyPress in
+                if let char = keyPress.characters.first, let num = Int(String(char)), (1...7).contains(num) {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                        selectedDialSlot = num
+                    }
+                    return .handled
+                }
+                switch keyPress.key {
+                case .leftArrow, .upArrow:
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                        selectedDialSlot = max(1, selectedDialSlot - 1)
+                    }
+                    return .handled
+                case .rightArrow, .downArrow:
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                        selectedDialSlot = min(7, selectedDialSlot + 1)
+                    }
+                    return .handled
+                default:
+                    return .ignored
                 }
             }
         }

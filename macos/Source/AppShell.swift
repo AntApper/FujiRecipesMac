@@ -163,6 +163,22 @@ public struct SidebarView: View {
                                         }
                                     }
                                 )
+                                .accessibilityIdentifier("sidebar-slot-\(slot)")
+                            }
+                        }
+                        .background {
+                            // Fast keyboard navigation for C1–C7 slots (⌥1..⌥7)
+                            ForEach(1...7, id: \.self) { slot in
+                                Button("Select C\(slot)") {
+                                    withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                                        selection = .camera
+                                        selectedDialSlot = slot
+                                    }
+                                }
+                                .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
+                                .opacity(0)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
                             }
                         }
                     }
@@ -356,7 +372,12 @@ public struct SidebarView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         statusBeacon
-                        statusLabels
+
+                        Text(statusLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(1)
+
                         Spacer(minLength: 2)
 
                         Text(statusCapsuleText)
@@ -673,10 +694,10 @@ public struct SidebarDialRackRow: View {
             }
             .disabled(!hasSettings)
         }
-        .help(isDropTargeted ? "Drop to stage recipe into slot C\(slot)" : "\(assignedRecipeName) (C\(slot))")
+        .help(isDropTargeted ? "Drop to stage recipe into slot C\(slot)" : "\(assignedRecipeName) (C\(slot) · ⌥\(slot))")
         .accessibilityLabel("Dial Slot C\(slot): \(assignedRecipeName)")
         .accessibilityValue(isCameraSynced ? "Camera-Synced" : (isStagedDraft ? "Staged Draft" : "Empty Slot"))
-        .accessibilityHint("Click to inspect C\(slot) in camera staging, or drop a recipe here to stage it.")
+        .accessibilityHint("Click or press ⌥\(slot) to inspect C\(slot) in camera staging, or drop a recipe here to stage it.")
     }
 
     private var dialBadge: some View {

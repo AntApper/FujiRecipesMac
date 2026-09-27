@@ -3,10 +3,13 @@ import FujiRecipesCore
 import X100VIHelper
 import PTPClientMacOS
 
-private enum MacAppCommand {
+enum MacAppCommand {
     static let refreshRecipes = Notification.Name("com.ant.fuji-recipes.refresh-recipes")
     static let selectTab = Notification.Name("com.ant.fuji-recipes.select-tab")
+    static let selectDialSlot = Notification.Name("com.ant.fuji-recipes.select-dial-slot")
+    static let focusSearch = Notification.Name("com.ant.fuji-recipes.focus-search")
     static let tabKey = "tab"
+    static let slotKey = "slot"
 }
 
 /// Boundary for supplying a camera transport to macOS views. Tests and
@@ -111,6 +114,29 @@ struct FujiRecipesMacApp: App {
                 }
                 .keyboardShortcut("3", modifiers: .command)
             }
+            CommandGroup(after: .pasteboard) {
+                Button("Find Recipes…") {
+                    NotificationCenter.default.post(
+                        name: MacAppCommand.selectTab,
+                        object: nil,
+                        userInfo: [MacAppCommand.tabKey: AppTab.recipes.rawValue]
+                    )
+                    NotificationCenter.default.post(name: MacAppCommand.focusSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+            }
+            CommandMenu("Dial Presets") {
+                ForEach(1...7, id: \.self) { slot in
+                    Button("Select C\(slot)") {
+                        NotificationCenter.default.post(
+                            name: MacAppCommand.selectDialSlot,
+                            object: nil,
+                            userInfo: [MacAppCommand.slotKey: slot]
+                        )
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
+                }
+            }
         }
     }
 }
@@ -203,6 +229,21 @@ public struct FujiRecipesMacRoot: View {
             else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedTab = tab
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.selectDialSlot)) { notification in
+            guard let slot = notification.userInfo?[MacAppCommand.slotKey] as? Int,
+                  (1...7).contains(slot) else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                selectedTab = .camera
+                selectedDialSlot = slot
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
+            if selectedTab != .recipes {
+                withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                    selectedTab = .recipes
+                }
             }
         }
         .accessibilityAction(named: "Show Recipes") { selectedTab = .recipes }

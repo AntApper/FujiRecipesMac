@@ -22,6 +22,9 @@ public struct RecipeListView: View {
     @State private var recipeToEdit: Recipe?
     @State private var recipeToDelete: Recipe?
     @State private var customRecipeMessage: String?
+    @State private var selectedRecipeID: Recipe.ID? = nil
+    @State private var quickLookRecipe: Recipe? = nil
+    @FocusState private var isSearchFocused: Bool
 
     // Expanded cards can be substantially taller than the compact cards.
     // Top-align each adaptive grid cell so adjacent cards do not float in the
@@ -63,10 +66,21 @@ public struct RecipeListView: View {
                             RecipeCard(
                                 recipe: recipe,
                                 isExpanded: expandedRecipeIDs.contains(recipe.id),
+                                isSelected: selectedRecipeID == recipe.id,
                                 favorites: store.favorites,
                                 loadouts: store.loadouts,
                                 isCustomRecipe: store.isCustomRecipe(recipe),
+                                onSelect: {
+                                    selectedRecipeID = recipe.id
+                                },
+                                onQuickLook: {
+                                    selectedRecipeID = recipe.id
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                        quickLookRecipe = recipe
+                                    }
+                                },
                                 onToggleExpand: {
+                                    selectedRecipeID = recipe.id
                                     withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
                                         if expandedRecipeIDs.contains(recipe.id) {
                                             expandedRecipeIDs.remove(recipe.id)
@@ -112,6 +126,68 @@ public struct RecipeListView: View {
         }
         .navigationTitle("Fuji Recipes Studio")
         .searchable(text: $store.searchQuery, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
+        .modifier(SearchFocusModifier(isSearchFocused: $isSearchFocused))
+        .onChange(of: isSearchFocused) { _, focused in
+            if focused {
+                DispatchQueue.main.async {
+                    if let window = NSApp.keyWindow ?? NSApp.mainWindow,
+                       let searchField = window.findSearchField() {
+                        window.makeFirstResponder(searchField)
+                    }
+                }
+            }
+        }
+        .background {
+            // Cmd+F shortcut to focus search bar
+            Button("Find in Recipes") {
+                focusSearchField()
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+
+            // Spacebar shortcut to toggle Quick Look (disabled when search is focused)
+            Button("Toggle Quick Look") {
+                toggleQuickLook()
+            }
+            .keyboardShortcut(.space, modifiers: [])
+            .disabled(isSearchFocused)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .onKeyPress(.space) {
+            if isSearchFocused { return .ignored }
+            toggleQuickLook()
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            if quickLookRecipe != nil {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    quickLookRecipe = nil
+                }
+                return .handled
+            }
+            if isSearchFocused {
+                isSearchFocused = false
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.downArrow) {
+            if isSearchFocused { return .ignored }
+            selectNextRecipe()
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            if isSearchFocused { return .ignored }
+            selectPreviousRecipe()
+            return .handled
+        }
+        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
+            focusSearchField()
+        }
         .alert("Couldn’t Load Recipes", isPresented: Binding(
             get: { store.lastError != nil },
             set: { if !$0 { store.lastError = nil } }
@@ -239,6 +315,100 @@ public struct RecipeListView: View {
                     get: { selectedPhotoUrl != nil },
                     set: { if !$0 { selectedPhotoUrl = nil } }
                 ))
+            }
+        }
+        .overlay {
+            if let recipe = quickLookRecipe {
+                RecipeQuickLookView(
+                    recipe: recipe,
+                    isFavorite: store.favorites.isFavorite(recipe.id),
+                    loadouts: store.loadouts,
+                    isCameraConnected: cameraManager.status == .connected,
+                    onToggleFavorite: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            store.favorites.toggleFavorite(for: recipe.id)
+                        }
+                    },
+                    onDismiss: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            quickLookRecipe = nil
+                        }
+                    },
+                    onStageToSlot: { slot in
+                        Task {
+                            await load(recipe, into: slot)
+                        }
+                    },
+                    onSelectPhoto: { url in
+                        selectedPhotoUrl = url
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .animation(.spring(response: 0.28, dampingFraction: 0.8), value: quickLookRecipe?.id)
+            }
+        }
+    }
+
+    private func toggleQuickLook() {
+        guard !isSearchFocused else { return }
+        if quickLookRecipe != nil {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                quickLookRecipe = nil
+            }
+        } else {
+            let target = store.filteredRecipes.first(where: { $0.id == selectedRecipeID })
+                ?? store.filteredRecipes.first
+            if let target {
+                selectedRecipeID = target.id
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                    quickLookRecipe = target
+                }
+            }
+        }
+    }
+
+    private func selectNextRecipe() {
+        guard !store.filteredRecipes.isEmpty else { return }
+        if let currentID = selectedRecipeID,
+           let idx = store.filteredRecipes.firstIndex(where: { $0.id == currentID }) {
+            let nextIdx = min(idx + 1, store.filteredRecipes.count - 1)
+            let nextRecipe = store.filteredRecipes[nextIdx]
+            selectedRecipeID = nextRecipe.id
+            if quickLookRecipe != nil {
+                quickLookRecipe = nextRecipe
+            }
+        } else if let first = store.filteredRecipes.first {
+            selectedRecipeID = first.id
+            if quickLookRecipe != nil {
+                quickLookRecipe = first
+            }
+        }
+    }
+
+    private func selectPreviousRecipe() {
+        guard !store.filteredRecipes.isEmpty else { return }
+        if let currentID = selectedRecipeID,
+           let idx = store.filteredRecipes.firstIndex(where: { $0.id == currentID }) {
+            let prevIdx = max(idx - 1, 0)
+            let prevRecipe = store.filteredRecipes[prevIdx]
+            selectedRecipeID = prevRecipe.id
+            if quickLookRecipe != nil {
+                quickLookRecipe = prevRecipe
+            }
+        } else if let first = store.filteredRecipes.first {
+            selectedRecipeID = first.id
+            if quickLookRecipe != nil {
+                quickLookRecipe = first
+            }
+        }
+    }
+
+    private func focusSearchField() {
+        isSearchFocused = true
+        DispatchQueue.main.async {
+            if let window = NSApp.keyWindow ?? NSApp.mainWindow,
+               let searchField = window.findSearchField() {
+                window.makeFirstResponder(searchField)
             }
         }
     }
@@ -913,6 +1083,40 @@ public struct RecipeListView: View {
     }
 }
 
+// MARK: - Search Focus Helpers
+
+private struct SearchFocusModifier: ViewModifier {
+    @FocusState.Binding var isSearchFocused: Bool
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.searchFocused($isSearchFocused)
+        } else {
+            content
+        }
+    }
+}
+
+private extension NSWindow {
+    func findSearchField() -> NSSearchField? {
+        contentView?.findSearchField()
+    }
+}
+
+private extension NSView {
+    func findSearchField() -> NSSearchField? {
+        if let searchField = self as? NSSearchField {
+            return searchField
+        }
+        for subview in subviews {
+            if let found = subview.findSearchField() {
+                return found
+            }
+        }
+        return nil
+    }
+}
+
 private struct CSlotPickerSheet: View {
     let recipe: Recipe
     @ObservedObject var loadouts: LoadoutStore
@@ -1090,9 +1294,12 @@ private struct GallerySlotPill: View {
 private struct RecipeCard: View {
     let recipe: Recipe
     let isExpanded: Bool
+    var isSelected: Bool = false
     @ObservedObject var favorites: FavoritesStore
     let loadouts: LoadoutStore
     let isCustomRecipe: Bool
+    var onSelect: (() -> Void)? = nil
+    var onQuickLook: (() -> Void)? = nil
     let onToggleExpand: () -> Void
     let onQuickLoadToSlot: (Int) -> Void
     let onLoadToSlot: () -> Void
@@ -1131,31 +1338,42 @@ private struct RecipeCard: View {
         .glassCard(
             padding: 0,
             radius: Glass.cardRadius,
-            tint: isHovered ? Color.white.opacity(0.07) : Theme.glassPanelBg,
-            borderColor: isHovered ? accent.opacity(0.45) : nil
+            tint: isSelected ? Theme.fujiAmber.opacity(0.12) : (isHovered ? Color.white.opacity(0.07) : Theme.glassPanelBg),
+            borderColor: isSelected ? Theme.fujiAmber.opacity(0.85) : (isHovered ? accent.opacity(0.45) : nil)
         )
         .overlay(
-            // Top Accent Color Ribbon
+            // Top Accent Color Ribbon & Selection Ring
             RoundedRectangle(cornerRadius: Glass.cardRadius, style: .continuous)
                 .stroke(
-                    LinearGradient(
-                        colors: [accent.opacity(isHovered ? 0.75 : 0.4), Color.clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.0
+                    isSelected ? Theme.fujiAmber.opacity(0.9) : (isHovered ? accent.opacity(0.7) : Color.white.opacity(0.08)),
+                    lineWidth: isSelected ? 1.8 : 1.0
                 )
                 .allowsHitTesting(false)
         )
         .scaleEffect(isHovered ? 1.012 : 1.0)
-        .shadow(color: isHovered ? accent.opacity(0.18) : Color.clear, radius: 14, y: 6)
+        .shadow(color: isHovered ? accent.opacity(0.18) : (isSelected ? Theme.fujiAmber.opacity(0.15) : Color.clear), radius: 14, y: 6)
         .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isHovered)
         .animation(.spring(response: 0.32, dampingFraction: 0.8), value: isExpanded)
+        .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isSelected)
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                onSelect?()
+                onQuickLook?()
+            }
+        )
         .onHover { isHovered = $0 }
         .draggable(recipe) {
             RecipeDragPreview(recipe: recipe)
         }
         .contextMenu {
+            Button("Quick Look Formula (Spacebar)") {
+                onSelect?()
+                onQuickLook?()
+            }
+            .keyboardShortcut(.space, modifiers: [])
+
+            Divider()
+
             Section("Stage to Camera Dial Slot") {
                 ForEach(1...7, id: \.self) { slot in
                     let slotName = (loadouts.loadout(for: slot)?.name.isEmpty ?? true)
@@ -1187,6 +1405,7 @@ private struct RecipeCard: View {
             // Recipe Thumbnail (clean, completely unobstructed)
             previewThumbnail
                 .onTapGesture {
+                    onSelect?()
                     onToggleExpand()
                 }
 
@@ -1259,6 +1478,7 @@ private struct RecipeCard: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
+                onSelect?()
                 onToggleExpand()
             }
 
@@ -1278,12 +1498,14 @@ private struct RecipeCard: View {
                             } label: {
                                 Label("Stage to C\(slot): \(slotName)", systemImage: "dial.low.fill")
                             }
+                            .accessibilityIdentifier("send-to-dial-slot-\(slot)")
                         }
                     }
                     Divider()
                     Button("Slot Matrix / Options…") {
                         onLoadToSlot()
                     }
+                    .accessibilityIdentifier("open-slot-matrix-\(recipe.id)")
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "dial.low.fill")
@@ -1308,6 +1530,25 @@ private struct RecipeCard: View {
                 .accessibilityIdentifier("send-to-dial-\(recipe.id)")
 
                 HStack(spacing: 8) {
+                    // Quick Look eye button
+                    Button(action: {
+                        onSelect?()
+                        onQuickLook?()
+                    }) {
+                        Image(systemName: "eye")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(isHovered ? Theme.textPrimary : Theme.textTertiary)
+                            .padding(6)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Quick Look recipe formula (Spacebar or double-click)")
+                    .accessibilityLabel("Quick Look \(recipe.name)")
+                    .accessibilityIdentifier("recipe-quick-look-\(recipe.id)")
+
                     // Favorite star button
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -1685,7 +1926,7 @@ private struct SampleThumbnailButton: View {
     }
 }
 
-private struct FormulaSettingItem {
+fileprivate struct FormulaSettingItem {
     let label: String
     let value: String
 }
@@ -1738,6 +1979,331 @@ public struct PhotoLightboxView: View {
             }
         }
         .frame(minWidth: 500, minHeight: 400)
+    }
+}
+
+// MARK: - Recipe Quick Look Lightbox
+
+public struct RecipeQuickLookView: View {
+    public let recipe: Recipe
+    public let isFavorite: Bool
+    public let loadouts: LoadoutStore
+    public let isCameraConnected: Bool
+    public let onToggleFavorite: () -> Void
+    public let onDismiss: () -> Void
+    public let onStageToSlot: (Int) -> Void
+    public let onSelectPhoto: (String) -> Void
+
+    private var simName: String {
+        recipe.filmSimulation?.displayName ?? recipe.settings?["filmSimulation"] ?? "Custom Sim"
+    }
+
+    private var accent: Color {
+        Theme.filmSimColor(for: simName)
+    }
+
+    public var body: some View {
+        ZStack {
+            // Dark Frosted Backdrop
+            Theme.obsidianBlack.opacity(0.72)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    onDismiss()
+                }
+
+            // Lightbox Modal Card
+            VStack(spacing: 0) {
+                // Header Bar
+                HStack(alignment: .center, spacing: 10) {
+                    FilmSimBadge(name: simName, isCompact: false)
+
+                    if let dr = recipe.dynamicRange {
+                        Text("DR\(dr.rawValue)")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Theme.emeraldGreen)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Theme.emeraldGreen.opacity(0.18))
+                            .clipShape(Capsule())
+                    }
+
+                    KelvinChip(
+                        kelvin: recipe.colorTempK,
+                        modeName: recipe.whiteBalanceMode?.displayName ?? recipe.settings?["whiteBalance"]
+                    )
+
+                    Spacer()
+
+                    // Favorite Button
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(isFavorite ? Theme.warmGold : Theme.textTertiary)
+                            .padding(6)
+                            .background(Circle().fill(Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                    .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                    .accessibilityIdentifier("recipe-quick-look-favorite")
+
+                    // Close Button
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close Quick Look (Space or Esc)")
+                    .accessibilityLabel("Close Quick Look")
+                    .accessibilityIdentifier("recipe-quick-look-close")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+                Divider().overlay(Color.white.opacity(0.1))
+
+                // Scrollable Body
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Title & Metadata
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(recipe.name)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .accessibilityIdentifier("recipe-quick-look-title")
+
+                            HStack(spacing: 12) {
+                                if !recipe.source.isEmpty {
+                                    Label(recipe.source, systemImage: "book.closed")
+                                }
+                                if let date = recipe.dateString {
+                                    Label(date, systemImage: "calendar")
+                                }
+                                if let cams = recipe.compatibleCameras, !cams.isEmpty {
+                                    Label(cams.joined(separator: ", "), systemImage: "camera")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+
+                            if let tags = recipe.tags, !tags.isEmpty {
+                                HStack(spacing: 6) {
+                                    ForEach(tags, id: \.self) { tag in
+                                        Text("#\(tag)")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundStyle(accent.opacity(0.85))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(accent.opacity(0.12))
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                .padding(.top, 2)
+                            }
+                        }
+
+                        // Sample Photos Carousel
+                        if !recipe.imageUrls.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("SAMPLE PHOTOGRAPHS")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Theme.textTertiary)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(recipe.imageUrls, id: \.self) { urlString in
+                                            if let url = URL(string: urlString) {
+                                                SampleThumbnailButton(
+                                                    urlString: urlString,
+                                                    url: url,
+                                                    onSelect: onSelectPhoto
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Tone Curve Radar & Key Visual Readout
+                        HStack(alignment: .top, spacing: 16) {
+                            ToneCurveRadar(
+                                highlight: recipe.highlight,
+                                shadow: recipe.shadow,
+                                color: recipe.color,
+                                sharpness: recipe.sharpness,
+                                accentColor: accent
+                            )
+                            .frame(width: 110, height: 95)
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.black.opacity(0.25))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                            )
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("KEY PARAMETERS")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Theme.textTertiary)
+
+                                let items = settingRows.prefix(6)
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                                    ForEach(Array(items), id: \.label) { item in
+                                        HStack {
+                                            Text(item.label)
+                                                .font(.caption2)
+                                                .foregroundStyle(Theme.textTertiary)
+                                            Spacer()
+                                            Text(item.value)
+                                                .font(.caption2.weight(.bold))
+                                                .foregroundStyle(Color.white)
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.white.opacity(0.04))
+                                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Full Parameter Formula
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("FULL CAMERA PARAMETER FORMULA")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Theme.textTertiary)
+
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                                ForEach(settingRows, id: \.label) { item in
+                                    HStack(spacing: 6) {
+                                        Text(item.label)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(Theme.textTertiary)
+                                        Spacer(minLength: 4)
+                                        Text(item.value)
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(Theme.textPrimary)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 7)
+                                    .background(Color.black.opacity(0.3))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .padding(20)
+                }
+                .frame(maxHeight: 380)
+
+                Divider().overlay(Color.white.opacity(0.1))
+
+                // Footer Bar with 1-click Dial Staging (C1–C7)
+                HStack(spacing: 8) {
+                    Text("STAGE TO DIAL:")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+
+                    ForEach(1...7, id: \.self) { slot in
+                        let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
+                            ? "Empty"
+                            : (loadouts.loadout(for: slot)?.name ?? "Empty")
+                        Button {
+                            onStageToSlot(slot)
+                        } label: {
+                            Text("C\(slot)")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(slotAccent(slot))
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(slotAccent(slot).opacity(0.16))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .stroke(slotAccent(slot).opacity(0.4), lineWidth: 0.8)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Stage to C\(slot): \(slotName)")
+                        .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
+                    }
+
+                    Spacer()
+
+                    Button("Done") {
+                        onDismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(Color.black.opacity(0.2))
+            }
+            .frame(width: 640)
+            .fixedSize(horizontal: true, vertical: true)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.deepCharcoal.opacity(0.96))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [accent.opacity(0.7), Color.white.opacity(0.12)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.2
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: Color.black.opacity(0.7), radius: 36, y: 16)
+            .accessibilityIdentifier("recipe-quick-look-modal")
+            .padding(24)
+        }
+    }
+
+    private var settingRows: [FormulaSettingItem] {
+        var items: [FormulaSettingItem] = []
+        let raw = recipe.settings ?? [:]
+
+        func add(_ key: String, display: String) {
+            if let val = raw[key], !val.isEmpty {
+                items.append(FormulaSettingItem(label: display, value: val))
+            }
+        }
+
+        add("filmSimulation", display: "Film Sim")
+        add("dynamicRange", display: "Dynamic Range")
+        add("grainEffect", display: "Grain")
+        add("colorChromeEffect", display: "Color Chrome")
+        add("colorChromeFxBlue", display: "Chrome FX Blue")
+        add("whiteBalance", display: "White Balance")
+        if let r = recipe.wbShiftRed, let b = recipe.wbShiftBlue {
+            items.append(FormulaSettingItem(label: "WB Shift", value: "R:\(r.formatValue) B:\(b.formatValue)"))
+        }
+        add("highlight", display: "Highlight")
+        add("shadow", display: "Shadow")
+        add("color", display: "Color")
+        add("sharpness", display: "Sharpness")
+        add("highIsoNr", display: "Noise Reduction")
+        add("clarity", display: "Clarity")
+        add("iso", display: "ISO")
+        add("exposureCompensation", display: "Exp. Comp")
+
+        return items
     }
 }
 

@@ -154,8 +154,14 @@ public final class CustomRecipeLibrary: ObservableObject {
 
     @discardableResult
     public func saveCopy(of recipe: Recipe) throws -> Recipe {
-        let copy = recipe.duplicated()
-        try save(copy)
+        let baseName = recipe.name.isEmpty ? "Recipe" : recipe.name
+        var copy = recipe.duplicated()
+        var number = 1
+        while conflictingRecipe(named: copy.name) != nil {
+            number += 1
+            copy = recipe.duplicated(name: "\(baseName) (Custom \(number))")
+        }
+        try save(copy, disallowNameCollision: true)
         return copy
     }
 

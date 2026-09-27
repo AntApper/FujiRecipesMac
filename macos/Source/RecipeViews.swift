@@ -202,6 +202,19 @@ public struct RecipeListView: View {
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
             focusSearchField()
         }
+        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.showToast)) { notification in
+            guard
+                let title = notification.userInfo?[MacAppCommand.toastTitleKey] as? String,
+                let message = notification.userInfo?[MacAppCommand.toastMessageKey] as? String
+            else { return }
+            let isError = notification.userInfo?[MacAppCommand.toastIsErrorKey] as? Bool ?? false
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                activeHUDToast = HUDToast(title: title, message: message, isError: isError)
+            }
+            if !isError {
+                dismissToast(activeHUDToast, after: .seconds(3))
+            }
+        }
         .alert("Couldn’t Load Recipes", isPresented: Binding(
             get: { store.lastError != nil },
             set: { if !$0 { store.lastError = nil } }

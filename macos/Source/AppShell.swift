@@ -86,8 +86,21 @@ public struct SidebarView: View {
                                 isSelected: selection == .recipes && recipeStore.selectedFilterCategory == .myRecipes,
                                 count: recipeStore.customRecipes.recipes.count,
                                 onDropRecipe: { recipe in
-                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                                        try? recipeStore.customRecipes.saveCopy(of: recipe)
+                                    do {
+                                        let copy = try withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                            try recipeStore.customRecipes.saveCopy(of: recipe)
+                                        }
+                                        showToast(
+                                            title: "Added to My Recipes",
+                                            message: "“\(copy.name)” is ready to edit in My Recipes.",
+                                            isError: false
+                                        )
+                                    } catch {
+                                        showToast(
+                                            title: "Couldn’t Add to My Recipes",
+                                            message: error.localizedDescription,
+                                            isError: true
+                                        )
                                     }
                                 }
                             ) {
@@ -243,6 +256,20 @@ public struct SidebarView: View {
             )
         }
         .clearLocalDraftConfirmation(slot: $slotPendingLocalClear, loadouts: recipeStore.loadouts)
+    }
+
+    /// The only drag source is a recipe card, so the recipe list is on
+    /// screen to show the toast whenever a recipe is dropped here.
+    private func showToast(title: String, message: String, isError: Bool) {
+        NotificationCenter.default.post(
+            name: MacAppCommand.showToast,
+            object: nil,
+            userInfo: [
+                MacAppCommand.toastTitleKey: title,
+                MacAppCommand.toastMessageKey: message,
+                MacAppCommand.toastIsErrorKey: isError
+            ]
+        )
     }
 
     private func simShortcutRow(title: String, family: RecipeStore.FilmSimFamily) -> some View {

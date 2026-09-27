@@ -46,7 +46,7 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.photography"
         PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-recipes-mac
         DEVELOPMENT_TEAM: ""
-      configurations:
+      configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.ant.fuji-recipes-mac.debug
           SWIFT_OPTIMIZATION_LEVEL: "-Onone"

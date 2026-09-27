@@ -168,28 +168,7 @@ public struct CameraConnectionView: View {
         } message: {
             Text("This clears all 7 local recipe drafts in FujiRecipes. It does not modify or clear the camera's physical slots.")
         }
-        .confirmationDialog(
-            "Clear Local Draft?",
-            isPresented: Binding(
-                get: { slotPendingLocalClear != nil },
-                set: { if !$0 { slotPendingLocalClear = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Clear Local Draft", role: .destructive) {
-                if let slot = slotPendingLocalClear {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        loadouts.clearLoadout(for: slot)
-                    }
-                }
-                slotPendingLocalClear = nil
-            }
-            Button("Cancel", role: .cancel) { slotPendingLocalClear = nil }
-        } message: {
-            if let slot = slotPendingLocalClear {
-                Text("This removes only FujiRecipes’ local draft for C\(slot). It does not clear, reset, or otherwise change the physical camera slot.")
-            }
-        }
+        .clearLocalDraftConfirmation(slot: $slotPendingLocalClear, loadouts: loadouts)
     }
 
     private var hardwareStatusCard: some View {

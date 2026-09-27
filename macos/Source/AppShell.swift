@@ -16,6 +16,7 @@ public struct SidebarView: View {
     public var onToggleConnection: (() -> Void)? = nil
 
     @State private var slotToEdit: Loadout? = nil
+    @State private var slotPendingLocalClear: Int?
 
     public init(
         selection: Binding<AppTab>,
@@ -167,11 +168,7 @@ public struct SidebarView: View {
                                         selectedDialSlot = slot
                                         slotToEdit = loadout ?? Loadout(slot: slot, name: "C\(slot)", filmSim: nil, dr: nil)
                                     },
-                                    onClear: {
-                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                            recipeStore.loadouts.clearLoadout(for: slot)
-                                        }
-                                    }
+                                    onClear: { slotPendingLocalClear = slot }
                                 )
                                 .accessibilityIdentifier("sidebar-slot-\(slot)")
                             }
@@ -245,6 +242,7 @@ public struct SidebarView: View {
                 )
             )
         }
+        .clearLocalDraftConfirmation(slot: $slotPendingLocalClear, loadouts: recipeStore.loadouts)
     }
 
     private func simShortcutRow(title: String, family: RecipeStore.FilmSimFamily) -> some View {
@@ -699,7 +697,7 @@ public struct SidebarDialRackRow: View {
             Button(role: .destructive) {
                 onClear()
             } label: {
-                Label("Clear Slot C\(slot)", systemImage: "trash")
+                Label("Clear Local Draft for C\(slot)…", systemImage: "trash")
             }
             .disabled(!hasSettings)
         }

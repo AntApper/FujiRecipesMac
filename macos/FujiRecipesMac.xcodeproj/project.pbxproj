@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		043AD41065F4A9AD76C04E74 /* RecipeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC371735BC4BE498B7BF9A0 /* RecipeViews.swift */; };
 		24B31F960B0B43E375CF1D1B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AD7A6F106493948957478B5B /* Assets.xcassets */; };
+		355B62A657030EA52AD80135 /* ClearLocalDraftConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C8E4746DA4B341CE31EBADA /* ClearLocalDraftConfirmation.swift */; };
 		373062E6DA8679E86394D835 /* CameraViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6526C64BD5A31DE03741605 /* CameraViews.swift */; };
 		45EFA24FF8F369002892B6A9 /* LoadoutViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6494D55A29495559D79BEE6E /* LoadoutViews.swift */; };
 		5ED7AA79B7F83488945017F0 /* AppShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D9D05BF55F33F8B8D9A510 /* AppShell.swift */; };
@@ -51,6 +52,7 @@
 		643A538049390048D12E91B5 /* libusb-1.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = "libusb-1.0.0.dylib"; sourceTree = "<group>"; };
 		6494D55A29495559D79BEE6E /* LoadoutViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadoutViews.swift; sourceTree = "<group>"; };
 		6851A2512123A82969DC7612 /* CustomRecipeEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomRecipeEditor.swift; sourceTree = "<group>"; };
+		6C8E4746DA4B341CE31EBADA /* ClearLocalDraftConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClearLocalDraftConfirmation.swift; sourceTree = "<group>"; };
 		88413BAFB0BF741AB89BB55A /* DataRecoveryAlerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataRecoveryAlerts.swift; sourceTree = "<group>"; };
 		9124BD8B00AD84C5CC9A1337 /* x100vi_helper.provenance.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = x100vi_helper.provenance.json; sourceTree = "<group>"; };
 		A22A780E87320959E804670A /* libusb-COPYING.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "libusb-COPYING.txt"; sourceTree = "<group>"; };
@@ -105,6 +107,7 @@
 				2C1B1FA821F3994E5F677084 /* AppAssets.swift */,
 				C2D9D05BF55F33F8B8D9A510 /* AppShell.swift */,
 				E6526C64BD5A31DE03741605 /* CameraViews.swift */,
+				6C8E4746DA4B341CE31EBADA /* ClearLocalDraftConfirmation.swift */,
 				6851A2512123A82969DC7612 /* CustomRecipeEditor.swift */,
 				88413BAFB0BF741AB89BB55A /* DataRecoveryAlerts.swift */,
 				D358801E89EFF05B57002EA9 /* GlassDesign.swift */,
@@ -279,6 +282,7 @@
 				8155F6370B1D2124F2D1DD7B /* AppAssets.swift in Sources */,
 				5ED7AA79B7F83488945017F0 /* AppShell.swift in Sources */,
 				373062E6DA8679E86394D835 /* CameraViews.swift in Sources */,
+				355B62A657030EA52AD80135 /* ClearLocalDraftConfirmation.swift in Sources */,
 				9FF07632BA1FC353708A9472 /* CustomRecipeEditor.swift in Sources */,
 				FF2378798AF50191551E6774 /* DataRecoveryAlerts.swift in Sources */,
 				6A6CECFA4A8810323C7EAB2B /* GlassDesign.swift in Sources */,

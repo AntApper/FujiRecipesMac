@@ -198,6 +198,23 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertEqual(manager.status, .disconnected)
         XCTAssertNil(manager.lastError, "a write that failed because of the user's disconnect reported an error banner")
     }
+
+    @MainActor
+    func testStaleDisconnectHandlerDoesNotEndNextConnection() async {
+        let first = SlotRegisterCamera()
+        let second = SlotRegisterCamera()
+        let manager = CameraManager()
+        await manager.connect(using: first)
+
+        first.unplug()
+        manager.disconnect()
+        await manager.connect(using: second)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(manager.status, .connected)
+        XCTAssertTrue(second.isConnected, "the first connection's unplug event closed the second connection")
+        XCTAssertFalse(manager.isBusy)
+    }
 }
 
 // MARK: - Slot-register camera

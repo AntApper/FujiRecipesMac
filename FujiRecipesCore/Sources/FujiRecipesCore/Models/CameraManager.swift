@@ -27,8 +27,9 @@ public final class CameraManager: ObservableObject {
 
     private var client: PTPClientProtocol?
     private var connectionMonitorTask: Task<Void, Never>?
-    /// Bumped by `disconnect()`. Work captured under an older value belongs
-    /// to an ended connection and must not touch the gate or published state.
+    /// Bumped by `connect` and `disconnect()`. Work captured under an older
+    /// value belongs to an ended connection and must not touch the gate or
+    /// published state.
     private var generation = 0
     private var gateWaiters: [CheckedContinuation<Void, Error>] = []
 
@@ -38,6 +39,7 @@ public final class CameraManager: ObservableObject {
         guard status != .connecting, status != .connected else { return }
 
         DebugLogger.info("CameraManager.connect() called", category: .camera)
+        generation += 1
         let gen = generation
         status = .connecting
         operation = .connecting
@@ -47,7 +49,7 @@ public final class CameraManager: ObservableObject {
 
         session.setDisconnectHandler { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.generation == gen else { return }
                 if self.status == .connected || self.status == .connecting {
                     DebugLogger.info("Camera USB physical disconnection detected", category: .camera)
                     self.disconnect()
@@ -59,6 +61,7 @@ public final class CameraManager: ObservableObject {
             try await withTimeout(timeout: 15.0) {
                 try await session.connect()
             }
+            guard gen == generation else { return }
 
             let info = session.cameraInfo
             self.cameraInfo = PTPCameraInfo(
@@ -67,19 +70,27 @@ public final class CameraManager: ObservableObject {
             )
             // Active settings can fail for properties not supported in the current
             // USB mode; don't let that fail the whole connection.
-            activeSettingsState = await readAllActiveSettings(using: session)
+            let activeSettings = await readAllActiveSettings(using: session)
+            guard gen == generation else { return }
+            activeSettingsState = activeSettings
 
             // Keep dirty drafts: anything staged while offline still needs writing.
             if let loadouts {
                 operation = .readingSlots
                 _ = await refreshSlots(into: loadouts, overwriteDirtyDrafts: false, using: session, gen: gen)
+                guard gen == generation else { return }
             }
 
+            guard session.isConnected else {
+                disconnect()
+                return
+            }
             status = .connected
             operation = .idle
             release(gen)
-            startConnectionMonitor()
+            startConnectionMonitor(gen)
         } catch {
+            guard gen == generation else { return }
             status = .error
             operation = .failed("Connection failed")
             lastError = "Connection failed. Check the USB connection and camera mode, then retry. \(error.localizedDescription)"
@@ -108,14 +119,14 @@ public final class CameraManager: ObservableObject {
         lastSlotRefresh = nil
     }
 
-    private func startConnectionMonitor() {
+    private func startConnectionMonitor(_ gen: Int) {
         connectionMonitorTask?.cancel()
         connectionMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                guard let self = self, self.status == .connected else { break }
-                if let client = self.client, !client.isConnected {
+                guard let self = self, self.generation == gen, self.status == .connected else { break }
+                guard let client = self.client, client.isConnected else {
                     DebugLogger.info("Camera client reported isConnected == false; setting status to disconnected", category: .camera)
                     self.disconnect()
                     break
@@ -127,8 +138,11 @@ public final class CameraManager: ObservableObject {
     // MARK: - Active Settings
 
     public func readActiveSettings() async {
-        _ = try? await exclusive(nil) { client, _ in
-            activeSettingsState = await readAllActiveSettings(using: client)
+        _ = try? await exclusive(nil) { client, gen in
+            let state = await readAllActiveSettings(using: client)
+            if gen == generation {
+                activeSettingsState = state
+            }
         }
     }
 
@@ -169,6 +183,7 @@ public final class CameraManager: ObservableObject {
             Dictionary(uniqueKeysWithValues: (1...7).map { ($0, store.revision(of: $0)) })
         }
         let result = await readSlots(using: client)
+        guard gen == generation else { return result }
         lastSlotRefresh = result
         if let loadouts, !result.presets.isEmpty {
             let presets = overwriteDirtyDrafts
@@ -280,9 +295,9 @@ public final class CameraManager: ObservableObject {
         // Profile modification is intentionally unsupported for the X100VI pipeline.
         _ = profileModifier
         do {
-            return try await exclusive(.convertingRAF) { client, _ in
+            return try await exclusive(.convertingRAF) { client, gen in
                 let outcome = await client.convertRAF(raf, profileModifier: nil)
-                if case .failed(let message) = outcome {
+                if gen == generation, case .failed(let message) = outcome {
                     operation = .failed("RAW conversion failed")
                     lastError = "RAW conversion failed: \(message)"
                 }
@@ -378,8 +393,10 @@ public final class CameraManager: ObservableObject {
         do {
             return try await writePresetSlotRecoverably(data(), to: slot, using: client)
         } catch {
-            operation = .failed("C\(slot) write failed")
-            lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
+            if gen == generation {
+                operation = .failed("C\(slot) write failed")
+                lastError = "C\(slot) was not verified on camera: \(error.localizedDescription)"
+            }
             throw error
         }
     }

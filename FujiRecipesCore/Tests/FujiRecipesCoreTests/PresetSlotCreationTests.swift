@@ -220,7 +220,7 @@ final class PresetSlotCreationTests: XCTestCase {
         await manager.connect(using: client, loadouts: LoadoutStore())
 
         XCTAssertEqual(manager.status, .connected)
-        XCTAssertEqual(client.readPropertyCodes, [])
+        XCTAssertEqual(client.readPropertyCodes, [0xD18C])
         XCTAssertEqual(client.readSlots, [1, 2, 3, 4, 5, 6, 7])
     }
 

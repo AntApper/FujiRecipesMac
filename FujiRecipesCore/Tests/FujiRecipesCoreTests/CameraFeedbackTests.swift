@@ -146,6 +146,36 @@ final class CameraFeedbackTests: XCTestCase {
         )
     }
 
+    func testWriteAllSummaryNamesSlotsCreatedFromEmpty() {
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [(slot: 4, result: .success(PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true)))]),
+            "Created and verified C4."
+        )
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [2, 4, 5].map { (slot: $0, result: .success(PTPPresetSlotWriteResult(slot: $0, createdFromEmpty: $0 == 4))) }),
+            "Wrote and verified all 3 staged slots. Created C4 from an empty slot."
+        )
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [2, 4, 6].map { (slot: $0, result: .success(PTPPresetSlotWriteResult(slot: $0, createdFromEmpty: $0 != 2))) }),
+            "Wrote and verified all 3 staged slots. Created C4 and C6 from empty slots."
+        )
+    }
+
+    func testWriteSummaryUsesTheCreatedVerbAndNotesAnEditDuringTheWrite() {
+        XCTAssertEqual(
+            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, differences: [.grainEffect]).summary,
+            "Created C4 with 1 difference: Grain."
+        )
+        XCTAssertEqual(
+            PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color], draftEditedDuringWrite: true).summary,
+            "Wrote C3 with 2 differences: Grain, Color. You edited it during the write, so the newer draft is still staged."
+        )
+        XCTAssertEqual(
+            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, draftEditedDuringWrite: true).summary,
+            "Created C4. You edited it during the write, so the newer draft is still staged."
+        )
+    }
+
     func testWriteAllSummaryListsDifferencesAndFailuresWithReasons() {
         let outcomes: [SlotWriteOutcome] = [
             (slot: 2, result: .success(PTPPresetSlotWriteResult(slot: 2))),

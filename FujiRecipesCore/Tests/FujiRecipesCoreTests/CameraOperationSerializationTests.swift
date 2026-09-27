@@ -109,6 +109,45 @@ final class CameraOperationSerializationTests: XCTestCase {
     }
 
     @MainActor
+    func testWriteAllReportsASlotEditedDuringItsWrite() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.applyRecipe(Recipe(id: "three", name: "Three", source: "test", sourceUrl: nil, filmSimulation: .eterna), to: 3)
+
+        let writeAll = Task { await manager.writeAllStagedSlots(from: store) }
+        await camera.waitUntilBusy()
+        store.setHighlight(for: 3, highlight: 2)
+        let outcomes = await writeAll.value
+
+        let result = try XCTUnwrap(outcomes.first { $0.slot == 3 }).result.get()
+        XCTAssertTrue(result.draftEditedDuringWrite)
+        XCTAssertFalse(result.isVerified)
+        XCTAssertEqual(
+            WriteAllSummary.text(for: outcomes),
+            "Wrote 1 of 1 slot. Wrote C3. You edited it during the write, so the newer draft is still staged."
+        )
+    }
+
+    @MainActor
+    func testSingleWriteReportsASlotEditedDuringItsWrite() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.applyRecipe(Recipe(id: "three", name: "Three", source: "test", sourceUrl: nil, filmSimulation: .eterna), to: 3)
+
+        let write = Task { try await manager.writeSlot(3, from: store) }
+        await camera.waitUntilBusy()
+        store.setHighlight(for: 3, highlight: 2)
+        let result = try await write.value
+
+        XCTAssertTrue(result.draftEditedDuringWrite)
+        XCTAssertEqual(result.summary, "Wrote C3. You edited it during the write, so the newer draft is still staged.")
+    }
+
+    @MainActor
     func testWriteSlotAdoptsReadbackForUntouchedSlot() async throws {
         let camera = SlotRegisterCamera()
         let store = LoadoutStore()
@@ -119,6 +158,8 @@ final class CameraOperationSerializationTests: XCTestCase {
 
         let result = try await manager.writeSlot(6, from: store)
 
+        XCTAssertFalse(result.draftEditedDuringWrite)
+        XCTAssertEqual(result.summary, "Wrote and verified C6.")
         XCTAssertEqual(result.observedSnapshot?.name, "Six")
         XCTAssertFalse(store.isDirty(6))
         XCTAssertEqual(store.loadout(for: 6)?.provenance, .cameraSynced)

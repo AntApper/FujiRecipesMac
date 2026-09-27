@@ -129,11 +129,7 @@ public final class CustomRecipeLibrary: ObservableObject {
     }
 
     public static func defaultStorageURL() -> URL {
-        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        return root
-            .appendingPathComponent("FujiRecipes", isDirectory: true)
-            .appendingPathComponent("custom-recipes-v1.json")
+        AppSupportDirectory.current.appendingPathComponent("custom-recipes-v1.json")
     }
 
     private func persist() throws {

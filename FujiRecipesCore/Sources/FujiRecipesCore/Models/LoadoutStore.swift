@@ -23,6 +23,9 @@ public final class LoadoutStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: loadoutsKey),
            let loadouts = try? JSONDecoder().decode([Loadout].self, from: data) {
             self.loadouts = loadouts.sorted { $0.slot < $1.slot }
+            // Only loadouts persist, so a draft staged in an earlier session
+            // must be re-marked or the next camera sync would discard it.
+            dirtySlots = Set(loadouts.filter { $0.provenance == .localDraft && $0.hasAnySettings }.map(\.slot))
             print("✅ LOADED \(loadouts.count) loadouts from UserDefaults")
         } else {
             self.loadouts = (1...7).map { Loadout(slot: $0, name: "C\($0)", filmSim: nil, dr: nil) }
@@ -48,6 +51,15 @@ public final class LoadoutStore: ObservableObject {
 
     public func isDirty(_ slot: Int) -> Bool {
         dirtySlots.contains(slot)
+    }
+
+    /// Slots holding local settings the camera doesn't have yet. A cleared
+    /// draft has no settings, so it is never written over the camera slot.
+    public var stagedSlots: [Int] {
+        loadouts
+            .filter { $0.hasAnySettings && ($0.provenance != .cameraSynced || isDirty($0.slot)) }
+            .map(\.slot)
+            .sorted()
     }
 
     private func update(_ slot: Int, save: Bool = true, _ mutate: (inout Loadout) -> Void) {

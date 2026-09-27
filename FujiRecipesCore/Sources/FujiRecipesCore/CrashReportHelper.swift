@@ -13,10 +13,7 @@ public final class CrashReportHelper: @unchecked Sendable {
     
     private nonisolated(unsafe) static let fileManager = FileManager.default
     private static var reportDirectory: URL? {
-        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return nil
-        }
-        let dir = appSupport.appendingPathComponent("FujiRecipes", isDirectory: true)
+        let dir = AppSupportDirectory.current
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

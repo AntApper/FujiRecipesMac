@@ -81,6 +81,9 @@ final class CustomRecipeLibraryUITests: XCTestCase {
         let sendToDial = element("send-to-dial-\(fixtureID)")
         XCTAssertTrue(sendToDial.waitForExistence(timeout: 5))
         sendToDial.click()
+        let slotMatrix = app.menuItems["Slot Matrix / Options…"]
+        XCTAssertTrue(slotMatrix.waitForExistence(timeout: 3))
+        slotMatrix.click()
         XCTAssertTrue(element("send-to-dial-slot-1").waitForExistence(timeout: 3))
         XCTAssertTrue(element("c-slot-picker-local-draft-notice").waitForExistence(timeout: 3))
     }

@@ -9,6 +9,7 @@ allow_developer_rpaths=false
 minimum_macos="14.0"
 expected_version=""
 expected_build=""
+expected_bundle_id="com.ant.fuji-recipes-mac"
 
 usage() {
   cat <<'EOF'
@@ -27,6 +28,8 @@ Options:
   --minimum-macos VERSION    Reject code built for a newer macOS (default 14.0)
   --expected-version VALUE   Require CFBundleShortVersionString to match
   --expected-build VALUE     Require CFBundleVersion to match
+  --expected-bundle-id VALUE Require CFBundleIdentifier to match
+                             (default com.ant.fuji-recipes-mac)
 EOF
 }
 
@@ -44,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --minimum-macos) minimum_macos="${2:-}"; shift 2 ;;
     --expected-version) expected_version="${2:-}"; shift 2 ;;
     --expected-build) expected_build="${2:-}"; shift 2 ;;
+    --expected-bundle-id) expected_bundle_id="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -74,7 +78,7 @@ plutil -lint "$plist" >/dev/null
 bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")"
 bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
 bundle_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")"
-[[ "$bundle_identifier" == "com.ant.fuji-recipes-mac" ]] ||
+[[ "$bundle_identifier" == "$expected_bundle_id" ]] ||
   fail "unexpected bundle identifier: $bundle_identifier"
 [[ "$bundle_version" != *'$('* && "$bundle_version" != "" ]] ||
   fail "CFBundleShortVersionString must be a concrete release version"

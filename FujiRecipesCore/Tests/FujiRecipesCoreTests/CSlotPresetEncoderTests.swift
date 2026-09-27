@@ -442,6 +442,24 @@ final class CSlotPresetEncoderTests: XCTestCase {
         }
     }
 
+    func testRecipeLoaderFindsCatalogNestedInBundleSubdirectory() throws {
+        let bundleURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NestedRecipes-\(UUID().uuidString).bundle", isDirectory: true)
+        let nested = bundleURL.appendingPathComponent("Contents/Resources/Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: bundleURL) }
+        try FileManager.default.copyItem(
+            at: bundledRecipeURL(),
+            to: nested.appendingPathComponent("recipes-data.json")
+        )
+        let bundle = try XCTUnwrap(Bundle(url: bundleURL))
+
+        XCTAssertEqual(try RecipeLoader.loadRecipes(from: bundle, subdirectory: "Resources").count, 50)
+        XCTAssertThrowsError(try RecipeLoader.loadRecipes(from: bundle)) { error in
+            XCTAssertEqual(error as? RecipeLoaderError, .fileNotFound)
+        }
+    }
+
     @MainActor
     func testHalfStepShadowSurvivesRecipeAndLoadoutEncode() throws {
         let defaults = UserDefaults.standard
@@ -500,14 +518,17 @@ final class CSlotPresetEncoderTests: XCTestCase {
     }
 
     private func bundledRecipeDatabase() throws -> RecipesData {
+        try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: bundledRecipeURL()))
+    }
+
+    private func bundledRecipeURL() -> URL {
         let testFile = URL(fileURLWithPath: #filePath)
         let repository = testFile
             .deletingLastPathComponent() // FujiRecipesCoreTests
             .deletingLastPathComponent() // Tests
             .deletingLastPathComponent() // FujiRecipesCore
             .deletingLastPathComponent() // repository root
-        let resource = repository.appendingPathComponent("macos/Resources/recipes-data.json")
-        return try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
+        return repository.appendingPathComponent("macos/Resources/recipes-data.json")
     }
 
     private func recipe(

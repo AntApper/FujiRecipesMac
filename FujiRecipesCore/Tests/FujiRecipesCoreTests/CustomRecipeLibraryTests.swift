@@ -3,6 +3,17 @@ import XCTest
 
 final class CustomRecipeLibraryTests: XCTestCase {
     @MainActor
+    func testOnlyReleaseIdentityUsesTheReleaseSupportFolder() {
+        XCTAssertEqual(AppSupportDirectory.url(forBundleIdentifier: "com.ant.fuji-recipes-mac").lastPathComponent, "FujiRecipes")
+        XCTAssertEqual(
+            AppSupportDirectory.url(forBundleIdentifier: "com.ant.fuji-recipes-mac.debug").lastPathComponent,
+            "FujiRecipes-com.ant.fuji-recipes-mac.debug"
+        )
+        XCTAssertEqual(AppSupportDirectory.url(forBundleIdentifier: nil).lastPathComponent, "FujiRecipes-unbundled")
+        XCTAssertNotEqual(CustomRecipeLibrary.defaultStorageURL().deletingLastPathComponent().lastPathComponent, "FujiRecipes")
+    }
+
+    @MainActor
     func testSavePersistsAndReloadsRecipe() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

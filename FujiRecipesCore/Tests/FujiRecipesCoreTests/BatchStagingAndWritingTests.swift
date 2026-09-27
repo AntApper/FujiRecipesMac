@@ -296,7 +296,69 @@ final class BatchStagingAndWritingTests: XCTestCase {
         XCTAssertTrue(store.isDirty(2))
     }
 
+    @MainActor
+    func testConnectKeepsStagedDraftsAndSyncsUntouchedSlots() async {
+        let mockClient = seededCameraClient()
+        let store = LoadoutStore()
+        store.applyRecipe(
+            Recipe(id: "offline", name: "Offline Draft", source: "test", sourceUrl: nil, filmSimulation: .velvia),
+            to: 1
+        )
+
+        await CameraManager().connect(using: mockClient, loadouts: store)
+
+        XCTAssertEqual(store.loadout(for: 1)?.name, "Offline Draft")
+        XCTAssertTrue(store.isDirty(1))
+        XCTAssertEqual(store.loadout(for: 2)?.name, "Camera 2")
+        XCTAssertEqual(store.loadout(for: 2)?.provenance, .cameraSynced)
+    }
+
+    @MainActor
+    func testConnectKeepsDraftsStagedBeforeRelaunch() async {
+        LoadoutStore().applyRecipe(
+            Recipe(id: "offline", name: "Offline Draft", source: "test", sourceUrl: nil, filmSimulation: .velvia),
+            to: 3
+        )
+        let relaunched = LoadoutStore()
+
+        await CameraManager().connect(using: seededCameraClient(), loadouts: relaunched)
+
+        XCTAssertEqual(relaunched.loadout(for: 3)?.name, "Offline Draft")
+        XCTAssertEqual(relaunched.stagedSlots, [3])
+    }
+
+    @MainActor
+    func testWriteAllStagedSlotsSkipsCameraSyncedAndClearedSlots() async {
+        let mockClient = seededCameraClient()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: mockClient, loadouts: store)
+        store.applyRecipe(
+            Recipe(id: "r2", name: "Staged Two", source: "test", sourceUrl: nil, filmSimulation: .velvia),
+            to: 2
+        )
+        store.clearLoadout(for: 5)
+        XCTAssertEqual(store.stagedSlots, [2])
+
+        let results = await manager.writeAllStagedSlots(from: store)
+
+        XCTAssertEqual(results.map(\.slot), [2])
+        XCTAssertEqual(mockClient.writtenSlots, [2])
+    }
+
     // MARK: - Helpers
+
+    private func seededCameraClient() -> BatchMockPTPClient {
+        let client = BatchMockPTPClient()
+        for slot in 1...7 {
+            client.slotPresets[slot] = PTPClientPresetData(
+                slot: slot,
+                name: "Camera \(slot)",
+                filmSimulation: FilmSimulation.classicChrome.rawValue
+            )
+        }
+        return client
+    }
 
     private func makeRecipeJSON(
         presetSettings: [String: Double],
@@ -328,7 +390,7 @@ private final class BatchMockPTPClient: PTPClientProtocol, @unchecked Sendable {
     var cameraInfo = PTPCameraInfo(model: "FUJIFILM X100VI")
     var failSlots: Set<Int> = []
     private(set) var writtenSlots: [Int] = []
-    private var slotPresets: [Int: PTPClientPresetData] = [:]
+    var slotPresets: [Int: PTPClientPresetData] = [:]
 
     init() {
         for slot in 1...7 {

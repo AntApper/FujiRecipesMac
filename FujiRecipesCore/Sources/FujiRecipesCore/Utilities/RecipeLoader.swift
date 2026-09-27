@@ -87,8 +87,8 @@ public struct RecipeJSON: Codable, Sendable {
 public enum RecipeLoader {
     /// Load recipes from `recipes-data.json` in the given bundle.
     /// - Returns: Recipes sorted by film-simulation display name, then recipe name.
-    public static func loadRecipes(from bundle: Bundle) throws -> [Recipe] {
-        guard let url = bundle.url(forResource: "recipes-data", withExtension: "json") else {
+    public static func loadRecipes(from bundle: Bundle, subdirectory: String? = nil) throws -> [Recipe] {
+        guard let url = bundle.url(forResource: "recipes-data", withExtension: "json", subdirectory: subdirectory) else {
             throw RecipeLoaderError.fileNotFound
         }
 

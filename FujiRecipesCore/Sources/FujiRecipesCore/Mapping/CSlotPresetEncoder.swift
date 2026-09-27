@@ -6,6 +6,11 @@ import Foundation
 /// rather than active-shooting property values. In particular, tone-family values
 /// are signed 16-bit tenths and High ISO NR uses Fuji's non-linear encoding.
 public enum CSlotPresetEncoder {
+    /// X100VI (firmware 1.31) accepts highlight and shadow from −2 to +4 and
+    /// rejects anything outside with 0x201C.
+    public static let highlightShadowRange: ClosedRange<Int32> = -2...4
+    public static let colorSharpnessRange: ClosedRange<Int32> = -4...4
+
     /// Fuji's C-slot High ISO NR lookup, verified against FilmKit's raw preset
     /// mapping. These are UInt16 bit patterns, including the `0x8000` value.
     public static let highIsoNRRawValues: [Int32: UInt32] = [
@@ -143,10 +148,10 @@ public enum CSlotPresetEncoder {
 
         let rawWBShiftRed = try rawPreset?.wbShiftRed ?? wbShiftRed.map { try rawShift($0, property: 0xD19A) }
         let rawWBShiftBlue = try rawPreset?.wbShiftBlue ?? wbShiftBlue.map { try rawShift($0, property: 0xD19B) }
-        let rawHighlight = try rawPreset?.highlight ?? highlight.map { try rawTenths($0, property: 0xD19D, range: -2...4) }
-        let rawShadow = try rawPreset?.shadow ?? shadow.map { try rawTenths($0, property: 0xD19E, range: -2...4) }
-        let rawColor = try rawPreset?.color ?? color.map { try rawTenths($0, property: 0xD19F, range: -4...4) }
-        let rawSharpness = try rawPreset?.sharpness ?? sharpness.map { try rawTenths($0, property: 0xD1A0, range: -4...4) }
+        let rawHighlight = try rawPreset?.highlight ?? highlight.map { try rawTenths($0, property: 0xD19D, range: highlightShadowRange) }
+        let rawShadow = try rawPreset?.shadow ?? shadow.map { try rawTenths($0, property: 0xD19E, range: highlightShadowRange) }
+        let rawColor = try rawPreset?.color ?? color.map { try rawTenths($0, property: 0xD19F, range: colorSharpnessRange) }
+        let rawSharpness = try rawPreset?.sharpness ?? sharpness.map { try rawTenths($0, property: 0xD1A0, range: colorSharpnessRange) }
         let rawHighIsoNr = try rawPreset?.highIsoNr ?? highIsoNr.map(rawHighIsoNR)
         let rawClarity = try rawPreset?.clarity ?? clarity.map { try rawTenths($0, property: 0xD1A2, range: -5...5) }
 

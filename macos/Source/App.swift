@@ -35,12 +35,27 @@ private enum MacAppLaunchConfiguration {
         if let path = ProcessInfo.processInfo.environment["FUJI_RECIPES_CUSTOM_LIBRARY_PATH"],
            !path.isEmpty {
             return RecipeStore(
+                recipeLoading: loadBundledRecipes,
                 customRecipes: CustomRecipeLibrary(storageURL: URL(fileURLWithPath: path))
             )
         }
         #endif
-        return RecipeStore()
+        return RecipeStore(recipeLoading: loadBundledRecipes)
     }
+}
+
+/// Packaged apps and the Xcode project copy `recipes-data.json` into the main
+/// bundle. A bare SwiftPM build only has it in this target's resource bundle,
+/// nested under the `Resources` folder name from `Package.swift`, and
+/// `Bundle.module` only exists (and traps if missing) under SwiftPM.
+@MainActor
+func loadBundledRecipes() throws -> [Recipe] {
+    #if SWIFT_PACKAGE
+    if Bundle.main.url(forResource: "recipes-data", withExtension: "json") == nil {
+        return try RecipeLoader.loadRecipes(from: .module, subdirectory: "Resources")
+    }
+    #endif
+    return try RecipeLoader.loadRecipes(from: .main)
 }
 
 @main

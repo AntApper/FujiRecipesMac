@@ -50,6 +50,10 @@ cd "$(dirname "$0")"
 
 APP_NAME="Fuji Recipes"
 BUNDLE_ID="com.ant.fuji-recipes-mac"
+# Debug packages must not share defaults or data with an installed release.
+if [[ "$CONFIG" == "debug" ]]; then
+  BUNDLE_ID="com.ant.fuji-recipes-mac.debug"
+fi
 
 if [[ "$CONFIG" == "release" ]]; then
   ../scripts/verify-helper-resource.sh --require-universal --minimum-macos 14.0
@@ -130,6 +134,7 @@ validation_args=(
   --app "$APP"
   --expected-version "$VERSION"
   --expected-build "$BUILD_NUMBER"
+  --expected-bundle-id "$BUNDLE_ID"
   --minimum-macos 14.0
 )
 if [[ "$CONFIG" == "release" ]]; then

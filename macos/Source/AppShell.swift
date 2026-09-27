@@ -176,21 +176,6 @@ public struct SidebarView: View {
                                 .accessibilityIdentifier("sidebar-slot-\(slot)")
                             }
                         }
-                        .background {
-                            // Fast keyboard navigation for C1–C7 slots (⌥1..⌥7)
-                            ForEach(1...7, id: \.self) { slot in
-                                Button("Select C\(slot)") {
-                                    withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
-                                        selection = .camera
-                                        selectedDialSlot = slot
-                                    }
-                                }
-                                .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
-                                .opacity(0)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                            }
-                        }
                     }
 
                     // 3. FILM SIMULATION BASES Section
@@ -305,7 +290,7 @@ public struct SidebarView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(count) recipes")
+        .accessibilityLabel("\(title), \(count == 1 ? "1 recipe" : "\(count) recipes")")
     }
 
     private var brandHeader: some View {
@@ -584,7 +569,7 @@ private struct SidebarLibraryRow: View {
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(count) recipes")
+        .accessibilityLabel("\(title), \(count == 1 ? "1 recipe" : "\(count) recipes")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .dropDestination(for: Recipe.self) { items, _ in
             guard let onDropRecipe, let recipe = items.first else { return false }
@@ -929,6 +914,12 @@ public enum AppTab: String, CaseIterable, Identifiable {
         case .camera: return Theme.emeraldGreen
         case .darkroom: return Theme.cyanAccent
         }
+    }
+}
+
+extension DynamicRange {
+    var badgeLabel: String {
+        self == .auto ? "DR Auto" : displayName
     }
 }
 

@@ -61,9 +61,9 @@ public final class CameraManager: ObservableObject {
             // USB mode; don't let that fail the whole connection.
             await readActiveSettings()
 
-            // Inspect and sync camera slots so state is verified before reporting connected.
+            // Keep dirty drafts: anything staged while offline still needs writing.
             if let loadouts {
-                _ = await refreshCameraSlots(into: loadouts, overwriteDirtyDrafts: true)
+                _ = await refreshCameraSlots(into: loadouts)
             }
 
             status = .connected
@@ -215,19 +215,11 @@ public final class CameraManager: ObservableObject {
 
     // MARK: - Batch Write Staged Slots
 
-    /// Writes all staged/configured loadout slots (1...7) sequentially to the camera.
-    ///
-    /// For each slot where `loadouts.loadout(for: slot).hasAnySettings` (or dirty/staged),
-    /// this writes the loadout to the slot, syncs the observed snapshot back to the store,
-    /// marks the write verified, and collects the result.
     public func writeAllStagedSlots(from loadouts: LoadoutStore) async -> [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] {
         var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
 
-        for slot in 1...7 {
-            guard let loadout = loadouts.loadout(for: slot),
-                  loadout.hasAnySettings || loadouts.isDirty(slot) else {
-                continue
-            }
+        for slot in loadouts.stagedSlots {
+            guard let loadout = loadouts.loadout(for: slot) else { continue }
 
             do {
                 let writeResult = try await writeLoadout(loadout, to: slot)

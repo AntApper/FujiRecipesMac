@@ -650,24 +650,28 @@ public struct SlotEditorSheet: View {
 
     /// `range` is in whole UI steps; `tenths` and `step` are C-slot tenths.
     private func stepperRow(title: String, tenths value: Binding<Int32>, range: ClosedRange<Int32>, step: Int32) -> some View {
-        HStack {
+        let decrease = {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                if value.wrappedValue - step >= range.lowerBound * 10 { value.wrappedValue -= step }
+            }
+        }
+        let increase = {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                if value.wrappedValue + step <= range.upperBound * 10 { value.wrappedValue += step }
+            }
+        }
+        return HStack {
             Text(title)
                 .font(.subheadline)
                 .glassPrimary()
             Spacer()
             HStack(spacing: 8) {
-                Button {
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                        if value.wrappedValue - step >= range.lowerBound * 10 { value.wrappedValue -= step }
-                    }
-                } label: {
+                Button(action: decrease) {
                     Image(systemName: "minus.circle.fill")
                         .font(.title3)
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Decrease \(title)")
-                .accessibilityHint("Decreases \(title) by \(ToneTenths.text(step).dropFirst()).")
 
                 Text(ToneTenths.text(value.wrappedValue))
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
@@ -675,19 +679,18 @@ public struct SlotEditorSheet: View {
                     .frame(width: 36)
                     .contentTransition(.numericText())
 
-                Button {
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                        if value.wrappedValue + step <= range.upperBound * 10 { value.wrappedValue += step }
-                    }
-                } label: {
+                Button(action: increase) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
                         .foregroundStyle(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Increase \(title)")
-                .accessibilityHint("Increases \(title) by \(ToneTenths.text(step).dropFirst()).")
             }
+        }
+        .accessibilityRepresentation {
+            Stepper(title, onIncrement: increase, onDecrement: decrease)
+                .accessibilityValue(ToneTenths.text(value.wrappedValue))
+                .accessibilityHint("Adjusts in steps of \(ToneTenths.text(step).dropFirst()).")
         }
     }
 

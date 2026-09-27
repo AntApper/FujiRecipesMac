@@ -216,57 +216,6 @@ public struct RecipeListView: View {
                 }
             }
         }
-        .overlay(alignment: .bottom) {
-            if let toast = activeHUDToast {
-                HStack(spacing: 12) {
-                    Image(systemName: toast.isError ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(toast.isError ? Theme.fujiAmber : Theme.emeraldGreen)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(toast.title)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color.white)
-                        Text(toast.message)
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundStyle(Theme.textSecondary)
-                            .lineLimit(2)
-                    }
-
-                    Spacer(minLength: 12)
-
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            activeHUDToast = nil
-                        }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.textTertiary)
-                            .padding(6)
-                            .background(Circle().fill(Color.white.opacity(0.08)))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(nsColor: .windowBackgroundColor).opacity(0.95))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(toast.isError ? Theme.fujiAmber.opacity(0.5) : Theme.emeraldGreen.opacity(0.4), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.45), radius: 18, y: 6)
-                )
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .opacity.combined(with: .scale(scale: 0.95))
-                ))
-            }
-        }
         .alert("Custom Recipe Library", isPresented: Binding(
             get: { customRecipeMessage != nil },
             set: { if !$0 { customRecipeMessage = nil } }
@@ -356,6 +305,57 @@ public struct RecipeListView: View {
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 .animation(.spring(response: 0.28, dampingFraction: 0.8), value: quickLookRecipe?.id)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = activeHUDToast {
+                HStack(spacing: 12) {
+                    Image(systemName: toast.isError ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(toast.isError ? Theme.fujiAmber : Theme.emeraldGreen)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(toast.title)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color.white)
+                        Text(toast.message)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            activeHUDToast = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(6)
+                            .background(Circle().fill(Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(toast.isError ? Theme.fujiAmber.opacity(0.5) : Theme.emeraldGreen.opacity(0.4), lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(0.45), radius: 18, y: 6)
+                )
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
             }
         }
     }

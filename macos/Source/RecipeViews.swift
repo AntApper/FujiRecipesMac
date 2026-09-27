@@ -12,6 +12,15 @@ private struct HUDToast: Identifiable, Equatable {
     let isError: Bool
 }
 
+private struct PendingStageTop {
+    let recipes: [Recipe]
+    let replacedSlots: [Int]
+
+    var replacedSlotList: String {
+        ListFormatter.localizedString(byJoining: replacedSlots.map { "C\($0)" })
+    }
+}
+
 public struct RecipeListView: View {
     @ObservedObject public var store: RecipeStore
     @ObservedObject public var cameraManager: CameraManager
@@ -19,6 +28,7 @@ public struct RecipeListView: View {
     @State private var recipeToLoad: Recipe?
     @State private var selectedPhotoUrl: String? = nil
     @State private var activeHUDToast: HUDToast?
+    @State private var pendingStageTop: PendingStageTop?
     @State private var recipeToEdit: Recipe?
     @State private var recipeToDelete: Recipe?
     @State private var customRecipeMessage: String?
@@ -246,6 +256,22 @@ public struct RecipeListView: View {
             Button("Cancel", role: .cancel) { recipeToDelete = nil }
         } message: {
             Text(recipeToDelete.map { "“\($0.name)” will be removed from My Recipes." } ?? "")
+        }
+        .confirmationDialog(
+            pendingStageTop.map { "Replace Local Drafts in \($0.replacedSlotList)?" } ?? "",
+            isPresented: Binding(
+                get: { pendingStageTop != nil },
+                set: { if !$0 { pendingStageTop = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingStageTop
+        ) { pending in
+            Button("Replace Drafts", role: .destructive) {
+                stageToDial(pending.recipes)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { pending in
+            Text("Stage Top \(pending.recipes.count) replaces your unsynced drafts in \(pending.replacedSlotList) with the top filtered recipes. The camera isn’t changed.")
         }
         .sheet(item: $recipeToEdit) { recipe in
             CustomRecipeEditor(
@@ -503,6 +529,15 @@ public struct RecipeListView: View {
     private func stageTop7ToDial() {
         let recipes = Array(store.filteredRecipes.prefix(7))
         guard !recipes.isEmpty else { return }
+        let replaced = store.loadouts.stagedSlots.filter { $0 <= recipes.count }
+        if replaced.isEmpty {
+            stageToDial(recipes)
+        } else {
+            pendingStageTop = PendingStageTop(recipes: recipes, replacedSlots: replaced)
+        }
+    }
+
+    private func stageToDial(_ recipes: [Recipe]) {
         store.loadouts.stageAll(recipes: recipes)
         let count = recipes.count
         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {

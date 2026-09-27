@@ -145,6 +145,59 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertTrue(store.isDirty(4))
         XCTAssertEqual(store.stagedSlots, [4])
     }
+
+    // MARK: - Item 15: disconnect during connect
+
+    @MainActor
+    func testDisconnectDuringConnectSlotReadEndsDisconnected() async {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+
+        let connect = Task { await manager.connect(using: camera, loadouts: store) }
+        await camera.waitUntilBusy()
+        manager.disconnect()
+        await connect.value
+
+        XCTAssertEqual(manager.status, .disconnected)
+        XCTAssertNil(manager.lastError, "a failure from the abandoned connect reached lastError")
+        XCTAssertEqual(manager.operation, .idle)
+    }
+
+    @MainActor
+    func testUnplugDuringConnectSlotReadEndsDisconnected() async {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+
+        let connect = Task { await manager.connect(using: camera, loadouts: store) }
+        await camera.waitUntilBusy()
+        camera.unplug()
+        await connect.value
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(manager.status, .disconnected)
+        XCTAssertNil(manager.lastError)
+    }
+
+    @MainActor
+    func testWriteFailureAfterDisconnectDoesNotSetLastError() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        var four = try XCTUnwrap(store.loadout(for: 4))
+        four.filmSim = .provia
+
+        let write = Task { try await manager.writeLoadout(four, to: 4) }
+        await camera.waitUntilBusy()
+        manager.disconnect()
+        let outcome = await write.result
+
+        XCTAssertThrowsError(try outcome.get())
+        XCTAssertEqual(manager.status, .disconnected)
+        XCTAssertNil(manager.lastError, "a write that failed because of the user's disconnect reported an error banner")
+    }
 }
 
 // MARK: - Slot-register camera

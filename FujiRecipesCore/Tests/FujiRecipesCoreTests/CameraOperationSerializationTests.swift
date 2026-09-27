@@ -235,6 +235,27 @@ final class CameraOperationSerializationTests: XCTestCase {
     }
 
     @MainActor
+    func testDisconnectDuringWriteAllLeavesNoSlotWriting() async {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        for slot in 2...4 {
+            store.applyRecipe(Recipe(id: "r\(slot)", name: "Recipe \(slot)", source: "test", sourceUrl: nil, filmSimulation: .velvia), to: slot)
+        }
+
+        let writeAll = Task { await manager.writeAllStagedSlots(from: store) }
+        await camera.waitUntilBusy()
+        manager.disconnect()
+        let results = await writeAll.value
+
+        XCTAssertEqual(manager.operation, .idle, "an abandoned Write All kept marking slots as writing")
+        XCTAssertEqual(manager.status, .disconnected)
+        XCTAssertLessThanOrEqual(results.count, 1, "Write All kept going after the disconnect")
+        XCTAssertEqual(store.stagedSlots, [2, 3, 4])
+    }
+
+    @MainActor
     func testStaleDisconnectHandlerDoesNotEndNextConnection() async {
         let first = SlotRegisterCamera()
         let second = SlotRegisterCamera()

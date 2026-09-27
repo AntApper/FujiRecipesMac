@@ -21,10 +21,11 @@ final class CameraPresetNameTests: XCTestCase {
     func testNonASCIICharactersFoldToTheirASCIIEquivalents() {
         XCTAssertEqual(CameraPresetName.label(for: "Café Noir", slot: 3), "Cafe Noir")
         XCTAssertEqual(CameraPresetName.label(for: "Ciné—Film\u{00A0}’86", slot: 3), "Cine-Film '86")
-        XCTAssertEqual(CameraPresetName.label(for: "日本", slot: 3), "ri ben")
+        XCTAssertEqual(CameraPresetName.label(for: "Straße Æther", slot: 3), "Strasse AEther")
     }
 
     func testNamesWithNothingPrintableFallBackToTheSlot() {
+        XCTAssertEqual(CameraPresetName.label(for: "日本の夏", slot: 3), "C3")
         XCTAssertEqual(CameraPresetName.label(for: "📷🎞️", slot: 3), "C3")
         XCTAssertEqual(CameraPresetName.label(for: "", slot: 3), "C3")
     }
@@ -66,6 +67,24 @@ final class CameraPresetNameTests: XCTestCase {
         XCTAssertTrue(adopted)
         let loadout = try XCTUnwrap(store.loadout(for: 3))
         XCTAssertEqual(loadout.name, "Kodak T-Max 100 Hard Tone")
+        XCTAssertEqual(loadout.recipeName, Self.tMaxHard)
+        XCTAssertEqual(loadout.recipeID, "tmax-hard")
+    }
+
+    @MainActor
+    func testCameraSyncKeepsTheRecipeLinkOfARenamedDraft() throws {
+        let store = LoadoutStore(defaults: try isolatedDefaults())
+        let recipe = Recipe(id: "tmax-hard", name: Self.tMaxHard, source: "test", sourceUrl: nil, filmSimulation: .acros)
+        store.applyRecipe(recipe, to: 3)
+        store.updateName(for: 3, name: "Darkroom Test")
+
+        store.adoptCameraWrite(
+            PTPClientPresetData(slot: 3, name: "Darkroom Test", filmSimulation: FilmSimulation.acros.rawValue),
+            ifUnchangedSince: store.revision(of: 3)
+        )
+
+        let loadout = try XCTUnwrap(store.loadout(for: 3))
+        XCTAssertEqual(loadout.name, "Darkroom Test")
         XCTAssertEqual(loadout.recipeName, Self.tMaxHard)
         XCTAssertEqual(loadout.recipeID, "tmax-hard")
     }

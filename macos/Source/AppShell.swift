@@ -374,22 +374,22 @@ public struct SidebarView: View {
     }
 
     private var statusFooter: some View {
-        Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selection = .camera
-            }
-        } label: {
-            ViewThatFits(in: .horizontal) {
-                // Wide layout: full horizontal bar
-                HStack(spacing: 8) {
-                    statusBeacon
-                    statusLabels
-                    Spacer(minLength: 4)
-                    quickConnectButton(fullWidth: false)
+        ViewThatFits(in: .horizontal) {
+            // Wide layout: full horizontal bar
+            HStack(spacing: 8) {
+                openCameraButton {
+                    HStack(spacing: 8) {
+                        statusBeacon
+                        statusLabels
+                        Spacer(minLength: 4)
+                    }
                 }
+                quickConnectButton(fullWidth: false)
+            }
 
-                // Compact layout: 2 stacked rows to eliminate any text truncation
-                VStack(alignment: .leading, spacing: 6) {
+            // Compact layout: 2 stacked rows to eliminate any text truncation
+            VStack(alignment: .leading, spacing: 6) {
+                openCameraButton {
                     HStack(spacing: 6) {
                         statusBeacon
 
@@ -408,24 +408,35 @@ public struct SidebarView: View {
                             .background(cameraManager.status.tint.opacity(0.14))
                             .clipShape(Capsule())
                     }
-
-                    quickConnectButton(fullWidth: true)
                 }
+
+                quickConnectButton(fullWidth: true)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(cameraManager.status.tint.opacity(cameraManager.status == .connected ? 0.35 : 0.08), lineWidth: 0.8)
-                    )
-            )
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(cameraManager.status.tint.opacity(cameraManager.status == .connected ? 0.35 : 0.08), lineWidth: 0.8)
+                )
+        )
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
+    }
+
+    private func openCameraButton<Label: View>(@ViewBuilder label: () -> Label) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                selection = .camera
+            }
+        } label: {
+            label().contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens Camera & Staging.")
     }
 
     private var statusBeacon: some View {

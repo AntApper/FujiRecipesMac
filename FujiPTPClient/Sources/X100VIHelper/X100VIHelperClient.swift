@@ -536,7 +536,7 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             try await writeProperty(0xD198, value: Int32(smoothSkin.rawValue))
         }
         if let wb = recipe.whiteBalanceMode {
-            try await writeProperty(0xD199, value: Int32(wb.actualPTPValue))
+            try await writeProperty(0xD199, value: Int32(wb.rawValue))
         }
         if let ct = recipe.colorTempK {
             try await writeProperty(0xD19C, value: Int32(ct))
@@ -803,7 +803,9 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     ) -> [String: any Sendable] {
         var params: [String: any Sendable] = ["index": index]
 
-        if !data.name.isEmpty { params["name"] = data.name }
+        // x100vi_helper.c refuses a whole write whose name exceeds its
+        // FUJI_PRESET_NAME_MAX_CHARACTERS of 15.
+        if !data.name.isEmpty { params["name"] = String(data.name.prefix(15)) }
         if let v = data.filmSimulation { params["film_simulation"] = Int(v) }
         if let v = data.dynamicRange { params["dynamic_range"] = Int(v) }
         if let v = data.grainEffect { params["grain_effect"] = Int(v) }

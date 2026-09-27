@@ -248,7 +248,7 @@ final class RecipeWorkflowIntegrationTests: XCTestCase {
         // Verify the data written to the camera preset matches the customized recipe settings
         let cameraData = try XCTUnwrap(mockClient.slotPresets[3])
         XCTAssertEqual(cameraData.colorTemp, 6200)
-        XCTAssertEqual(cameraData.whiteBalance, WhiteBalanceMode.colorTemperature.actualPTPValue)
+        XCTAssertEqual(cameraData.whiteBalance, 0x8007)
         XCTAssertEqual(cameraData.highlight, 20)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: cameraData.highlight), 2)
         XCTAssertEqual(cameraData.color, -10)
@@ -343,7 +343,7 @@ final class RecipeWorkflowIntegrationTests: XCTestCase {
             Recipe(id: "1", name: "Urban Street", source: "A", sourceUrl: nil, filmSimulation: .classicChrome, whiteBalanceMode: .auto),
             Recipe(id: "2", name: "Urban Sunset", source: "A", sourceUrl: nil, filmSimulation: .classicChrome, whiteBalanceMode: .daylight),
             Recipe(id: "3", name: "Nature Green", source: "B", sourceUrl: nil, filmSimulation: .velvia, whiteBalanceMode: .auto),
-            Recipe(id: "4", name: "Night Street", source: "C", sourceUrl: nil, filmSimulation: .acros, whiteBalanceMode: .tungsten)
+            Recipe(id: "4", name: "Night Street", source: "C", sourceUrl: nil, filmSimulation: .acros, whiteBalanceMode: .incandescent)
         ]
 
         let store = RecipeStore(recipeLoading: { recipes })

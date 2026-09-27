@@ -686,7 +686,7 @@ public struct CameraConnectionView: View {
 
             isWritingAll = false
             writeAllPlan = []
-            let verified = !outcomes.isEmpty && outcomes.allSatisfy { (try? $0.result.get())?.differences.isEmpty == true }
+            let verified = !outcomes.isEmpty && outcomes.allSatisfy { (try? $0.result.get())?.isVerified == true }
             feedback = ActionFeedback(text: WriteAllSummary.text(for: outcomes), succeeded: verified)
         }
     }
@@ -697,11 +697,7 @@ public struct CameraConnectionView: View {
             do {
                 feedback = ActionFeedback(text: "Writing C\(slot) to camera…", succeeded: false)
                 let result = try await manager.writeSlot(slot, from: loadouts)
-                guard !loadouts.isDirty(slot) else {
-                    feedback = ActionFeedback(text: "Wrote C\(slot) to the camera. You edited it during the write, so the newer draft is still staged.", succeeded: false)
-                    return
-                }
-                feedback = ActionFeedback(text: result.summary, succeeded: result.differences.isEmpty)
+                feedback = ActionFeedback(text: result.summary, succeeded: result.isVerified)
             } catch {
                 feedback = ActionFeedback(text: "C\(slot): \(error.localizedDescription)", succeeded: false)
             }

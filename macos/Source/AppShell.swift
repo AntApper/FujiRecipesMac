@@ -642,11 +642,11 @@ public struct SidebarDialRackRow: View {
 
     private var assignedRecipeName: String {
         if hasSettings {
-            if let recipeName = loadout?.recipeName, !recipeName.isEmpty {
-                return recipeName
-            }
             if let name = loadout?.name, !name.isEmpty, name != "C\(slot)" {
                 return name
+            }
+            if let recipeName = loadout?.recipeName, !recipeName.isEmpty {
+                return recipeName
             }
             return "Custom Preset"
         }

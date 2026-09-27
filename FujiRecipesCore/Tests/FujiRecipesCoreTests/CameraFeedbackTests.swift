@@ -74,9 +74,9 @@ final class CameraFeedbackTests: XCTestCase {
     // MARK: - Write readback comparison
 
     @MainActor
-    func testRewritingASlotThatReadsGrainSixReportsNoDifference() async throws {
+    func testRewritingASlotThatReadsGrainSixWritesGrainOff() async throws {
         let camera = ScriptedCamera()
-        camera.rejectedGrain = [6]
+        camera.rejectedGrain = [6, 7]
         camera.setSlot(PTPClientPresetData(slot: 5, name: "California Summ", filmSimulation: 19, grainEffect: 6, whiteBalance: 0x8007, colorTemp: 6700))
         let store = LoadoutStore()
         let manager = CameraManager()
@@ -85,15 +85,33 @@ final class CameraFeedbackTests: XCTestCase {
 
         let result = try await manager.writeSlot(5, from: store)
 
+        XCTAssertEqual(camera.slot(5).grainEffect, 6)
         XCTAssertEqual(result.differences, [])
         XCTAssertEqual(result.summary, "Wrote and verified C5.")
-        XCTAssertEqual(camera.slot(5).grainEffect, 6)
     }
 
     @MainActor
-    func testCopyingGrainSixIntoAnotherSlotReportsTheGrainDifference() async throws {
+    func testWritingGrainOffOverWeakLargeReadsBackSevenAndVerifies() async throws {
         let camera = ScriptedCamera()
-        camera.rejectedGrain = [6]
+        camera.rejectedGrain = [6, 7]
+        camera.setSlot(PTPClientPresetData(slot: 3, name: "Camera 3", filmSimulation: 19, grainEffect: 4, whiteBalance: 2))
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.setGrainEffect(for: 3, grain: .off)
+
+        let result = try await manager.writeSlot(3, from: store)
+
+        XCTAssertEqual(camera.slot(3).grainEffect, 7)
+        XCTAssertEqual(result.differences, [])
+        XCTAssertEqual(result.summary, "Wrote and verified C3.")
+        XCTAssertEqual(store.loadout(for: 3)?.grain, .off)
+    }
+
+    @MainActor
+    func testCopyingGrainSixIntoAnotherSlotWritesGrainOff() async throws {
+        let camera = ScriptedCamera()
+        camera.rejectedGrain = [6, 7]
         let manager = CameraManager()
         await manager.connect(using: camera)
         var raw = LoadoutRawPresetState()
@@ -102,8 +120,21 @@ final class CameraFeedbackTests: XCTestCase {
 
         let result = try await manager.writeLoadout(copy, to: 3)
 
-        XCTAssertEqual(result.differences, [.grainEffect])
-        XCTAssertEqual(result.summary, "Wrote C3 with 1 difference: Grain.")
+        XCTAssertEqual(camera.slot(3).grainEffect, 6)
+        XCTAssertEqual(result.differences, [])
+        XCTAssertEqual(result.summary, "Wrote and verified C3.")
+    }
+
+    @MainActor
+    func testASyncedGrainSixShowsAsOffAndEncodesAsOne() throws {
+        let store = LoadoutStore()
+        store.syncFromCameraPresetData([PTPClientPresetData(slot: 5, name: "California Summ", filmSimulation: 19, grainEffect: 6)])
+
+        let loadout = try XCTUnwrap(store.loadout(for: 5))
+
+        XCTAssertEqual(loadout.grain, .off)
+        XCTAssertEqual(loadout.rawPreset?.grainEffect, 6)
+        XCTAssertEqual(try CSlotPresetEncoder.encode(loadout: loadout, slot: 5).grainEffect, 1)
     }
 
     @MainActor
@@ -130,6 +161,36 @@ final class CameraFeedbackTests: XCTestCase {
         XCTAssertEqual(
             WriteAllSummary.text(for: [2, 3, 5].map { (slot: $0, result: .success(PTPPresetSlotWriteResult(slot: $0))) }),
             "Wrote and verified all 3 staged slots."
+        )
+    }
+
+    func testWriteAllSummaryNamesSlotsCreatedFromEmpty() {
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [(slot: 4, result: .success(PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true)))]),
+            "Created and verified C4."
+        )
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [2, 4, 5].map { (slot: $0, result: .success(PTPPresetSlotWriteResult(slot: $0, createdFromEmpty: $0 == 4))) }),
+            "Wrote and verified all 3 staged slots. Created C4 from an empty slot."
+        )
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [2, 4, 6].map { (slot: $0, result: .success(PTPPresetSlotWriteResult(slot: $0, createdFromEmpty: $0 != 2))) }),
+            "Wrote and verified all 3 staged slots. Created C4 and C6 from empty slots."
+        )
+    }
+
+    func testWriteSummaryUsesTheCreatedVerbAndNotesAnEditDuringTheWrite() {
+        XCTAssertEqual(
+            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, differences: [.grainEffect]).summary,
+            "Created C4 with 1 difference: Grain."
+        )
+        XCTAssertEqual(
+            PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color], draftEditedDuringWrite: true).summary,
+            "Wrote C3 with 2 differences: Grain, Color. You edited it during the write, so the newer draft is still staged."
+        )
+        XCTAssertEqual(
+            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, draftEditedDuringWrite: true).summary,
+            "Created C4. You edited it during the write, so the newer draft is still staged."
         )
     }
 
@@ -185,7 +246,9 @@ final class CameraFeedbackTests: XCTestCase {
 
 /// Stores every C-slot field. A write applies each field it sets, except a
 /// grain in `rejectedGrain` (the X100VI answers 0x201C and leaves it
-/// unchanged) and monochrome tones under a color film.
+/// unchanged) and monochrome tones under a color film. Like the X100VI, a
+/// grain of 1 (Off) keeps the old size: it stores 7 over a large grain
+/// (4, 5, or 7) and 6 otherwise.
 final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
     private let lock = NSLock()
     private var slots: [Int: PTPClientPresetData]
@@ -264,6 +327,8 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
             if let requested = data.grainEffect, _rejectedGrain.contains(requested) {
                 grain = old.grainEffect
                 warnings.append("0xD195: 0x201C")
+            } else if data.grainEffect == 1 {
+                grain = old.grainEffect.map { [4, 5, 7].contains($0) } == true ? 7 : 6
             }
             let film = data.filmSimulation ?? old.filmSimulation
             let monochrome = film.flatMap(FilmSimulation.init(rawValue:)).map(CSlotPresetEncoder.isMonochrome) ?? false

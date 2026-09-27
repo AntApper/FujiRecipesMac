@@ -341,7 +341,7 @@ extension Recipe {
         
         if let filmSim = filmSimulation { values[0xD001] = Int32(filmSim.rawValue) }
         if let dr = dynamicRange { values[0xD007] = Int32(dr.rawValue) }
-        if let wb = whiteBalanceMode { values[0x5005] = Int32(wb.actualPTPValue) }
+        if let wb = whiteBalanceMode { values[0x5005] = Int32(wb.rawValue) }
         if let sharpness = sharpness { values[0x5015] = sharpness }
         
         return values

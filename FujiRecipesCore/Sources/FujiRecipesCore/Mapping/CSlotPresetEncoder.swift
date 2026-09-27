@@ -133,9 +133,9 @@ public enum CSlotPresetEncoder {
         let isMonochrome = resolvedFilmSimulation
             .flatMap(FilmSimulation.init(rawValue:))
             .map(isMonochrome) ?? false
-        let rawWB = rawPreset?.whiteBalance ?? whiteBalance.map { UInt32($0.actualPTPValue) }
+        let rawWB = rawPreset?.whiteBalance ?? whiteBalance?.rawValue
         let rawColorTemp: UInt32?
-        if rawWB == WhiteBalanceMode.colorTemperature.actualPTPValue {
+        if rawWB == WhiteBalanceMode.colorTemperature.rawValue {
             let resolvedColorTemp = rawPreset?.colorTemp ?? colorTemp ?? 5_500
             guard (2_500...10_000).contains(resolvedColorTemp) else {
                 throw CSlotPresetEncodingError.outOfRange(property: 0xD19C, value: Int64(resolvedColorTemp), valid: "2500...10000 K")
@@ -153,17 +153,19 @@ public enum CSlotPresetEncoder {
         let rawSharpness = try rawPreset?.sharpness ?? sharpness.map { try rawTenths($0, property: 0xD1A0, range: colorSharpnessRange) }
         let rawHighIsoNr = try rawPreset?.highIsoNr ?? highIsoNr.map(rawHighIsoNR)
         let rawClarity = try rawPreset?.clarity ?? clarity.map { try rawTenths($0, property: 0xD1A2, range: -5...5) }
+        let rawGrainEffect = rawPreset?.grainEffect.map { GrainEffect(cameraValue: $0) == .off ? rawGrain(.off) : $0 }
+            ?? grainEffect.map(rawGrain)
 
         return PTPClientPresetData(
             slot: slot,
-            name: CameraPresetName.label(for: name),
+            name: CameraPresetName.label(for: name, slot: slot),
             imageQuality: rawPreset?.imageQuality ?? imageQuality,
             imageSize: rawPreset?.imageSize ?? imageSize,
             dynamicRange: rawPreset?.dynamicRange ?? dynamicRange.map(rawDynamicRange),
             filmSimulation: resolvedFilmSimulation,
             monoWarmCool: rawPreset?.monoWarmCool ?? monoWarmCool,
             monoMagentaGreen: rawPreset?.monoMagentaGreen ?? monoMagentaGreen,
-            grainEffect: rawPreset?.grainEffect ?? grainEffect.map(rawGrain),
+            grainEffect: rawGrainEffect,
             colorChrome: rawPreset?.colorChrome ?? colorChrome.map(rawEffect),
             colorChromeFxBlue: rawPreset?.colorChromeFxBlue ?? colorChromeFxBlue.map(rawEffect),
             smoothSkin: rawPreset?.smoothSkin ?? smoothSkin.map(rawEffect),

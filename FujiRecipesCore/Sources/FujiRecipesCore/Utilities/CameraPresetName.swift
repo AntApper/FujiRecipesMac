@@ -2,45 +2,31 @@ import Foundation
 
 /// A camera-safe label for Fujifilm custom preset slots.
 ///
-/// The camera has accepted a 15-character printable-ASCII `0xD18D` label and
-/// rejected the app's 17-character label, even though its property readback
-/// reserves a larger PTP string field. Use the proven-safe 15-character limit
-/// until a hardware boundary test establishes whether 16 characters are valid.
-/// The recipe title remains unchanged; this value is only the label stored on
-/// camera.
+/// The X100VI (firmware 1.31) accepts a `0xD18D` name of 0 to 25 printable
+/// ASCII characters (0x20...0x7E) and rejects a longer or non-ASCII name with
+/// 0x201C. The recipe title remains unchanged; this value is only the label
+/// stored on camera.
 public enum CameraPresetName {
-    public static let maximumCharacterCount = 15
+    public static let maximumCharacterCount = 25
 
-    /// Converts a library recipe title into the deterministic label sent to
-    /// `0xD18D`. Unsupported punctuation is replaced with a space, repeated
-    /// whitespace is collapsed, and the result is clipped on an ASCII boundary.
-    public static func label(for recipeName: String) -> String {
-        let normalized = recipeName.precomposedStringWithCompatibilityMapping
-        let mapped = normalized.unicodeScalars.map { scalar -> Character in
-            switch scalar.value {
-            case 0x20...0x7E:
-                return Character(String(scalar))
-            case 0x00A0, 0x2018, 0x2019, 0x201A, 0x201B:
-                return scalar.value == 0x00A0 ? " " : "'"
-            case 0x2010...0x2015:
-                return "-"
-            default:
-                return " "
-            }
-        }
-        let collapsed = String(mapped)
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-        return String(collapsed.prefix(maximumCharacterCount))
+    /// Folds a name into the label sent to `0xD18D`: Latin letters and
+    /// punctuation folded to ASCII, collapsed whitespace, and a cut on a word
+    /// boundary. A name with nothing printable left, such as one in another
+    /// script, becomes the slot's own label, such as "C3".
+    public static func label(for name: String, slot: Int) -> String {
+        let folded = name.applyingTransform(StringTransform("Latin-ASCII"), reverse: false) ?? name
+        let printable = String(String.UnicodeScalarView(folded.unicodeScalars.map {
+            (0x20...0x7E).contains($0.value) ? $0 : " "
+        }))
+        let words = printable.split(separator: " ")
+        let label = fit(words)
+        return label.isEmpty ? "C\(slot)" : label
     }
 
-    /// Standard PTP string bytes: count including the NUL, ASCII/UCS-2LE
-    /// characters, and a terminating UCS-2 NUL. The input must be a validated
-    /// camera label so its scalar and UTF-16 counts are identical.
-    public static func ptpPayload(forCameraLabel label: String) -> Data {
-        precondition(label.unicodeScalars.allSatisfy { $0.value >= 0x20 && $0.value <= 0x7E })
-        precondition(label.count <= maximumCharacterCount)
-
+    /// Standard PTP string bytes for `label(for:slot:)`: count including the
+    /// NUL, UCS-2LE characters, and a terminating UCS-2 NUL.
+    public static func ptpPayload(for name: String, slot: Int) -> Data {
+        let label = label(for: name, slot: slot)
         var bytes = [UInt8(label.count + 1)]
         for scalar in label.unicodeScalars {
             bytes.append(UInt8(scalar.value))
@@ -48,5 +34,26 @@ public enum CameraPresetName {
         }
         bytes.append(contentsOf: [0, 0])
         return Data(bytes)
+    }
+
+    private static func fit(_ words: [Substring]) -> String {
+        let joined = words.joined(separator: " ")
+        guard joined.count > maximumCharacterCount else { return joined }
+        guard words[0].count <= maximumCharacterCount else {
+            return String(words[0].prefix(maximumCharacterCount))
+        }
+
+        var kept: [Substring] = []
+        var length = 0
+        for word in words {
+            let next = kept.isEmpty ? word.count : length + 1 + word.count
+            guard next <= maximumCharacterCount else { break }
+            kept.append(word)
+            length = next
+        }
+        while let last = kept.last, !last.contains(where: { $0.isLetter || $0.isNumber }) {
+            kept.removeLast()
+        }
+        return kept.joined(separator: " ")
     }
 }

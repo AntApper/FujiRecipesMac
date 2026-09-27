@@ -42,7 +42,7 @@ Confirmed via FilmKit cross-referencing 7 camera presets on X100VI (2026-03).
 | PTP Property | Name               | Description                                    | Encoding                                  |
 |-------------|-------------------|------------------------------------------------|-------------------------------------------|
 | `0xD18C`    | PresetSlot         | Active preset slot selector                    | 1–7                                       |
-| `0xD18D`    | PresetName         | Preset display name                            | PTP string                                |
+| `0xD18D`    | PresetName         | Preset display name                            | PTP string of 0–25 printable ASCII characters (see note) |
 | `0xD18E`    | P:ImageSize        | Image size for preset                          | Index into size enum                      |
 | `0xD18F`    | P:ImageQuality     | Image quality for preset                       | Index into quality enum                   |
 | `0xD190`    | P:DynamicRange%    | Dynamic range                                  | Raw percentage: 100, 200, 400             |
@@ -50,7 +50,7 @@ Confirmed via FilmKit cross-referencing 7 camera presets on X100VI (2026-03).
 | `0xD192`    | P:FilmSimulation   | Film simulation                                | FilmSim enum (0x01–0x14)                  |
 | `0xD193`    | P:MonoWC×10        | Mono Warm/Cool tone (B&W only)                 | ×10 encoding                              |
 | `0xD194`    | P:MonoMG×10        | Mono Magenta/Green tone (B&W only)             | ×10 encoding                              |
-| `0xD195`    | P:GrainEffect      | Grain effect                                   | 1=Off, 2=Weak Small, 3=Strong Small, 4=Weak Large, 5=Strong Large |
+| `0xD195`    | P:GrainEffect      | Grain effect                                   | 1=Off, 2=Weak Small, 3=Strong Small, 4=Weak Large, 5=Strong Large; 6 and 7 read back as Off but cannot be written |
 | `0xD196`    | P:ColorChrome      | Color Chrome Effect                            | 1=Off, 2=Weak, 3=Strong                   |
 | `0xD197`    | P:ColorChromeFxBlue| Color Chrome FX Blue                           | 1=Off, 2=Weak, 3=Strong                   |
 | `0xD198`    | P:SmoothSkin       | Smooth Skin Effect                             | 1=Off, 2=Weak, 3=Strong                   |
@@ -67,6 +67,8 @@ Confirmed via FilmKit cross-referencing 7 camera presets on X100VI (2026-03).
 | `0xD1A3`    | P:LongExpNR        | Long exposure NR                               | 0=Off, 1=On                               |
 | `0xD1A4`    | P:ColorSpace       | Color space                                    | 1=sRGB, 2=AdobeRGB                        |
 | `0xD1A5`    | P:?D1A5            | Unknown                                        | Always 7                                    |
+
+`0xD18D` accepts 0 to 25 printable ASCII characters (`0x20`–`0x7E`), including an empty name. A name of 26 or more characters, or one with any non-ASCII character, is rejected with `0x201C` and the old name stays. Measured on an X100VI, firmware 1.31, by write and readback on C3. `CameraPresetName` folds names to fit.
 
 ### Verified C-slot raw encoding
 
@@ -139,21 +141,26 @@ From FilmKit enums (confirmed on X100VI via preset scan) and libgphoto2:
 
 ## White Balance Mode Values
 
-From FilmKit d185 profile + libgphoto2 `0x5005`:
+The X100VI (firmware 1.31) accepts exactly these 14 codes for C-slot property `0xD199`, measured by write and readback on C3. They match the 14 entries of the camera's white balance menu. There is no Cloudy.
 
-| PTP Value | Name                   | Notes                              |
-|-----------|------------------------|------------------------------------|
-| 0x0000    | As Shot                |                                    |
-| 0x0002    | Auto (AWB)             | Standard auto white balance        |
-| 0x0004    | Daylight               | ~5500K                             |
-| 0x0006    | Incandescent/Tungsten  | ~3000K                             |
-| 0x0008    | Underwater             |                                    |
-| 0x8001    | Fluorescent 1          | ~4500K                             |
-| 0x8002    | Fluorescent 2          | ~4700K                             |
-| 0x8003    | Fluorescent 3          | ~3600K                             |
-| 0x8006    | Shade                  | ~7000K                             |
-| 0x8007    | Color Temperature      | Custom Kelvin mode                 |
-| 0x8021    | Ambience Priority      | Auto ambience priority (X-Trans V) |
+| PTP Value | Name                   |
+|-----------|------------------------|
+| 0x8020    | Auto White Priority    |
+| 0x0002    | Auto                   |
+| 0x8021    | Auto Ambience Priority |
+| 0x8008    | Custom 1               |
+| 0x8009    | Custom 2               |
+| 0x800A    | Custom 3               |
+| 0x8007    | Color Temperature (K)  |
+| 0x0004    | Daylight               |
+| 0x8006    | Shade                  |
+| 0x8001    | Fluorescent 1          |
+| 0x8002    | Fluorescent 2          |
+| 0x8003    | Fluorescent 3          |
+| 0x0006    | Incandescent           |
+| 0x0008    | Underwater             |
+
+The camera rejects these codes with `0x201C`: `0x0000` (As Shot), `0x0001`, `0x0003`, `0x0005`, `0x0007`, `0x0009`, `0x000A`, `0x8004`, `0x8005`, `0x800B`, `0x800C`, and `0x8022`.
 
 ## Dynamic Range Values (`0xD007`)
 
@@ -184,10 +191,16 @@ DR-P may use `0xD02E` (WideDynamicRange) with values:
 | 3         | Strong Small  |
 | 4         | Weak Large    |
 | 5         | Strong Large  |
+| 6         | Off, Small    |
+| 7         | Off, Large    |
+
+The camera stores Off as 6 or 7. The names for 6 and 7 come from the Fuji table in libgphoto2 2.5.34.
 
 ### Preset Property (`0xD195`)
 
-Same flat enum 1–5. Confirmed from preset cross-reference.
+Same enum as `0xD023`. C5, C7, and the live `0xD023` have been read as 6.
+
+A write of 1 (Off) is accepted, and the camera keeps the current grain size: 1 over 2 or 3 reads back 6, and 1 over 4 or 5 reads back 7. A write of 6 or 7 is rejected with `0x201C`, even when the slot already reads that value. Measured on an X100VI, firmware 1.31, by write and readback on C3.
 
 ### d185 Profile Format
 

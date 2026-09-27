@@ -118,7 +118,7 @@ public enum RecipeLoader {
         let filmSim = jsonRecipe.filmSimEnum.flatMap { UInt32(exactly: $0) }.flatMap(FilmSimulation.init(rawValue:))
         let wb = (jsonRecipe.ptpSettings["whiteBalance"] ?? preset["whiteBalance"])
             .flatMap { UInt32(exactly: $0) }
-            .flatMap(whiteBalance(cameraValue:))
+            .flatMap(WhiteBalanceMode.init(rawValue:))
         let colorTemp = resolveColorTemperature(from: jsonRecipe, wb: wb)
 
         return Recipe(
@@ -132,7 +132,7 @@ public enum RecipeLoader {
             dateString: jsonRecipe.date,
             filmSimulation: filmSim,
             dynamicRange: unsigned("dynamicRange").flatMap(DynamicRange.init(rawValue:)),
-            grainEffect: unsigned("grainEffect").flatMap(GrainEffect.init(rawValue:)),
+            grainEffect: unsigned("grainEffect").flatMap(GrainEffect.init(cameraValue:)),
             colorChrome: unsigned("colorChromeEffect").flatMap(EffectIntensity.init(rawValue:)),
             colorChromeFxBlue: unsigned("colorChromeFxBlue").flatMap(EffectIntensity.init(rawValue:)),
             smoothSkin: unsigned("smoothSkin").flatMap(EffectIntensity.init(rawValue:)),
@@ -155,12 +155,6 @@ public enum RecipeLoader {
             parseStatus: .ok,
             sourceRawPreset: halfStepRawPreset(from: preset)
         )
-    }
-
-    /// The camera's white balance `6` is Incandescent, but `WhiteBalanceMode`
-    /// gives that raw value to `.cloudy`. `.tungsten` writes the same `6`.
-    static func whiteBalance(cameraValue: UInt32) -> WhiteBalanceMode? {
-        cameraValue == WhiteBalanceMode.tungsten.actualPTPValue ? .tungsten : WhiteBalanceMode(rawValue: cameraValue)
     }
 
     /// Whole UI steps round-trip through `uiTone` and `rawTenths`. Half steps

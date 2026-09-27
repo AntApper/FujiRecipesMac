@@ -39,6 +39,14 @@ final class X100VIHelperRequestTests: XCTestCase {
         XCTAssertEqual(request["high_iso_nr"] as? Int, 32_768, "D1A1")
     }
 
+    func testHelperRequestKeepsNamesWithinTheHelpersFifteenCharacters() {
+        let preset = PTPClientPresetData(slot: 3, name: "Kodak T-Max 100 Hard Tone")
+
+        let params = X100VIHelperClient.presetWriteParameters(index: 3, data: preset)
+
+        XCTAssertEqual(params["name"] as? String, "Kodak T-Max 100")
+    }
+
     func testBusySlotSelectionIsEligibleForOneSafeReconnectRetry() {
         let response: [String: Any] = [
             "success": false,

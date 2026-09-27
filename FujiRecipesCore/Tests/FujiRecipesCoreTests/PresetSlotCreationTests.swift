@@ -2,30 +2,16 @@ import XCTest
 @testable import FujiRecipesCore
 
 final class PresetSlotCreationTests: XCTestCase {
-    func testCameraPresetNameMatchesVerifiedFifteenCharacterLimit() {
-        XCTAssertEqual(CameraPresetName.label(for: "C4 PTP VERIFY B"), "C4 PTP VERIFY B")
-        XCTAssertEqual(CameraPresetName.label(for: "PRO Negative 160C"), "PRO Negative 16")
-        XCTAssertEqual(CameraPresetName.label(for: "Fujicolor 100 Industrial"), "Fujicolor 100 I")
-    }
-
-    func testCameraPresetNameNormalizesToSafeASCII() {
-        XCTAssertEqual(
-            CameraPresetName.label(for: "Ciné—Film\u{00A0}’86"),
-            "Cin -Film '86"
-        )
-    }
-
     func testCameraPresetNamePayloadMatchesFilmKitPTPEncoding() {
-        let label = CameraPresetName.label(for: "PRO Negative 160C")
-
         XCTAssertEqual(
-            Array(CameraPresetName.ptpPayload(forCameraLabel: label)),
+            Array(CameraPresetName.ptpPayload(for: "PRO Negative 160C", slot: 4)),
             [
-                0x10,
+                0x12,
                 0x50, 0x00, 0x52, 0x00, 0x4F, 0x00, 0x20, 0x00,
                 0x4E, 0x00, 0x65, 0x00, 0x67, 0x00, 0x61, 0x00,
                 0x74, 0x00, 0x69, 0x00, 0x76, 0x00, 0x65, 0x00,
-                0x20, 0x00, 0x31, 0x00, 0x36, 0x00, 0x00, 0x00
+                0x20, 0x00, 0x31, 0x00, 0x36, 0x00, 0x30, 0x00,
+                0x43, 0x00, 0x00, 0x00
             ]
         )
     }
@@ -177,14 +163,14 @@ final class PresetSlotCreationTests: XCTestCase {
         await manager.connect(using: client)
         let recipe = Recipe(
             id: "long-name",
-            name: "PRO Negative 160C",
+            name: "Kodak Farbwelt 200 Expired - A Fujifilm Film Simulation Recipe for X-Trans V Cameras",
             source: "test",
             sourceUrl: nil
         )
 
         _ = try await manager.importRecipeToCState(recipe, slot: 4)
 
-        XCTAssertEqual(client.writtenPreset?.name, "PRO Negative 16")
+        XCTAssertEqual(client.writtenPreset?.name, "Kodak Farbwelt 200")
     }
 
     @MainActor

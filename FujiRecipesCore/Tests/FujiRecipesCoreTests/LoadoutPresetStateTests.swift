@@ -40,7 +40,7 @@ final class LoadoutPresetStateTests: XCTestCase {
             colorChrome: 3,
             colorChromeFxBlue: 2,
             smoothSkin: 1,
-            whiteBalance: WhiteBalanceMode.colorTemperature.actualPTPValue,
+            whiteBalance: WhiteBalanceMode.colorTemperature.rawValue,
             wbShiftRed: -4,
             wbShiftBlue: 5,
             colorTemp: 5_600,
@@ -241,7 +241,7 @@ final class LoadoutPresetStateTests: XCTestCase {
 
         let loadoutBefore = try XCTUnwrap(store.loadout(for: 4))
         XCTAssertEqual(loadoutBefore.name, "Kodachrome")
-        XCTAssertEqual(loadoutBefore.recipeName, "Kodachrome")
+        XCTAssertNil(loadoutBefore.recipeName)
         XCTAssertEqual(loadoutBefore.filmSim, .classicChrome)
         XCTAssertFalse(store.isCameraSlotEmpty(4))
 
@@ -287,7 +287,7 @@ final class LoadoutPresetStateTests: XCTestCase {
         for tc in testCases {
             let loadout = try XCTUnwrap(store.loadout(for: tc.slot))
             XCTAssertEqual(loadout.name, tc.expectedLabel, "loadout.name should match slotLabel for slot \(tc.slot)")
-            XCTAssertEqual(loadout.recipeName, tc.expectedLabel, "loadout.recipeName should match slotLabel for slot \(tc.slot)")
+            XCTAssertNil(loadout.recipeName, "A camera slot that did not come from a recipe has no recipe name (slot \(tc.slot))")
             XCTAssertNil(loadout.recipeID, "Camera sync should clear recipeID")
             XCTAssertEqual(loadout.provenance, .cameraSynced, "Provenance should be cameraSynced")
             XCTAssertFalse(store.isDirty(tc.slot), "Slot \(tc.slot) should not be dirty after sync")
@@ -316,38 +316,24 @@ final class LoadoutPresetStateTests: XCTestCase {
 
         let syncedLoadout = try XCTUnwrap(store.loadout(for: 3))
         XCTAssertEqual(syncedLoadout.name, "Café")
-        XCTAssertEqual(syncedLoadout.recipeName, "Café")
+        XCTAssertNil(syncedLoadout.recipeName)
         XCTAssertEqual(syncedLoadout.displayLabel, "Café")
         XCTAssertEqual(syncedLoadout.provenance, .cameraSynced)
         XCTAssertFalse(store.isDirty(3))
-
-        // Verify LoadoutCard title resolution logic:
-        // isCameraVerified = isCameraConnected && loadout?.provenance == .cameraSynced && !isDirty
-        // displayTitle = isCameraVerified ? loadout.name : (loadout.recipeName ?? loadout.name)
-        let isCameraConnected = true
-        let isCameraVerified = isCameraConnected && syncedLoadout.provenance == .cameraSynced && !store.isDirty(3)
-        XCTAssertTrue(isCameraVerified)
-        let displayTitle = isCameraVerified ? syncedLoadout.name : (syncedLoadout.recipeName ?? syncedLoadout.name)
-        XCTAssertEqual(displayTitle, "Café", "LoadoutCard should display the verified camera slot name")
 
         // 3. User edits the draft locally
         store.updateName(for: 3, name: "Local Edit")
         let editedLoadout = try XCTUnwrap(store.loadout(for: 3))
         XCTAssertTrue(store.isDirty(3))
         XCTAssertEqual(editedLoadout.provenance, .localDraft)
-        let isCameraVerifiedAfterEdit = isCameraConnected && editedLoadout.provenance == .cameraSynced && !store.isDirty(3)
-        XCTAssertFalse(isCameraVerifiedAfterEdit)
-        let editedDisplayTitle = isCameraVerifiedAfterEdit ? editedLoadout.name : (editedLoadout.recipeName ?? editedLoadout.name)
-        // Since isCameraVerified is false, fallback uses recipeName ?? name
-        // (both are consistent with local draft)
-        XCTAssertEqual(editedDisplayTitle, "Café")
+        XCTAssertNil(editedLoadout.recipeName)
         XCTAssertEqual(editedLoadout.displayLabel, "Local Edit")
 
         // 4. Syncing again with overwriteDirtyDrafts = true resets back to camera name
         store.syncFromCameraPresetData([cafePreset], overwriteDirtyDrafts: true)
         let resyncedLoadout = try XCTUnwrap(store.loadout(for: 3))
         XCTAssertEqual(resyncedLoadout.name, "Café")
-        XCTAssertEqual(resyncedLoadout.recipeName, "Café")
+        XCTAssertNil(resyncedLoadout.recipeName)
         XCTAssertEqual(resyncedLoadout.displayLabel, "Café")
         XCTAssertFalse(store.isDirty(3))
     }

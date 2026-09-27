@@ -488,7 +488,7 @@ public struct RecipeListView: View {
                     }
                     return
                 }
-                let verified = result.differences.isEmpty
+                let verified = result.isVerified
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     activeHUDToast = HUDToast(
                         title: verified ? "✓ Synced to C\(slot)" : "C\(slot) Differs from \"\(recipe.name)\"",

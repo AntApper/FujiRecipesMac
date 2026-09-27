@@ -281,17 +281,21 @@ public final class LoadoutStore: ObservableObject {
 
             var loadout = loadouts[index]
             let cameraName = data.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            let slotLabel = cameraName.isEmpty ? "C\(data.slot)" : cameraName
-            loadout.name = slotLabel
-            loadout.recipeName = slotLabel
-            loadout.recipeID = nil
+            let cameraShowsRecipe = [loadout.recipeName, loadout.name]
+                .compactMap { $0 }
+                .contains { CameraPresetName.label(for: $0, slot: data.slot) == cameraName }
+            if !cameraShowsRecipe {
+                loadout.recipeName = nil
+                loadout.recipeID = nil
+            }
+            loadout.name = cameraName.isEmpty ? "C\(data.slot)" : cameraName
             loadout.imageQuality = data.imageQuality
             loadout.imageSize = data.imageSize
             loadout.filmSim = data.filmSimulation.flatMap(FilmSimulation.init(rawValue:))
             loadout.dr = data.dynamicRange.flatMap(DynamicRange.init(rawValue:))
             loadout.monoWarmCool = data.monoWarmCool
             loadout.monoMagentaGreen = data.monoMagentaGreen
-            loadout.grain = data.grainEffect.flatMap(GrainEffect.init(rawValue:))
+            loadout.grain = data.grainEffect.flatMap(GrainEffect.init(cameraValue:))
             loadout.colorChrome = data.colorChrome.flatMap(EffectIntensity.init(rawValue:))
             loadout.colorChromeFxBlue = data.colorChromeFxBlue.flatMap(EffectIntensity.init(rawValue:))
             loadout.smoothSkin = data.smoothSkin.flatMap(EffectIntensity.init(rawValue:))
@@ -331,8 +335,11 @@ public final class LoadoutStore: ObservableObject {
         saveLoadouts()
     }
 
+    /// `recipe` is the recipe the write came from, when the slot's draft did
+    /// not carry it. The slot keeps that link only if the camera reads back the
+    /// recipe's label.
     @discardableResult
-    public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int) -> Bool {
+    public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int, writtenFrom recipe: Recipe? = nil) -> Bool {
         guard self.revision(of: observed.slot) == revision else {
             if observed.isEmptySlot {
                 cameraEmptySlots.insert(observed.slot)
@@ -340,6 +347,10 @@ public final class LoadoutStore: ObservableObject {
                 cameraEmptySlots.remove(observed.slot)
             }
             return false
+        }
+        if let recipe, let index = loadouts.firstIndex(where: { $0.slot == observed.slot }) {
+            loadouts[index].recipeName = recipe.name
+            loadouts[index].recipeID = recipe.id
         }
         syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
         markCameraWriteVerified(slot: observed.slot)

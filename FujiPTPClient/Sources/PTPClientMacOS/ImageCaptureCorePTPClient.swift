@@ -82,9 +82,20 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
         try? await Task.sleep(nanoseconds: 120_000_000)
 
         let values = try await Self.readPresetValues(using: self)
+        return Self.presetData(slot: index, values: values)
+    }
+
+    /// A never-configured slot reads as an empty name and zero for every
+    /// numeric property.
+    static func presetData(slot: Int, values: [UInt16: PTPPropertyResponse]) -> PTPClientPresetData {
+        let name = stringValue(values[0xD18D])
+        let isEmptySlot = name.isEmpty && presetPropertyCodes
+            .filter { $0 != 0xD18D }
+            .allSatisfy { uintValue(values[$0]) == 0 }
         return PTPClientPresetData(
-            slot: index,
-            name: Self.stringValue(values[0xD18D]),
+            slot: slot,
+            name: name,
+            isEmptySlot: isEmptySlot,
             imageQuality: Self.uintValue(values[0xD18F]),
             imageSize: Self.uintValue(values[0xD18E]),
             dynamicRange: Self.uintValue(values[0xD190]),
@@ -125,7 +136,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
 
         // 2. Write slot name if provided
         if !data.name.isEmpty {
-            try await writeRawProperty(0xD18D, payload: Self.ptpString(data.name))
+            try await writeRawProperty(0xD18D, payload: CameraPresetName.ptpPayload(for: data.name, slot: index))
         }
 
         // 3. Resolve effective modes for conditional field gating
@@ -161,10 +172,10 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
 
         // 8. Write tone and saturation settings respecting monochrome eligibility
         if isMono {
-            if let warmCool = data.monoWarmCool, warmCool != 0 {
+            if let warmCool = data.monoWarmCool {
                 await writeConditionalProperty(0xD193, value: warmCool, warnings: &warnings)
             }
-            if let magentaGreen = data.monoMagentaGreen, magentaGreen != 0 {
+            if let magentaGreen = data.monoMagentaGreen {
                 await writeConditionalProperty(0xD194, value: magentaGreen, warnings: &warnings)
             }
         } else {
@@ -256,7 +267,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             try await writeProperty(0xD198, value: Int32(value.rawValue))
         }
         if let value = recipe.whiteBalanceMode {
-            try await writeProperty(0xD199, value: Int32(value.actualPTPValue))
+            try await writeProperty(0xD199, value: Int32(value.rawValue))
         }
         if let value = recipe.colorTempK {
             try await writeProperty(0xD19C, value: Int32(value))
@@ -355,22 +366,6 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             }
         }
         return String(scalars).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func ptpString(_ value: String) -> Data {
-        let ascii = value
-            .precomposedStringWithCompatibilityMapping
-            .unicodeScalars
-            .filter { $0.value < 0x80 && $0.value >= 0x20 }
-            .prefix(15)
-        var result = Data([UInt8(ascii.count + 1)])
-        for scalar in ascii {
-            result.append(UInt8(scalar.value))
-            result.append(0)
-        }
-        result.append(0)
-        result.append(0)
-        return result
     }
 
     private func writeRawProperty(_ code: UInt16, payload: Data) async throws {

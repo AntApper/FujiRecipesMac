@@ -44,7 +44,7 @@ final class BundledCatalogTests: XCTestCase {
             let mode = kelvin == nil ? Self.cardWhiteBalanceModes[whiteBalance[0]] : .colorTemperature
             XCTAssertNotNil(mode, "\(id) white balance text \(whiteBalance[0])")
             XCTAssertEqual(recipe.whiteBalanceMode, mode, "\(id) white balance")
-            XCTAssertEqual(raw.whiteBalance, mode?.actualPTPValue, "\(id) white balance")
+            XCTAssertEqual(raw.whiteBalance, mode?.rawValue, "\(id) white balance")
             XCTAssertEqual(raw.colorTemp, kelvin, "\(id) color temperature")
             XCTAssertEqual(raw.wbShiftRed, Int32(shifts[0]), "\(id) red shift")
             XCTAssertEqual(raw.wbShiftBlue, Int32(shifts[3]), "\(id) blue shift")
@@ -97,7 +97,7 @@ final class BundledCatalogTests: XCTestCase {
     private static let cardWhiteBalanceModes: [String: WhiteBalanceMode] = [
         "Auto": .auto,
         "Daylight": .daylight,
-        "Incandescent": .tungsten,
+        "Incandescent": .incandescent,
         "Fluorescent 1": .fluorescent1,
         "Fluorescent 3": .fluorescent3,
         "Shade": .shade,

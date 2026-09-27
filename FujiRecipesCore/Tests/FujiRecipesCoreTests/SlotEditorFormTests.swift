@@ -69,6 +69,39 @@ final class SlotEditorFormTests: XCTestCase {
         XCTAssertFalse(store.isDirty(3))
     }
 
+    func testSwitchingToColorTemperatureAndBackLeavesTheSlotClean() throws {
+        let store = storeWithCameraSyncedC3()
+        var form = SlotEditorForm(try XCTUnwrap(store.loadout(for: 3)))
+        form.whiteBalance = .colorTemperature
+        form.colorTemperature = 7_000
+        form.whiteBalance = .daylight
+
+        store.saveEditorForm(form, slot: 3)
+
+        XCTAssertFalse(store.isDirty(3))
+    }
+
+    func testTurningAToneOnAndOffAgainLeavesTheSlotClean() throws {
+        let store = LoadoutStore()
+        store.syncFromCameraPresetData([PTPClientPresetData(slot: 3, name: "No Tones", filmSimulation: 19)], overwriteDirtyDrafts: true)
+        var form = SlotEditorForm(try XCTUnwrap(store.loadout(for: 3)))
+        form.includesHighlight = true
+        form.highlight = 10
+        form.includesHighlight = false
+
+        store.saveEditorForm(form, slot: 3)
+
+        XCTAssertFalse(store.isDirty(3))
+    }
+
+    func testTheFormShowsTheKelvinTheCameraWillGet() throws {
+        let loadout = Loadout(slot: 3, name: "Kelvin", wb: .colorTemperature)
+
+        let written = try XCTUnwrap(try CSlotPresetEncoder.encode(loadout: loadout, slot: 3).colorTemp)
+
+        XCTAssertEqual(SlotEditorForm(loadout).colorTemperature, Int(written))
+    }
+
     func testUneditedFormDraftEncodesTheSameCameraRequest() throws {
         let store = storeWithCameraSyncedC3()
         let loadout = try XCTUnwrap(store.loadout(for: 3))

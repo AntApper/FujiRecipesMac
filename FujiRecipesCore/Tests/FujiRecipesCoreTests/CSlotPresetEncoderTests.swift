@@ -142,6 +142,37 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertNil(CSlotPresetEncoder.uiTone(from: Int32(Int16.min)))
     }
 
+    func testHalfStepTonesRoundToNearestWritableStop() {
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 5), 1)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -5), -1)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 15), 2)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -15), -2)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 25), 3)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -25), -3)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 10), 1)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -10), -1)
+    }
+
+    func testBundledHalfStepRecipesEncodeToNearestWholeStop() throws {
+        let database = try bundledRecipeDatabase()
+        let kodachrome = try XCTUnwrap(database.recipes.first { $0.id == "kodachrome-64" })
+        let recipe = RecipeLoader.recipe(from: kodachrome)
+        XCTAssertEqual(kodachrome.settings["shadow"], "+0.5")
+        XCTAssertEqual(recipe.shadow, 1, "Shadow +0.5 must round to +1, not truncate to 0")
+        let encoded = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
+        XCTAssertEqual(encoded.shadow, 10)
+
+        let amber = try XCTUnwrap(database.recipes.first { $0.id == "classic-amber" })
+        let amberRecipe = RecipeLoader.recipe(from: amber)
+        XCTAssertEqual(amber.settings["highlight"], "-1.5")
+        XCTAssertEqual(amber.settings["shadow"], "+2.5")
+        XCTAssertEqual(amberRecipe.highlight, -2)
+        XCTAssertEqual(amberRecipe.shadow, 3)
+        let encodedAmber = try CSlotPresetEncoder.encode(recipe: amberRecipe, slot: 2)
+        XCTAssertEqual(encodedAmber.highlight, -20)
+        XCTAssertEqual(encodedAmber.shadow, 30)
+    }
+
     func testRejectsOutOfRangeValuesBeforePTPWrite() {
         XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(shadow: 5), slot: 1)) {
             XCTAssertEqual(
@@ -378,14 +409,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
     }
 
     func testAllBundledRecipesEncodeSuccessfullyForCSlot() throws {
-        let testFile = URL(fileURLWithPath: #filePath)
-        let repository = testFile
-            .deletingLastPathComponent() // FujiRecipesCoreTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // FujiRecipesCore
-            .deletingLastPathComponent() // repository root
-        let resource = repository.appendingPathComponent("macos/Resources/recipes-data.json")
-        let database = try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
+        let database = try bundledRecipeDatabase()
 
         XCTAssertEqual(database.recipes.count, 40, "Expected exactly 40 recipes in recipes-data.json")
 
@@ -396,6 +420,17 @@ final class CSlotPresetEncoderTests: XCTestCase {
                 "Recipe '\(recipe.name)' (\(recipe.id)) failed to encode for C-slot"
             )
         }
+    }
+
+    private func bundledRecipeDatabase() throws -> RecipesData {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repository = testFile
+            .deletingLastPathComponent() // FujiRecipesCoreTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // FujiRecipesCore
+            .deletingLastPathComponent() // repository root
+        let resource = repository.appendingPathComponent("macos/Resources/recipes-data.json")
+        return try JSONDecoder().decode(RecipesData.self, from: Data(contentsOf: resource))
     }
 
     private func recipe(

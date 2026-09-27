@@ -166,7 +166,11 @@ public struct FujiRecipesMacRoot: View {
                                 cameraSessionFactory: cameraSessionFactory
                             )
                         case .darkroom:
-                            RAFDarkroomView(manager: cameraManager)
+                            RAFDarkroomView(
+                                manager: cameraManager,
+                                store: recipeStore,
+                                cameraSessionFactory: cameraSessionFactory
+                            )
                         }
                     }
                     .transition(.asymmetric(

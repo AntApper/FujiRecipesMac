@@ -144,7 +144,6 @@ public struct SidebarView: View {
                                     onDropRecipe: { recipe in
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                                             recipeStore.loadouts.applyRecipe(recipe, to: slot)
-                                            selection = .camera
                                             selectedDialSlot = slot
                                         }
                                     },
@@ -573,6 +572,7 @@ public struct SidebarDialRackRow: View {
 
     @State private var isHovered = false
     @State private var isDropTargeted = false
+    @State private var justDropped = false
 
     private var accent: Color { slotAccent(slot) }
     private var hasSettings: Bool { loadout?.hasAnySettings ?? false }
@@ -628,14 +628,23 @@ public struct SidebarDialRackRow: View {
                     .stroke(rowBorderColor, lineWidth: isDropTargeted ? 1.5 : (isSelected ? 1.0 : 0.8))
             )
             .shadow(color: isDropTargeted ? Theme.fujiAmber.opacity(0.6) : (isSelected ? accent.opacity(0.2) : Color.clear), radius: isDropTargeted ? 8 : (isSelected ? 4 : 0))
-            .scaleEffect(isDropTargeted ? 1.03 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isHovered || isSelected || isDropTargeted)
+            .scaleEffect(isDropTargeted ? 1.03 : (justDropped ? 1.04 : 1.0))
+            .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isHovered || isSelected || isDropTargeted || justDropped)
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)
         .dropDestination(for: Recipe.self) { items, _ in
             guard let recipe = items.first else { return false }
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                justDropped = true
+            }
             onDropRecipe(recipe)
+            Task {
+                try? await Task.sleep(for: .milliseconds(900))
+                withAnimation(.easeOut(duration: 0.35)) {
+                    justDropped = false
+                }
+            }
             return true
         } isTargeted: { targeted in
             withAnimation(.spring(response: 0.22, dampingFraction: 0.75)) {
@@ -716,7 +725,13 @@ public struct SidebarDialRackRow: View {
 
     @ViewBuilder
     private var statusIndicator: some View {
-        if isCameraSynced {
+        if justDropped {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(Theme.emeraldGreen)
+                .transition(.scale.combined(with: .opacity))
+                .help("Recipe Staged!")
+        } else if isCameraSynced {
             Circle()
                 .fill(Theme.emeraldGreen)
                 .frame(width: 6, height: 6)
@@ -737,6 +752,7 @@ public struct SidebarDialRackRow: View {
     }
 
     private var rowBackground: Color {
+        if justDropped { return Theme.emeraldGreen.opacity(0.2) }
         if isDropTargeted { return Theme.fujiAmber.opacity(0.2) }
         if isSelected { return accent.opacity(0.14) }
         if isHovered { return Color.white.opacity(0.06) }
@@ -744,6 +760,7 @@ public struct SidebarDialRackRow: View {
     }
 
     private var rowBorderColor: Color {
+        if justDropped { return Theme.emeraldGreen }
         if isDropTargeted { return Theme.fujiAmber }
         if isSelected { return accent.opacity(0.55) }
         if isHovered { return Color.white.opacity(0.12) }

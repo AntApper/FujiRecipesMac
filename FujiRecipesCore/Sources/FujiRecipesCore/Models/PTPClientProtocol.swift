@@ -256,6 +256,9 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
     public let observedSnapshot: PTPClientPresetData?
     /// Requested settings that `observedSnapshot` reads back differently.
     public let differences: [PresetField]
+    /// The user changed the slot's draft while this write ran, so the store
+    /// kept the newer draft instead of adopting the readback.
+    public let draftEditedDuringWrite: Bool
 
     public init(
         slot: Int,
@@ -264,7 +267,8 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         baseline: PTPPresetSlotBaseline? = nil,
         rollback: PTPPresetSlotRollbackOutcome = .notNeeded,
         observedSnapshot: PTPClientPresetData? = nil,
-        differences: [PresetField] = []
+        differences: [PresetField] = [],
+        draftEditedDuringWrite: Bool = false
     ) {
         self.slot = slot
         self.createdFromEmpty = createdFromEmpty
@@ -273,15 +277,36 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         self.rollback = rollback
         self.observedSnapshot = observedSnapshot
         self.differences = differences
+        self.draftEditedDuringWrite = draftEditedDuringWrite
     }
 
+    public var isVerified: Bool { differences.isEmpty && !draftEditedDuringWrite }
+
     public var summary: String {
-        guard !differences.isEmpty else {
-            return "\(createdFromEmpty ? "Created" : "Wrote") and verified C\(slot)."
+        let verb = createdFromEmpty ? "Created" : "Wrote"
+        let outcome: String
+        if differences.isEmpty {
+            outcome = draftEditedDuringWrite ? "\(verb) C\(slot)." : "\(verb) and verified C\(slot)."
+        } else {
+            let count = differences.count
+            let names = differences.map(\.displayName).joined(separator: ", ")
+            outcome = "\(verb) C\(slot) with \(count) difference\(count == 1 ? "" : "s"): \(names)."
         }
-        let count = differences.count
-        let names = differences.map(\.displayName).joined(separator: ", ")
-        return "Wrote C\(slot) with \(count) difference\(count == 1 ? "" : "s"): \(names)."
+        guard draftEditedDuringWrite else { return outcome }
+        return "\(outcome) You edited it during the write, so the newer draft is still staged."
+    }
+
+    func markingDraftEditedDuringWrite() -> PTPPresetSlotWriteResult {
+        PTPPresetSlotWriteResult(
+            slot: slot,
+            createdFromEmpty: createdFromEmpty,
+            warnings: warnings,
+            baseline: baseline,
+            rollback: rollback,
+            observedSnapshot: observedSnapshot,
+            differences: differences,
+            draftEditedDuringWrite: true
+        )
     }
 }
 

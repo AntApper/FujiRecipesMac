@@ -208,10 +208,8 @@ public final class CameraManager: ObservableObject {
         let revision = loadouts?.revision(of: slot)
         return try await exclusive(nil) { client, gen in
             let result = try await writePreset(CSlotPresetEncoder.encode(recipe: recipe, slot: slot), to: slot, using: client, gen: gen)
-            if let loadouts, let revision {
-                adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
-            }
-            return result
+            guard let loadouts, let revision else { return result }
+            return adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
         }
     }
 
@@ -219,7 +217,7 @@ public final class CameraManager: ObservableObject {
 
     /// Writes the store's current draft for `slot`, captured once the camera
     /// is free. The readback is adopted only if the draft did not change
-    /// during the write; callers can tell from `loadouts.isDirty(slot)`.
+    /// during the write; the result's `draftEditedDuringWrite` says when it did.
     public func writeSlot(_ slot: Int, from loadouts: LoadoutStore) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
             throw PTPError.invalidResponse("Preset slot must be 1–7")
@@ -351,8 +349,7 @@ public final class CameraManager: ObservableObject {
         }
         let revision = loadouts.revision(of: slot)
         let result = try await writePreset(CSlotPresetEncoder.encode(loadout: loadout, slot: slot), to: slot, using: client, gen: gen)
-        adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
-        return result
+        return adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
     }
 
     private func adopt(
@@ -361,9 +358,12 @@ public final class CameraManager: ObservableObject {
         into loadouts: LoadoutStore,
         ifUnchangedSince revision: Int,
         gen: Int
-    ) {
-        guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return }
-        loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision)
+    ) -> PTPPresetSlotWriteResult {
+        guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return result }
+        guard loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision) else {
+            return result.markingDraftEditedDuringWrite()
+        }
+        return result
     }
 
     private func writePreset(
@@ -546,15 +546,18 @@ public enum WriteAllSummary {
             guard case .failure(let error) = outcome.result else { return nil }
             return "C\(outcome.slot): \(error.localizedDescription)"
         }
-        if failures.isEmpty, written.allSatisfy(\.differences.isEmpty) {
-            return written.count == 1
-                ? "Wrote and verified C\(written[0].slot)."
-                : "Wrote and verified all \(written.count) staged slots."
+        if failures.isEmpty, written.allSatisfy(\.isVerified) {
+            guard written.count > 1 else { return written[0].summary }
+            let head = "Wrote and verified all \(written.count) staged slots."
+            let created = written.filter(\.createdFromEmpty).map { "C\($0.slot)" }
+            guard let last = created.last else { return head }
+            guard created.count > 1 else { return "\(head) Created \(last) from an empty slot." }
+            return "\(head) Created \(created.dropLast().joined(separator: ", ")) and \(last) from empty slots."
         }
         let count = outcomes.count
         let head = "Wrote \(written.count) of \(count) slot\(count == 1 ? "" : "s")."
-        let differing = written.filter { !$0.differences.isEmpty }.map(\.summary)
-        return ([head] + differing + failures).joined(separator: " ")
+        let unverified = written.filter { !$0.isVerified }.map(\.summary)
+        return ([head] + unverified + failures).joined(separator: " ")
     }
 }
 

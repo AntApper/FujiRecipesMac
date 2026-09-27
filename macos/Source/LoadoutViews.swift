@@ -115,10 +115,7 @@ public struct LoadoutsView: View {
         guard cameraManager.status == .connected else { return }
         Task {
             do {
-                let result = try await cameraManager.writeSlot(slot, from: loadouts)
-                refreshMessage = loadouts.isDirty(slot)
-                    ? "Wrote C\(slot). A newer local draft is still staged."
-                    : result.summary
+                refreshMessage = try await cameraManager.writeSlot(slot, from: loadouts).summary
             } catch {
                 refreshMessage = "Write failed for C\(slot): \(error.localizedDescription)"
             }
@@ -944,11 +941,7 @@ public struct SlotEditorSheet: View {
                     writeMessage = "C\(loadout.slot) was sent to the camera, but the post-write camera readback was unavailable. This local draft remains unverified."
                     return
                 }
-                guard !store.isDirty(loadout.slot) else {
-                    writeMessage = "C\(loadout.slot) was written to the camera, but a newer local draft is still staged."
-                    return
-                }
-                if let observedLoadout = store.loadout(for: loadout.slot) {
+                if !result.draftEditedDuringWrite, let observedLoadout = store.loadout(for: loadout.slot) {
                     loadout = observedLoadout
                     form = SlotEditorForm(observedLoadout)
                 }

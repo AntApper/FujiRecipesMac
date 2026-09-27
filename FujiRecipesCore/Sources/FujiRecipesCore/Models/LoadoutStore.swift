@@ -443,7 +443,8 @@ public struct Loadout: Identifiable, Codable, Sendable {
     public var recipeName: String?
     /// ID of the recipe that was loaded into this slot, if any.
     public var recipeID: String?
-    public var provenance: LoadoutProvenance?
+    /// Drafts stored before this field existed have no key and decode as `.localDraft`.
+    public var provenance: LoadoutProvenance
     
     // Convenience: whether this loadout has at least one setting configured
     public var hasAnySettings: Bool {
@@ -484,7 +485,7 @@ public struct Loadout: Identifiable, Codable, Sendable {
         rawPreset: LoadoutRawPresetState? = nil,
         recipeName: String? = nil,
         recipeID: String? = nil,
-        provenance: LoadoutProvenance? = .localDraft
+        provenance: LoadoutProvenance = .localDraft
     ) {
         self.slot = slot
         self.name = name
@@ -649,6 +650,12 @@ public struct LoadoutRawPresetState: Codable, Sendable, Equatable {
 public enum LoadoutProvenance: String, Codable, Sendable {
     case localDraft
     case cameraSynced
+}
+
+extension KeyedDecodingContainer {
+    func decode(_ type: LoadoutProvenance.Type, forKey key: Key) throws -> LoadoutProvenance {
+        try decodeIfPresent(type, forKey: key) ?? .localDraft
+    }
 }
 
 // MARK: - Loadout Extensions

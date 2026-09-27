@@ -910,11 +910,6 @@ public enum AppTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The two primary core workflows of FujiRecipes
-    public static var primaryTabs: [AppTab] {
-        [.recipes, .camera]
-    }
-
     public var id: String { rawValue }
 
     public var title: String {
@@ -966,33 +961,6 @@ public extension CameraStatus {
         case .connecting: return "PTP Connecting…"
         case .connected: return "Camera Online"
         case .error: return "Link Offline"
-        }
-    }
-
-    var detailLabel: String {
-        switch self {
-        case .disconnected: return "X100VI USB RAW • Not connected"
-        case .connecting: return "USB PTP • Connecting"
-        case .connected: return "USB PTP • Verified session"
-        case .error: return "USB PTP • Connection needs attention"
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .disconnected: return "cable.connector.slash"
-        case .connecting: return "arrow.triangle.2.circlepath.camera"
-        case .connected: return "checkmark.shield.fill"
-        case .error: return "exclamationmark.triangle.fill"
-        }
-    }
-
-    var displayTint: Color {
-        switch self {
-        case .disconnected: return Theme.textTertiary
-        case .connecting: return Theme.fujiAmber
-        case .connected: return Theme.emeraldGreen
-        case .error: return Theme.fujiRed
         }
     }
 }

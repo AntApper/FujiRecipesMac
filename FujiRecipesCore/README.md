@@ -21,8 +21,7 @@ FujiRecipesCore/
     │   ├── GrainEffect.swift        # 0xD023 grain enum (1–5)
     │   └── EffectIntensity.swift    # Generic 1=Off, 2=Weak, 3=Strong
     ├── Models/
-    │   ├── Recipe.swift             # Recipe with all parsed settings
-    │   └── PresetSlot.swift         # C1–C7 slot model
+    │   └── Recipe.swift             # Recipe with all parsed settings
     └── Mapping/
         └── PTPConstants.swift       # All 0xDxxx property codes + USB IDs
 ```

@@ -7,8 +7,10 @@ public final class FavoritesStore: ObservableObject {
     @Published private(set) public var favoriteIDs: Set<String> = []
     
     private let favoritesKey = "com.ant.fuji-recipes.favorites"
+    private let defaults: UserDefaults
     
-    public init() {
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadFavorites()
         print("✅ FavoritesStore initialized — \(favoriteIDs.count) favorites")
     }
@@ -16,7 +18,7 @@ public final class FavoritesStore: ObservableObject {
     // MARK: - Persistence
     
     private func loadFavorites() {
-        if let data = UserDefaults.standard.data(forKey: favoritesKey),
+        if let data = defaults.data(forKey: favoritesKey),
            let ids = try? JSONDecoder().decode([String].self, from: data) {
             self.favoriteIDs = Set(ids)
         }
@@ -24,7 +26,7 @@ public final class FavoritesStore: ObservableObject {
     
     private func saveFavorites() {
         if let data = try? JSONEncoder().encode(Array(favoriteIDs)) {
-            UserDefaults.standard.set(data, forKey: favoritesKey)
+            defaults.set(data, forKey: favoritesKey)
         }
     }
     

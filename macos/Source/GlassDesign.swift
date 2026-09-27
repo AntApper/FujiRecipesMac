@@ -10,7 +10,6 @@ public enum Theme {
     // Primary Colors
     public static let obsidianBlack = Color(red: 0.05, green: 0.055, blue: 0.065)
     public static let deepCharcoal  = Color(red: 0.09, green: 0.095, blue: 0.11)
-    public static let satinSurface  = Color(red: 0.13, green: 0.135, blue: 0.155)
     
     // Brand & Fuji Precision Accents
     public static let fujiAmber     = Color(red: 1.00, green: 0.65, blue: 0.20) // Classic dial engraving amber
@@ -18,14 +17,12 @@ public enum Theme {
     public static let titaniumMist  = Color(red: 0.88, green: 0.90, blue: 0.94) // Machined silver
     public static let cyanAccent    = Color(red: 0.24, green: 0.78, blue: 0.98) // Digital display cyan
     public static let emeraldGreen  = Color(red: 0.20, green: 0.84, blue: 0.56) // Success & link ready
-    public static let violetAccent  = Color(red: 0.68, green: 0.44, blue: 0.98) // Special feature
     public static let warmGold      = Color(red: 0.96, green: 0.78, blue: 0.38) // Star / Favorite gold
     
     // Glass Surface Tokens
     public static let glassPanelBg       = Color.white.opacity(0.04)
     public static let glassElevatedBg    = Color.white.opacity(0.07)
     public static let glassInteractiveBg = Color.white.opacity(0.06)
-    public static let glassHoverBg       = Color.white.opacity(0.10)
     public static let glassActiveBg      = Color.white.opacity(0.14)
     
     // Specular Borders & Strokes
@@ -69,8 +66,6 @@ public enum Glass {
     public static let cardRadius: CGFloat = 16
     public static let panelRadius: CGFloat = 20
     public static let buttonRadius: CGFloat = 22
-    public static let pillRadius: CGFloat = 12
-    public static let badgeRadius: CGFloat = 8
 
     public static let cardPadding: CGFloat = 16
     public static let panelPadding: CGFloat = 20
@@ -79,14 +74,7 @@ public enum Glass {
     public static let shadowRadius: CGFloat = 16
     public static let shadowYOffset: CGFloat = 6
 
-    public static let strokeColor = Color.white.opacity(0.12)
     public static let strokeWidth: CGFloat = 0.8
-
-    public static let panelTint = Color.white.opacity(0.04)
-    public static let highlight = Color.white.opacity(0.10)
-
-    public static let captionSecondary = Color.white.opacity(0.68)
-    public static let bodyPrimary: Color = .white
 }
 
 // MARK: - Window Backdrop with Dynamic Ambient Lighting

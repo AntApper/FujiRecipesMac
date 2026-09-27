@@ -133,7 +133,7 @@ public struct RecipeListView: View {
                                 },
                                 onDuplicate: {
                                     select(recipe)
-                                    recipeToEdit = recipe.duplicated()
+                                    recipeToEdit = store.customRecipes.uniquelyNamedCopy(of: recipe)
                                 }
                             )
                             .id(recipe.id)
@@ -321,7 +321,7 @@ public struct RecipeListView: View {
                         selectedPhotoUrl = url
                     },
                     onDuplicate: {
-                        let duplicated = recipe.duplicated()
+                        let duplicated = store.customRecipes.uniquelyNamedCopy(of: recipe)
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                             quickLookRecipe = nil
                         }
@@ -744,7 +744,7 @@ public struct RecipeListView: View {
         GlassPillToggle(
             options: [
                 (value: Optional<RecipeStore.FilterCategory>.none, label: "All (\(store.recipes.count))"),
-                (value: Optional<RecipeStore.FilterCategory>.some(.favorites), label: "★ Favorites (\(store.favorites.favoriteIDs.count))"),
+                (value: Optional<RecipeStore.FilterCategory>.some(.favorites), label: "★ Favorites (\(store.favoriteCount))"),
                 (value: Optional<RecipeStore.FilterCategory>.some(.myRecipes), label: "My Recipes (\(store.customRecipes.recipes.count))")
             ],
             selection: $store.selectedFilterCategory,
@@ -1331,7 +1331,7 @@ private struct GallerySlotPill: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(isTargeted ? Theme.fujiAmber : (isFilled ? Color.white : Theme.textTertiary))
 
-            if isFilled, let name = loadout?.name, !name.isEmpty {
+            if let name = loadout?.contentName {
                 Text(name)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)

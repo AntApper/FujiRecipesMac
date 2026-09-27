@@ -30,20 +30,6 @@
     "nostalgic_neg": 19,
     "reala_ace": 20
   },
-  "wbModeEnum": {
-    "as_shot": 0,
-    "auto": 2,
-    "daylight": 4,
-    "cloudy": 6,
-    "tungsten": 6,
-    "fluorescent_1": 32769,
-    "fluorescent_2": 32770,
-    "fluorescent_3": 32771,
-    "shade": 32774,
-    "color_temperature": 32775,
-    "ambience_priority": 32801,
-    "underwater": 8
-  },
   "dynamicRangeEnum": {
     "auto": 65535,
     "100": 100,

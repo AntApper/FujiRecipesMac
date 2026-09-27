@@ -24,6 +24,26 @@ final class WhiteBalanceModeTests: XCTestCase {
         )
     }
 
+    func testCatalogWhiteBalanceComesFromPresetSettings() {
+        let recipe = RecipeLoader.recipe(from: RecipeJSON(
+            id: "shade-walk",
+            name: "Shade Walk",
+            sensorGeneration: "X-Trans V",
+            filmSimulation: nil,
+            filmSimEnum: nil,
+            settings: [:],
+            ptpSettings: ["whiteBalance": 4],
+            presetSettings: ["whiteBalance": 32774],
+            sourceUrl: nil,
+            previewImageUrl: nil,
+            imageUrls: nil,
+            date: nil,
+            compatibleCameras: nil
+        ))
+
+        XCTAssertEqual(recipe.whiteBalanceMode?.displayName, "Shade")
+    }
+
     func testCatalogWhiteBalanceSixReadsAsIncandescentAndWritesSix() throws {
         let recipe = RecipeLoader.recipe(from: RecipeJSON(
             id: "classic-bw",

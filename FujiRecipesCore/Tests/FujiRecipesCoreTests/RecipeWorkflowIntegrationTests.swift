@@ -379,6 +379,23 @@ final class RecipeWorkflowIntegrationTests: XCTestCase {
         XCTAssertEqual(store.recipes.map(\.name), ["Bundled", "Bravo"])
     }
 
+    @MainActor
+    func testFavoriteCountSkipsIDsWithNoLoadedRecipe() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "favorite-count-\(UUID().uuidString)"))
+        let store = RecipeStore(
+            recipeLoading: { [Recipe(id: "bundled", name: "Bundled", source: "A", sourceUrl: nil, filmSimulation: .velvia)] },
+            defaults: defaults,
+            customRecipes: CustomRecipeLibrary(storageURL: tempDirectory.appendingPathComponent("custom-recipes-v1.json"))
+        )
+        store.loadRecipesSynchronously()
+
+        store.favorites.addFavorite("bundled")
+        store.favorites.addFavorite("custom-skipped-at-load")
+
+        XCTAssertEqual(store.favoriteCount, 1)
+        XCTAssertTrue(store.favorites.isFavorite("custom-skipped-at-load"))
+    }
+
     // MARK: - Helpers
 
     private func loadBundledRecipes() throws -> [Recipe] {

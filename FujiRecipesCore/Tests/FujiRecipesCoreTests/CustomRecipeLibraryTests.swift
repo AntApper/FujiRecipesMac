@@ -295,6 +295,18 @@ final class CustomRecipeLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testDuplicatingARecipeTwiceOffersTheNextFreeName() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("custom-recipes-v1.json"), loadOnInit: false)
+        let bundled = recipe(id: "kodak-portra-400", name: "Kodak Portra 400")
+
+        try library.save(library.uniquelyNamedCopy(of: bundled), disallowNameCollision: true)
+
+        XCTAssertEqual(library.uniquelyNamedCopy(of: bundled).name, "Kodak Portra 400 (Custom 2)")
+    }
+
+    @MainActor
     func testUnreadableLibraryBlocksSavingUntilTheIssueIsAcknowledged() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -412,10 +424,63 @@ final class CustomRecipeLibraryTests: XCTestCase {
         XCTAssertEqual(try backupContents(in: directory), [])
 
         fileManager.failsCopies = false
+        XCTAssertEqual(try error(from: { try library.save(recipe(id: "custom-new", name: "New")) }), .persistenceBlocked)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(library.loadIssue?.backupURL)), original)
+        library.acknowledgeLoadIssue()
         try library.save(recipe(id: "custom-new", name: "New"))
 
         XCTAssertEqual(try backupContents(in: directory), [original])
         XCTAssertEqual(CustomRecipeLibrary(storageURL: url).recipes.map(\.name), ["New"])
+    }
+
+    @MainActor
+    func testLibraryUnreadableAtLaunchKeepsItsRecipesOnceReadable() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        try JSONEncoder().encode(CustomRecipeLibraryExport(recipes: [
+            recipe(id: "custom-alpha", name: "Alpha"),
+            recipe(id: "custom-alpha-copy", name: "Alpha (Custom)")
+        ])).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+
+        let library = CustomRecipeLibrary(storageURL: url)
+        XCTAssertNil(try XCTUnwrap(library.loadIssue).backupURL)
+        library.acknowledgeLoadIssue()
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        let copy = try library.saveCopy(of: recipe(id: "custom-alpha", name: "Alpha"))
+
+        XCTAssertEqual(copy.name, "Alpha (Custom 2)")
+        XCTAssertEqual(
+            CustomRecipeLibrary(storageURL: url).recipes.map(\.name),
+            ["Alpha", "Alpha (Custom 2)", "Alpha (Custom)"]
+        )
+    }
+
+    @MainActor
+    func testRetiredWhiteBalanceNamesFromOlderBuildsReadAsIncandescent() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let olderBuildLibrary = Data("""
+        {"version": 1, "recipes": [
+          {"id": "custom-cloudy", "name": "Cloudy Walk", "source": "My Recipes", "imageUrls": [], "parseStatus": "ok",
+           "whiteBalanceMode": 6, "settings": {"whiteBalance": "Cloudy"}},
+          {"id": "custom-tungsten", "name": "Tungsten Night", "source": "My Recipes", "imageUrls": [], "parseStatus": "ok",
+           "whiteBalanceMode": 5, "settings": {"whiteBalance": "Tungsten"}},
+          {"id": "custom-daylight", "name": "Daylight", "source": "My Recipes", "imageUrls": [], "parseStatus": "ok",
+           "whiteBalanceMode": 4, "settings": {"whiteBalance": "Daylight"}}
+        ]}
+        """.utf8)
+        try olderBuildLibrary.write(to: url)
+
+        let loaded = CustomRecipeLibrary(storageURL: url)
+        let imported = CustomRecipeLibrary(storageURL: directory.appendingPathComponent("imported.json"), loadOnInit: false)
+        try imported.import(olderBuildLibrary)
+
+        XCTAssertEqual(loaded.recipes.map { $0.settings?["whiteBalance"] }, ["Incandescent", "Incandescent", "Daylight"])
+        XCTAssertEqual(imported.recipes.map { $0.settings?["whiteBalance"] }, ["Incandescent", "Daylight", "Incandescent"])
     }
 
     @MainActor

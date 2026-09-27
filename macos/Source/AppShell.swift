@@ -65,7 +65,7 @@ public struct SidebarView: View {
                                 icon: "star.fill",
                                 accentColor: Theme.fujiAmber,
                                 isSelected: selection == .recipes && recipeStore.selectedFilterCategory == .favorites,
-                                count: recipeStore.favorites.favoriteIDs.count,
+                                count: recipeStore.favoriteCount,
                                 onDropRecipe: { recipe in
                                     withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                                         recipeStore.favorites.addFavorite(recipe.id)

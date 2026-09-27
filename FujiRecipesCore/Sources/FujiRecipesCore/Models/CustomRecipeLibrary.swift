@@ -70,9 +70,17 @@ public struct CustomRecipeLibraryLoadIssue: Equatable, Sendable {
             let list = skipped.map { "“\($0.name)” (\($0.reason))" }.joined(separator: ", ")
             finding = "\(recipes) couldn’t be read and \(verb) left out: \(list)."
         }
-        let backup = backupURL.map { "The original file was copied to “\($0.lastPathComponent)”." }
-            ?? "FujiRecipes couldn’t make a copy of the original file, so it was left untouched."
-        return "\(finding) \(backup) Changes to My Recipes won’t be saved until you dismiss this."
+        guard let backupURL else {
+            return "\(finding) FujiRecipes couldn’t make a copy of the original file, so it was left untouched. My Recipes won’t save changes until FujiRecipes can make that copy."
+        }
+        let copied = "The original file was copied to “\(backupURL.lastPathComponent)”"
+        switch problem {
+        case .unreadableFile:
+            return "\(finding) \(copied), which keeps its contents. After you dismiss this, your next change to My Recipes replaces the main file."
+        case .skippedRecipes(let skipped):
+            let pronoun = skipped.count == 1 ? "it" : "them"
+            return "\(finding) \(copied), which keeps \(pronoun). After you dismiss this, your next change to My Recipes saves the main file without \(pronoun)."
+        }
     }
 }
 

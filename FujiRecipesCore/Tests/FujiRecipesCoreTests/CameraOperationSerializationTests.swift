@@ -148,6 +148,29 @@ final class CameraOperationSerializationTests: XCTestCase {
     }
 
     @MainActor
+    func testReplaceLocalDraftsKeepsASlotEditedWhileTheRefreshRead() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        store.applyRecipe(Recipe(id: "two", name: "Two", source: "test", sourceUrl: nil, filmSimulation: .velvia), to: 2)
+        store.applyRecipe(Recipe(id: "three", name: "Three", source: "test", sourceUrl: nil, filmSimulation: .eterna), to: 3)
+
+        let refresh = Task { await manager.refreshCameraSlots(into: store, overwriteDirtyDrafts: true) }
+        await camera.waitUntilBusy()
+        store.setHighlight(for: 3, highlight: 2)
+        store.updateName(for: 5, name: "Five")
+        _ = await refresh.value
+
+        XCTAssertEqual(store.loadout(for: 2)?.name, "Camera 2", "Replace Local Drafts kept a draft nobody touched during the read")
+        XCTAssertFalse(store.isDirty(2))
+        XCTAssertEqual(store.loadout(for: 3)?.name, "Three")
+        XCTAssertEqual(store.loadout(for: 3)?.highlight, 2, "the refresh replaced an edit made while it was reading")
+        XCTAssertEqual(store.loadout(for: 5)?.name, "Five", "the refresh replaced an edit made while it was reading")
+        XCTAssertEqual(store.stagedSlots, [3, 5])
+    }
+
+    @MainActor
     func testSingleWriteReportsASlotEditedDuringItsWrite() async throws {
         let camera = SlotRegisterCamera()
         let store = LoadoutStore()

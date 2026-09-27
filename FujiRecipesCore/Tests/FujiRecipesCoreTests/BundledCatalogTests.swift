@@ -51,6 +51,14 @@ final class BundledCatalogTests: XCTestCase {
         }
     }
 
+    func testEveryRecipeHasASortableDate() throws {
+        for source in try bundledRecipeCatalog().recipes {
+            XCTAssertNotNil(RecipeLoader.recipe(from: source).date, "\(source.id) date \(source.date ?? "nil")")
+        }
+        let summer = try XCTUnwrap(bundledRecipeCatalog().recipes.first { $0.date == "2026-05-02" })
+        XCTAssertEqual(RecipeLoader.recipe(from: summer).date?.timeIntervalSince1970, 1_777_680_000)
+    }
+
     func testLoaderDropsRawValuesThatAreNotExactCameraValues() {
         let recipe = RecipeLoader.recipe(from: RecipeJSON(
             id: "inexact",

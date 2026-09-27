@@ -419,6 +419,31 @@ final class CustomRecipeLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testLibraryUnreadableAtLaunchKeepsItsRecipesOnceReadable() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        try JSONEncoder().encode(CustomRecipeLibraryExport(recipes: [
+            recipe(id: "custom-alpha", name: "Alpha"),
+            recipe(id: "custom-alpha-copy", name: "Alpha (Custom)")
+        ])).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+
+        let library = CustomRecipeLibrary(storageURL: url)
+        XCTAssertNil(try XCTUnwrap(library.loadIssue).backupURL)
+        library.acknowledgeLoadIssue()
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        let copy = try library.saveCopy(of: recipe(id: "custom-alpha", name: "Alpha"))
+
+        XCTAssertEqual(copy.name, "Alpha (Custom 2)")
+        XCTAssertEqual(
+            CustomRecipeLibrary(storageURL: url).recipes.map(\.name),
+            ["Alpha", "Alpha (Custom 2)", "Alpha (Custom)"]
+        )
+    }
+
+    @MainActor
     func testMissingLibraryFileLoadsEmptyWithoutAnIssue() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

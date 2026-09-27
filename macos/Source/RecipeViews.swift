@@ -2218,7 +2218,8 @@ public struct RecipeQuickLookView: View {
                         // Tone Curve Radar & Key Visual Readout
                         HStack(alignment: .top, spacing: 16) {
                             ToneCurveRadar(tones: recipe.toneTenths, accentColor: accent)
-                            .frame(width: 110, height: 95)
+                            .fixedSize()
+                            .frame(minWidth: 110, minHeight: 95)
                             .padding(8)
                             .background(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)

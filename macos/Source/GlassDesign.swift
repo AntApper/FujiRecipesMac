@@ -564,6 +564,7 @@ public struct ToneCurveRadar: View {
             
             Text(tenths.map(ToneTenths.text) ?? "·")
                 .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                .lineLimit(1)
                 .foregroundStyle(toneColor(tenths))
         }
         .frame(minWidth: 17)

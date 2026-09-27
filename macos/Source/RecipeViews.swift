@@ -34,14 +34,23 @@ public struct RecipeListView: View {
     @State private var customRecipeMessage: String?
     @State private var selectedRecipeID: Recipe.ID? = nil
     @State private var quickLookRecipe: Recipe? = nil
+    @State private var gridWidth: Double = 0
     @FocusState private var isSearchFocused: Bool
+    @FocusState private var isGridFocused: Bool
+
+    private var columnCount: Int {
+        GridNavigation.columnCount(width: gridWidth, minimum: 330, spacing: 14)
+    }
 
     // Expanded cards can be substantially taller than the compact cards.
-    // Top-align each adaptive grid cell so adjacent cards do not float in the
+    // Top-align each grid cell so adjacent cards do not float in the
     // middle of the selected recipe's detail area.
-    private let columns = [
-        GridItem(.adaptive(minimum: 330, maximum: 560), spacing: 14, alignment: .top)
-    ]
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(maximum: 560), spacing: 14, alignment: .top),
+            count: columnCount
+        )
+    }
 
     public var onNavigateToCamera: (() -> Void)? = nil
 
@@ -56,92 +65,109 @@ public struct RecipeListView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                // Sleek Floating Control Header
-                headerControlBar
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    // Sleek Floating Control Header
+                    headerControlBar
 
-                // Filter & Sort Pills
-                filterAndSortBar
+                    // Filter & Sort Pills
+                    filterAndSortBar
 
-                // Quick Dial Strip for 1-click drag & drop
-                quickDialBar
+                    // Quick Dial Strip for 1-click drag & drop
+                    quickDialBar
 
-                if store.loadingState == .loading {
-                    recipeLoadingState
-                } else {
-                    if store.loadingState == .failed {
-                        emptyState
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    }
+                    if store.loadingState == .loading {
+                        recipeLoadingState
+                    } else {
+                        if store.loadingState == .failed {
+                            emptyState
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        }
 
-                    // Recipe Cards Grid
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(store.filteredRecipes) { recipe in
-                            RecipeCard(
-                                recipe: recipe,
-                                isExpanded: expandedRecipeIDs.contains(recipe.id),
-                                isSelected: selectedRecipeID == recipe.id,
-                                favorites: store.favorites,
-                                loadouts: store.loadouts,
-                                isCustomRecipe: store.isCustomRecipe(recipe),
-                                onSelect: {
-                                    selectedRecipeID = recipe.id
-                                },
-                                onQuickLook: {
-                                    selectedRecipeID = recipe.id
-                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                                        quickLookRecipe = recipe
-                                    }
-                                },
-                                onToggleExpand: {
-                                    selectedRecipeID = recipe.id
-                                    withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
-                                        if expandedRecipeIDs.contains(recipe.id) {
-                                            expandedRecipeIDs.remove(recipe.id)
-                                        } else {
-                                            expandedRecipeIDs.insert(recipe.id)
+                        // Recipe Cards Grid
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(store.filteredRecipes) { recipe in
+                                RecipeCard(
+                                    recipe: recipe,
+                                    isExpanded: expandedRecipeIDs.contains(recipe.id),
+                                    isSelected: selectedRecipeID == recipe.id,
+                                    favorites: store.favorites,
+                                    loadouts: store.loadouts,
+                                    isCustomRecipe: store.isCustomRecipe(recipe),
+                                    onSelect: {
+                                        select(recipe)
+                                    },
+                                    onQuickLook: {
+                                        select(recipe)
+                                        withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                            quickLookRecipe = recipe
                                         }
+                                    },
+                                    onToggleExpand: {
+                                        select(recipe)
+                                        withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                                            if expandedRecipeIDs.contains(recipe.id) {
+                                                expandedRecipeIDs.remove(recipe.id)
+                                            } else {
+                                                expandedRecipeIDs.insert(recipe.id)
+                                            }
+                                        }
+                                    },
+                                    onQuickLoadToSlot: { slot in
+                                        Task {
+                                            await load(recipe, into: slot)
+                                        }
+                                    },
+                                    onLoadToSlot: {
+                                        recipeToLoad = recipe
+                                    },
+                                    onSelectPhoto: { url in
+                                        selectedPhotoUrl = url
+                                    },
+                                    onEdit: {
+                                        recipeToEdit = recipe
+                                    },
+                                    onDelete: {
+                                        recipeToDelete = recipe
+                                    },
+                                    onDuplicate: {
+                                        select(recipe)
+                                        recipeToEdit = recipe.duplicated()
                                     }
-                                },
-                                onQuickLoadToSlot: { slot in
-                                    Task {
-                                        await load(recipe, into: slot)
-                                    }
-                                },
-                                onLoadToSlot: {
-                                    recipeToLoad = recipe
-                                },
-                                onSelectPhoto: { url in
-                                    selectedPhotoUrl = url
-                                },
-                                onEdit: {
-                                    recipeToEdit = recipe
-                                },
-                                onDelete: {
-                                    recipeToDelete = recipe
-                                },
-                                onDuplicate: {
-                                    selectedRecipeID = recipe.id
-                                    recipeToEdit = recipe.duplicated()
-                                }
-                            )
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.94)).combined(with: .offset(y: 10)),
-                                removal: .opacity.combined(with: .scale(scale: 0.96))
-                            ))
+                                )
+                                .id(recipe.id)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.94)).combined(with: .offset(y: 10)),
+                                    removal: .opacity.combined(with: .scale(scale: 0.96))
+                                ))
+                            }
+                        }
+                        .animation(.spring(response: 0.32, dampingFraction: 0.8), value: store.filteredRecipes.map(\.id))
+                        .frame(maxWidth: .infinity)
+                        .onGeometryChange(for: Double.self) { $0.size.width } action: { gridWidth = $0 }
+                        .focusable()
+                        .focusEffectDisabled()
+                        .focused($isGridFocused)
+                        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+                            let move: GridNavigation.Move = switch press.key {
+                            case .leftArrow: .left
+                            case .rightArrow: .right
+                            case .upArrow: .up
+                            default: .down
+                            }
+                            return moveSelection(move, scrollProxy: scrollProxy)
+                        }
+
+                        if store.filteredRecipes.isEmpty && store.loadingState != .failed {
+                            emptyState
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
                     }
-                    .animation(.spring(response: 0.32, dampingFraction: 0.8), value: store.filteredRecipes.map(\.id))
-
-                    if store.filteredRecipes.isEmpty && store.loadingState != .failed {
-                        emptyState
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    }
                 }
+                .padding(16)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: store.filteredRecipes.isEmpty)
             }
-            .padding(16)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: store.filteredRecipes.isEmpty)
         }
         .navigationTitle("Fuji Recipes Studio")
         .searchable(text: $store.searchQuery, placement: .toolbar, prompt: "Search recipes, film sims, Kelvin, tags…")
@@ -194,15 +220,8 @@ public struct RecipeListView: View {
             }
             return .ignored
         }
-        .onKeyPress(.downArrow) {
-            if isSearchFocused { return .ignored }
-            selectNextRecipe()
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            if isSearchFocused { return .ignored }
-            selectPreviousRecipe()
-            return .handled
+        .onChange(of: store.loadingState, initial: true) { _, state in
+            isGridFocused = state == .loaded
         }
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
             focusSearchField()
@@ -420,40 +439,25 @@ public struct RecipeListView: View {
         }
     }
 
-    private func selectNextRecipe() {
-        guard !store.filteredRecipes.isEmpty else { return }
-        if let currentID = selectedRecipeID,
-           let idx = store.filteredRecipes.firstIndex(where: { $0.id == currentID }) {
-            let nextIdx = min(idx + 1, store.filteredRecipes.count - 1)
-            let nextRecipe = store.filteredRecipes[nextIdx]
-            selectedRecipeID = nextRecipe.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = nextRecipe
-            }
-        } else if let first = store.filteredRecipes.first {
-            selectedRecipeID = first.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = first
-            }
-        }
+    private func select(_ recipe: Recipe) {
+        selectedRecipeID = recipe.id
+        isGridFocused = true
     }
 
-    private func selectPreviousRecipe() {
-        guard !store.filteredRecipes.isEmpty else { return }
-        if let currentID = selectedRecipeID,
-           let idx = store.filteredRecipes.firstIndex(where: { $0.id == currentID }) {
-            let prevIdx = max(idx - 1, 0)
-            let prevRecipe = store.filteredRecipes[prevIdx]
-            selectedRecipeID = prevRecipe.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = prevRecipe
-            }
-        } else if let first = store.filteredRecipes.first {
-            selectedRecipeID = first.id
-            if quickLookRecipe != nil {
-                quickLookRecipe = first
-            }
+    private func moveSelection(_ move: GridNavigation.Move, scrollProxy: ScrollViewProxy) -> KeyPress.Result {
+        let recipes = store.filteredRecipes
+        guard !recipes.isEmpty else { return .ignored }
+        let target = recipes.firstIndex(where: { $0.id == selectedRecipeID })
+            .map { recipes[GridNavigation.index(from: $0, move: move, count: recipes.count, columns: columnCount)] }
+            ?? recipes[0]
+        selectedRecipeID = target.id
+        if quickLookRecipe != nil {
+            quickLookRecipe = target
         }
+        withAnimation(.easeOut(duration: 0.2)) {
+            scrollProxy.scrollTo(target.id)
+        }
+        return .handled
     }
 
     private func focusSearchField() {

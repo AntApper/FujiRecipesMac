@@ -335,8 +335,10 @@ public final class LoadoutStore: ObservableObject {
         saveLoadouts()
     }
 
+    /// `recipe` is the recipe the write came from, when the slot's draft did
+    /// not carry it. The sync keeps the link only if the camera shows its label.
     @discardableResult
-    public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int) -> Bool {
+    public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int, writtenFrom recipe: Recipe? = nil) -> Bool {
         guard self.revision(of: observed.slot) == revision else {
             if observed.isEmptySlot {
                 cameraEmptySlots.insert(observed.slot)
@@ -344,6 +346,10 @@ public final class LoadoutStore: ObservableObject {
                 cameraEmptySlots.remove(observed.slot)
             }
             return false
+        }
+        if let recipe, let index = loadouts.firstIndex(where: { $0.slot == observed.slot }) {
+            loadouts[index].recipeName = recipe.name
+            loadouts[index].recipeID = recipe.id
         }
         syncFromCameraPresetData([observed], overwriteDirtyDrafts: true)
         markCameraWriteVerified(slot: observed.slot)

@@ -209,7 +209,7 @@ public final class CameraManager: ObservableObject {
         return try await exclusive(nil) { client, gen in
             let result = try await writePreset(CSlotPresetEncoder.encode(recipe: recipe, slot: slot), to: slot, using: client, gen: gen)
             guard let loadouts, let revision else { return result }
-            return adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
+            return adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, writtenFrom: recipe, gen: gen)
         }
     }
 
@@ -357,10 +357,11 @@ public final class CameraManager: ObservableObject {
         for slot: Int,
         into loadouts: LoadoutStore,
         ifUnchangedSince revision: Int,
+        writtenFrom recipe: Recipe? = nil,
         gen: Int
     ) -> PTPPresetSlotWriteResult {
         guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return result }
-        guard loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision) else {
+        guard loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision, writtenFrom: recipe) else {
             return result.markingDraftEditedDuringWrite()
         }
         return result

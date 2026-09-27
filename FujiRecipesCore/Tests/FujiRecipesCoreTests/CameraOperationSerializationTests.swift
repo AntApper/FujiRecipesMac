@@ -169,6 +169,21 @@ final class CameraOperationSerializationTests: XCTestCase {
     // MARK: - Item 15: disconnect during connect
 
     @MainActor
+    func testConnectReportsSlotReadAsItsOwnStep() async {
+        let camera = SlotRegisterCamera()
+        let manager = CameraManager()
+
+        let connect = Task { await manager.connect(using: camera, loadouts: LoadoutStore()) }
+        await camera.waitUntilBusy()
+
+        XCTAssertEqual(manager.status, .connecting)
+        XCTAssertEqual(manager.operation, .readingSlots)
+        await connect.value
+        XCTAssertEqual(manager.status, .connected)
+        XCTAssertEqual(manager.operation, .idle)
+    }
+
+    @MainActor
     func testDisconnectDuringConnectSlotReadEndsDisconnected() async {
         let camera = SlotRegisterCamera()
         let store = LoadoutStore()

@@ -35,6 +35,10 @@ public struct CameraConnectionView: View {
         isConnecting || manager.status == .connecting
     }
 
+    private var isReadingSlotsDuringConnect: Bool {
+        manager.status == .connecting && manager.operation == .readingSlots
+    }
+
     public init(
         manager: CameraManager,
         loadouts: LoadoutStore,
@@ -307,7 +311,7 @@ public struct CameraConnectionView: View {
             Text(manager.status == .connected ? "Session Active" : (isConnectionInFlight ? "Connecting…" : (manager.status == .error ? "Retry Available" : "Ready to Connect")))
                 .font(.subheadline.weight(.semibold))
                 .glassPrimary()
-            Text(manager.status == .connected ? "Verified USB session. C1–C7 preset reads and local drafts remain separate." : (isConnectionInFlight ? "Opening a USB PTP session. This can take up to 15 seconds." : "Connect over USB-C to inspect C1–C7 preset slots."))
+            Text(manager.status == .connected ? "Verified USB session. C1–C7 preset reads and local drafts remain separate." : (isReadingSlotsDuringConnect ? "Session open. Reading preset slots C1–C7 from the camera." : (isConnectionInFlight ? "Opening a USB PTP session. This can take up to 15 seconds." : "Connect over USB-C to inspect C1–C7 preset slots.")))
                 .font(.caption2)
                 .glassSecondary()
                 .lineLimit(2)
@@ -321,7 +325,7 @@ public struct CameraConnectionView: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(Color.black)
-                    Text("Establishing Link…")
+                    Text(isReadingSlotsDuringConnect ? "Reading C1–C7…" : "Establishing Link…")
                         .lineLimit(1)
                 } else {
                     Image(systemName: manager.status == .connected ? "xmark.circle.fill" : "bolt.fill")

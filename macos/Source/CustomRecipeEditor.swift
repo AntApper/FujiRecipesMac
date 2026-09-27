@@ -455,7 +455,6 @@ struct CustomRecipeEditor: View {
         (name: "Weak, Large", rawValue: GrainEffect.weakLarge.rawValue),
         (name: "Strong, Large", rawValue: GrainEffect.strongLarge.rawValue)
     ]
-    /// The camera rejects As Shot (0) as a C-slot white balance with 0x201C.
     private let whiteBalanceOptions = WhiteBalanceMode.cameraModes
 }
 

@@ -336,7 +336,8 @@ public final class LoadoutStore: ObservableObject {
     }
 
     /// `recipe` is the recipe the write came from, when the slot's draft did
-    /// not carry it. The sync keeps the link only if the camera shows its label.
+    /// not carry it. The slot keeps that link only if the camera reads back the
+    /// recipe's label.
     @discardableResult
     public func adoptCameraWrite(_ observed: PTPClientPresetData, ifUnchangedSince revision: Int, writtenFrom recipe: Recipe? = nil) -> Bool {
         guard self.revision(of: observed.slot) == revision else {

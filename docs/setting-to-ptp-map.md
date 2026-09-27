@@ -50,7 +50,7 @@ Confirmed via FilmKit cross-referencing 7 camera presets on X100VI (2026-03).
 | `0xD192`    | P:FilmSimulation   | Film simulation                                | FilmSim enum (0x01–0x14)                  |
 | `0xD193`    | P:MonoWC×10        | Mono Warm/Cool tone (B&W only)                 | ×10 encoding                              |
 | `0xD194`    | P:MonoMG×10        | Mono Magenta/Green tone (B&W only)             | ×10 encoding                              |
-| `0xD195`    | P:GrainEffect      | Grain effect                                   | 1=Off, 2=Weak Small, 3=Strong Small, 4=Weak Large, 5=Strong Large; 6 and 7 are Off, read only |
+| `0xD195`    | P:GrainEffect      | Grain effect                                   | 1=Off, 2=Weak Small, 3=Strong Small, 4=Weak Large, 5=Strong Large; 6 and 7 read back as Off but cannot be written |
 | `0xD196`    | P:ColorChrome      | Color Chrome Effect                            | 1=Off, 2=Weak, 3=Strong                   |
 | `0xD197`    | P:ColorChromeFxBlue| Color Chrome FX Blue                           | 1=Off, 2=Weak, 3=Strong                   |
 | `0xD198`    | P:SmoothSkin       | Smooth Skin Effect                             | 1=Off, 2=Weak, 3=Strong                   |

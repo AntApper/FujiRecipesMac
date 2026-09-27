@@ -17,7 +17,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
     private var process: Process?
     private var inputPipe: Pipe?
     private var errorPipe: Pipe?
-    private var lineIterator: AsyncThrowingStream<String, any Error>.Iterator?
     private var requestStreamContinuation: AsyncStream<PendingRequest>.Continuation?
     private var requestProcessorTask: Task<Void, Never>?
     private var stderrTail = ""
@@ -127,16 +126,19 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             self.process = process
             self.inputPipe = stdinPipe
             self.errorPipe = stderrPipe
-            self.lineIterator = lines.makeAsyncIterator()
             self.requestStreamContinuation = requestContinuation
             self.stderrTail = ""
             self.terminationSummary = nil
         }
 
-        // Start the single worker that owns the iterator and serialises I/O.
         let processor = Task { [weak self] in
             guard let self else { return }
-            await self.processRequests(from: requestStream)
+            await self.processRequests(
+                from: requestStream,
+                responses: lines,
+                input: stdinPipe.fileHandleForWriting,
+                process: process
+            )
         }
         self.queue.sync { self.requestProcessorTask = processor }
 
@@ -793,9 +795,17 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
         init(_ dict: [String: Any]) { self.dict = dict }
     }
 
-    /// The single worker that owns the helper's stdout iterator and processes
-    /// one request at a time.  This guarantees request/response ordering.
-    private func processRequests(from stream: AsyncStream<PendingRequest>) async {
+    /// The single worker for one helper session. It processes one request at
+    /// a time, which guarantees request/response ordering. It takes the
+    /// session's pipes and process because it can outlive teardown and must
+    /// never reach a later session.
+    private func processRequests(
+        from stream: AsyncStream<PendingRequest>,
+        responses: AsyncThrowingStream<String, any Error>,
+        input: FileHandle,
+        process: Process
+    ) async {
+        var responseLines = responses.makeAsyncIterator()
         for await request in stream {
             // A request can time out while waiting behind a long transfer.
             // Do not write cancelled queued work to the camera.
@@ -803,15 +813,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
                 continue
             }
             do {
-                var (iterator, inputPipe, process) = self.queue.sync { () -> (AsyncThrowingStream<String, any Error>.Iterator, Pipe, Process) in
-                    guard let iterator = self.lineIterator,
-                          let inputPipe = self.inputPipe,
-                          let process = self.process else {
-                        fatalError("Request processor started before connect")
-                    }
-                    return (iterator, inputPipe, process)
-                }
-
                 guard process.isRunning else {
                     throw PTPError.notConnected
                 }
@@ -826,15 +827,11 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
                     throw PTPError.invalidResponse("Failed to encode request")
                 }
 
-                inputPipe.fileHandleForWriting.write(lineData)
+                input.write(lineData)
 
-                guard let responseLine = try await iterator.next() else {
+                guard let responseLine = try await responseLines.next() else {
                     throw PTPError.invalidResponse(self.helperTerminationDetails(for: process))
                 }
-
-                // Store the mutated iterator back (AsyncThrowingStream iterators
-                // are value types that share read state via internal reference).
-                self.queue.sync { self.lineIterator = iterator }
 
                 guard let responseData = responseLine.data(using: String.Encoding.utf8),
                       let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
@@ -925,7 +922,6 @@ public final class X100VIHelperClient: PTPClientProtocol, @unchecked Sendable {
             requestProcessorTask = nil
             inputPipe = nil
             errorPipe = nil
-            lineIterator = nil
             process = nil
             lifecycle = .idle
             shutdownTask = nil

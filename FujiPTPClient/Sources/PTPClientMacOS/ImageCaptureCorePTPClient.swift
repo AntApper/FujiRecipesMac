@@ -82,9 +82,20 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
         try? await Task.sleep(nanoseconds: 120_000_000)
 
         let values = try await Self.readPresetValues(using: self)
+        return Self.presetData(slot: index, values: values)
+    }
+
+    /// A never-configured slot reads as an empty name and zero for every
+    /// numeric property.
+    static func presetData(slot: Int, values: [UInt16: PTPPropertyResponse]) -> PTPClientPresetData {
+        let name = stringValue(values[0xD18D])
+        let isEmptySlot = name.isEmpty && presetPropertyCodes
+            .filter { $0 != 0xD18D }
+            .allSatisfy { uintValue(values[$0]) == 0 }
         return PTPClientPresetData(
-            slot: index,
-            name: Self.stringValue(values[0xD18D]),
+            slot: slot,
+            name: name,
+            isEmptySlot: isEmptySlot,
             imageQuality: Self.uintValue(values[0xD18F]),
             imageSize: Self.uintValue(values[0xD18E]),
             dynamicRange: Self.uintValue(values[0xD190]),

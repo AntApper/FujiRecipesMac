@@ -157,6 +157,7 @@ struct FujiRecipesMacApp: App {
                     .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
                 }
             }
+            #if DEBUG
             CommandGroup(after: .help) {
                 Divider()
                 Button("Diagnostics & Debug HUD") {
@@ -164,6 +165,7 @@ struct FujiRecipesMacApp: App {
                 }
                 .keyboardShortcut("d", modifiers: [.command, .option])
             }
+            #endif
         }
     }
 }

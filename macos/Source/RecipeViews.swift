@@ -1593,6 +1593,7 @@ private struct RecipeCard: View {
                     }
                     .buttonStyle(.plain)
                     .help(isExpanded ? "Collapse recipe formula" : "Expand recipe formula")
+                    .accessibilityLabel(isExpanded ? "Collapse \(recipe.name) formula" : "Expand \(recipe.name) formula")
                 }
             }
         }

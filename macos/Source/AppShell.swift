@@ -290,7 +290,7 @@ public struct SidebarView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(count) recipes")
+        .accessibilityLabel("\(title), \(count == 1 ? "1 recipe" : "\(count) recipes")")
     }
 
     private var brandHeader: some View {
@@ -569,7 +569,7 @@ private struct SidebarLibraryRow: View {
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(count) recipes")
+        .accessibilityLabel("\(title), \(count == 1 ? "1 recipe" : "\(count) recipes")")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .dropDestination(for: Recipe.self) { items, _ in
             guard let onDropRecipe, let recipe = items.first else { return false }

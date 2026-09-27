@@ -529,32 +529,20 @@ public struct GlassPillToggle<Value: Hashable>: View {
 // MARK: - Visual Tone Curve Mini Radar / Offsets Indicator
 
 public struct ToneCurveRadar: View {
-    public let highlight: Int32?
-    public let shadow: Int32?
-    public let color: Int32?
-    public let sharpness: Int32?
+    public let tones: ToneTenths
     public var accentColor: Color = Theme.fujiAmber
 
-    public init(
-        highlight: Int32? = nil,
-        shadow: Int32? = nil,
-        color: Int32? = nil,
-        sharpness: Int32? = nil,
-        accentColor: Color = Theme.fujiAmber
-    ) {
-        self.highlight = highlight
-        self.shadow = shadow
-        self.color = color
-        self.sharpness = sharpness
+    public init(tones: ToneTenths, accentColor: Color = Theme.fujiAmber) {
+        self.tones = tones
         self.accentColor = accentColor
     }
 
     public var body: some View {
         HStack(spacing: 6) {
-            toneBar(label: "H", value: highlight ?? 0)
-            toneBar(label: "S", value: shadow ?? 0)
-            toneBar(label: "C", value: color ?? 0)
-            toneBar(label: "Sh", value: sharpness ?? 0)
+            toneBar(label: "H", tenths: tones.highlight)
+            toneBar(label: "S", tenths: tones.shadow)
+            toneBar(label: "C", tenths: tones.color)
+            toneBar(label: "Sh", tenths: tones.sharpness)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
@@ -568,17 +556,23 @@ public struct ToneCurveRadar: View {
         )
     }
 
-    private func toneBar(label: String, value: Int32) -> some View {
+    private func toneBar(label: String, tenths: Int32?) -> some View {
         VStack(spacing: 1.5) {
             Text(label)
                 .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(Theme.textSecondary)
             
-            Text(value == 0 ? "0" : (value > 0 ? "+\(value)" : "\(value)"))
+            Text(tenths.map(ToneTenths.text) ?? "·")
                 .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                .foregroundStyle(value == 0 ? Theme.textTertiary : (value > 0 ? accentColor : Theme.cyanAccent))
+                .foregroundStyle(toneColor(tenths))
         }
         .frame(minWidth: 17)
+    }
+
+    private func toneColor(_ tenths: Int32?) -> Color {
+        guard let tenths else { return Theme.textTertiary.opacity(0.6) }
+        if tenths == 0 { return Theme.textTertiary }
+        return tenths > 0 ? accentColor : Theme.cyanAccent
     }
 }
 

@@ -18,6 +18,7 @@ struct CustomRecipeEditor: View {
     @State private var colorTemperature: Int
     @State private var redShift: Int
     @State private var blueShift: Int
+    /// Highlight and shadow are C-slot tenths so they can hold half steps.
     @State private var highlight: Int
     @State private var shadow: Int
     @State private var color: Int
@@ -42,8 +43,8 @@ struct CustomRecipeEditor: View {
         _colorTemperature = State(initialValue: Int(recipe.colorTempK ?? 5_600))
         _redShift = State(initialValue: Int(recipe.wbShiftRed ?? 0))
         _blueShift = State(initialValue: Int(recipe.wbShiftBlue ?? 0))
-        _highlight = State(initialValue: Int(recipe.highlight ?? 0))
-        _shadow = State(initialValue: Int(recipe.shadow ?? 0))
+        _highlight = State(initialValue: Int(recipe.toneTenths.highlight ?? 0))
+        _shadow = State(initialValue: Int(recipe.toneTenths.shadow ?? 0))
         _color = State(initialValue: Int(recipe.color ?? 0))
         _sharpness = State(initialValue: Int(recipe.sharpness ?? 0))
         _highIsoNR = State(initialValue: Int(recipe.highIsoNr ?? 0))
@@ -269,13 +270,7 @@ struct CustomRecipeEditor: View {
             Section("Tone Curve & Offsets") {
                 VStack(spacing: 14) {
                     // Real-Time Interactive Radar Canvas
-                    InteractiveToneRadarView(
-                        highlight: highlight,
-                        shadow: shadow,
-                        color: color,
-                        sharpness: sharpness,
-                        accentColor: currentSimColor
-                    )
+                    InteractiveToneRadarView(tones: editedTones, accentColor: currentSimColor)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
 
@@ -283,8 +278,8 @@ struct CustomRecipeEditor: View {
 
                     // Live Parameter Steppers
                     VStack(spacing: 6) {
-                        Stepper("Highlight: \(signed(highlight))", value: $highlight, in: -2...4)
-                        Stepper("Shadow: \(signed(shadow))", value: $shadow, in: -2...4)
+                        Stepper("Highlight: \(ToneTenths.text(Int32(highlight)))", value: $highlight, in: halfStepRange, step: 5)
+                        Stepper("Shadow: \(ToneTenths.text(Int32(shadow)))", value: $shadow, in: halfStepRange, step: 5)
                         Stepper("Color: \(signed(color))", value: $color, in: -4...4)
                         Stepper("Sharpness: \(signed(sharpness))", value: $sharpness, in: -4...4)
                         Stepper("High ISO NR: \(signed(highIsoNR))", value: $highIsoNR, in: -4...4)
@@ -345,6 +340,14 @@ struct CustomRecipeEditor: View {
         .animation(.easeInOut(duration: 0.18), value: name)
     }
 
+    private var halfStepRange: ClosedRange<Int> {
+        Int(CSlotPresetEncoder.highlightShadowRange.lowerBound * 10)...Int(CSlotPresetEncoder.highlightShadowRange.upperBound * 10)
+    }
+
+    private var editedTones: ToneTenths {
+        makeRecipe().toneTenths
+    }
+
     private func makeRecipe() -> Recipe {
         let sim = FilmSimulation(rawValue: filmSimulation) ?? .provia
         let dr = DynamicRange(rawValue: dynamicRange) ?? .dr100
@@ -355,21 +358,22 @@ struct CustomRecipeEditor: View {
             "dynamicRange": dr.displayName,
             "grainEffect": selectedGrain.displayName,
             "whiteBalance": wb.displayName,
-            "highlight": signed(highlight),
-            "shadow": signed(shadow),
+            "highlight": ToneTenths.text(Int32(highlight)),
+            "shadow": ToneTenths.text(Int32(shadow)),
             "color": signed(color),
             "sharpness": signed(sharpness),
             "highIsoNr": signed(highIsoNR),
             "clarity": signed(clarity)
         ]
-        // Half-step values live only in the raw preset, so keep each raw value
-        // until the user moves that slider off its initial whole-step value.
-        var rawPreset = recipe.sourceRawPreset
-        if highlight != Int(recipe.highlight ?? 0) { rawPreset?.highlight = nil }
-        if shadow != Int(recipe.shadow ?? 0) { rawPreset?.shadow = nil }
-        if color != Int(recipe.color ?? 0) { rawPreset?.color = nil }
-        if sharpness != Int(recipe.sharpness ?? 0) { rawPreset?.sharpness = nil }
-        if clarity != Int(recipe.clarity ?? 0) { rawPreset?.clarity = nil }
+        // Whole-step fields cannot hold a half step, so highlight and shadow
+        // keep one in the raw preset. Other raw values last until the user
+        // moves that stepper off its initial whole-step value.
+        var rawPreset = recipe.sourceRawPreset ?? LoadoutRawPresetState()
+        rawPreset.highlight = highlight % 10 == 0 ? nil : Int32(highlight)
+        rawPreset.shadow = shadow % 10 == 0 ? nil : Int32(shadow)
+        if color != Int(recipe.color ?? 0) { rawPreset.color = nil }
+        if sharpness != Int(recipe.sharpness ?? 0) { rawPreset.sharpness = nil }
+        if clarity != Int(recipe.clarity ?? 0) { rawPreset.clarity = nil }
 
         return Recipe(
             id: recipe.id,
@@ -390,8 +394,8 @@ struct CustomRecipeEditor: View {
             wbShiftRed: Int32(redShift),
             wbShiftBlue: Int32(blueShift),
             colorTempK: wb == .colorTemperature ? UInt32(colorTemperature) : nil,
-            highlight: Int32(highlight),
-            shadow: Int32(shadow),
+            highlight: Int32(highlight / 10),
+            shadow: Int32(shadow / 10),
             color: Int32(color),
             sharpness: Int32(sharpness),
             highIsoNr: Int32(highIsoNR),
@@ -403,7 +407,7 @@ struct CustomRecipeEditor: View {
             compatibleCameras: ["X100VI"],
             tags: ["My Recipes"],
             parseStatus: .ok,
-            sourceRawPreset: rawPreset?.hasAnyValue == true ? rawPreset : nil
+            sourceRawPreset: rawPreset.hasAnyValue ? rawPreset : nil
         )
     }
 
@@ -435,22 +439,13 @@ struct CustomRecipeEditor: View {
 // MARK: - Interactive Tone Curve Radar Preview
 
 struct InteractiveToneRadarView: View {
-    let highlight: Int
-    let shadow: Int
-    let color: Int
-    let sharpness: Int
+    let tones: ToneTenths
     var accentColor: Color = Theme.fujiAmber
 
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                RadarCanvas(
-                    highlight: highlight,
-                    shadow: shadow,
-                    color: color,
-                    sharpness: sharpness,
-                    accentColor: accentColor
-                )
+                RadarCanvas(tones: tones, accentColor: accentColor)
                 .frame(width: 180, height: 180)
             }
             .padding(8)
@@ -465,20 +460,20 @@ struct InteractiveToneRadarView: View {
 
             // Real-Time Metric Badges
             HStack(spacing: 8) {
-                metricPill(label: "H", value: highlight)
-                metricPill(label: "S", value: shadow)
-                metricPill(label: "C", value: color)
-                metricPill(label: "Sh", value: sharpness)
+                metricPill(label: "H", tenths: tones.highlight ?? 0)
+                metricPill(label: "S", tenths: tones.shadow ?? 0)
+                metricPill(label: "C", tenths: tones.color ?? 0)
+                metricPill(label: "Sh", tenths: tones.sharpness ?? 0)
             }
         }
     }
 
-    private func metricPill(label: String, value: Int) -> some View {
+    private func metricPill(label: String, tenths value: Int32) -> some View {
         HStack(spacing: 3) {
             Text(label)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Theme.textSecondary)
-            Text(value > 0 ? "+\(value)" : "\(value)")
+            Text(ToneTenths.text(value))
                 .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                 .foregroundStyle(value == 0 ? Theme.textTertiary : (value > 0 ? accentColor : Theme.cyanAccent))
         }
@@ -492,14 +487,15 @@ struct InteractiveToneRadarView: View {
 // MARK: - 120Hz ProMotion Radar Canvas
 
 struct RadarCanvas: View {
-    let highlight: Int
-    let shadow: Int
-    let color: Int
-    let sharpness: Int
+    let tones: ToneTenths
     let accentColor: Color
 
     var body: some View {
         Canvas { context, size in
+            let highlight = CGFloat(tones.highlight ?? 0) / 10
+            let shadow = CGFloat(tones.shadow ?? 0) / 10
+            let color = CGFloat(tones.color ?? 0) / 10
+            let sharpness = CGFloat(tones.sharpness ?? 0) / 10
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let maxR: CGFloat = min(size.width, size.height) / 2 - 18
             let neutralR: CGFloat = maxR * 0.45

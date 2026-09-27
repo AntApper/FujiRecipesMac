@@ -288,7 +288,8 @@ public final class LoadoutStore: ObservableObject {
     /// fields. Clear a matching raw snapshot field whenever that editable
     /// value changed, including a transition to nil. Raw fields with no UI
     /// representation stay intact, so a read→edit→write cycle remains
-    /// lossless for newer camera values.
+    /// lossless for newer camera values. A tone whose raw tenth the editor
+    /// also set keeps it, because whole steps cannot hold a half step.
     private func discardRawValuesOverridden(in draft: inout Loadout, comparedTo previous: Loadout) {
         guard var raw = draft.rawPreset else { return }
 
@@ -302,10 +303,10 @@ public final class LoadoutStore: ObservableObject {
         if draft.wbShiftRed != previous.wbShiftRed { raw.wbShiftRed = nil }
         if draft.wbShiftBlue != previous.wbShiftBlue { raw.wbShiftBlue = nil }
         if draft.colorTempK != previous.colorTempK { raw.colorTemp = nil }
-        if draft.highlight != previous.highlight { raw.highlight = nil }
-        if draft.shadow != previous.shadow { raw.shadow = nil }
-        if draft.color != previous.color { raw.color = nil }
-        if draft.sharpness != previous.sharpness { raw.sharpness = nil }
+        if draft.highlight != previous.highlight, raw.highlight == previous.rawPreset?.highlight { raw.highlight = nil }
+        if draft.shadow != previous.shadow, raw.shadow == previous.rawPreset?.shadow { raw.shadow = nil }
+        if draft.color != previous.color, raw.color == previous.rawPreset?.color { raw.color = nil }
+        if draft.sharpness != previous.sharpness, raw.sharpness == previous.rawPreset?.sharpness { raw.sharpness = nil }
         if draft.highIsoNr != previous.highIsoNr { raw.highIsoNr = nil }
         if draft.clarity != previous.clarity { raw.clarity = nil }
         if draft.imageQuality != previous.imageQuality { raw.imageQuality = nil }

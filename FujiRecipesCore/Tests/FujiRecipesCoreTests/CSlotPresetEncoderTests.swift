@@ -141,12 +141,6 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -25), -2)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 10), 1)
         XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -10), -1)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: 5), 1)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: -5), -1)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: 15), 2)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: -15), -2)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: 25), 3)
-        XCTAssertEqual(RecipeLoader.catalogTone(from: -25), -3)
     }
 
     func testBundledHalfStepRecipesKeepExactToneTenths() throws {
@@ -154,7 +148,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
         let kodachrome = try XCTUnwrap(database.recipes.first { $0.id == "kodachrome-64" })
         let recipe = RecipeLoader.recipe(from: kodachrome)
         XCTAssertEqual(kodachrome.settings["shadow"], "+0.5")
-        XCTAssertEqual(recipe.shadow, 1, "UI shadow rounds +0.5 to +1")
+        XCTAssertEqual(recipe.shadow, 0, "whole-step shadow truncates +0.5 to 0")
         XCTAssertEqual(recipe.sourceRawPreset?.shadow, 5)
         let encoded = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
         XCTAssertEqual(encoded.shadow, 5, "C-slot write keeps shadow +0.5")
@@ -163,8 +157,8 @@ final class CSlotPresetEncoderTests: XCTestCase {
         let amberRecipe = RecipeLoader.recipe(from: amber)
         XCTAssertEqual(amber.settings["highlight"], "-1.5")
         XCTAssertEqual(amber.settings["shadow"], "+2.5")
-        XCTAssertEqual(amberRecipe.highlight, -2)
-        XCTAssertEqual(amberRecipe.shadow, 3)
+        XCTAssertEqual(amberRecipe.highlight, -1)
+        XCTAssertEqual(amberRecipe.shadow, 2)
         let encodedAmber = try CSlotPresetEncoder.encode(recipe: amberRecipe, slot: 2)
         XCTAssertEqual(encodedAmber.highlight, -15, "C-slot write keeps highlight -1.5")
         XCTAssertEqual(encodedAmber.shadow, 25, "C-slot write keeps shadow +2.5")

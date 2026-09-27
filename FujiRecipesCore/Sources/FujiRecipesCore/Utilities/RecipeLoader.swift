@@ -140,12 +140,12 @@ public enum RecipeLoader {
             wbShiftRed: signed("wbShiftRed"),
             wbShiftBlue: signed("wbShiftBlue"),
             colorTempK: colorTemp,
-            highlight: catalogTone(from: signed("highlightTone")),
-            shadow: catalogTone(from: signed("shadowTone")),
-            color: catalogTone(from: signed("color")),
-            sharpness: catalogTone(from: signed("sharpness")),
+            highlight: CSlotPresetEncoder.uiTone(from: signed("highlightTone")),
+            shadow: CSlotPresetEncoder.uiTone(from: signed("shadowTone")),
+            color: CSlotPresetEncoder.uiTone(from: signed("color")),
+            sharpness: CSlotPresetEncoder.uiTone(from: signed("sharpness")),
             highIsoNr: CSlotPresetEncoder.uiHighIsoNR(from: unsigned("highIsoNr")),
-            clarity: catalogTone(from: signed("clarity")),
+            clarity: CSlotPresetEncoder.uiTone(from: signed("clarity")),
             iso: jsonRecipe.settings["iso"],
             exposureCompensation: jsonRecipe.settings["exposureCompensation"],
             settings: jsonRecipe.settings,
@@ -161,16 +161,6 @@ public enum RecipeLoader {
     /// gives that raw value to `.cloudy`. `.tungsten` writes the same `6`.
     static func whiteBalance(cameraValue: UInt32) -> WhiteBalanceMode? {
         cameraValue == WhiteBalanceMode.tungsten.actualPTPValue ? .tungsten : WhiteBalanceMode(rawValue: cameraValue)
-    }
-
-    /// Nearest whole stop for catalog display. Camera sync uses truncating
-    /// `uiTone` so raw `+1.5` stays distinct from UI `+2`.
-    static func catalogTone(from raw: Int32?) -> Int32? {
-        guard let raw else { return nil }
-        let signed16 = Int32(Int16(truncatingIfNeeded: raw))
-        guard signed16 != Int32(Int16.min) else { return nil }
-        let bias: Int32 = signed16 >= 0 ? 5 : -5
-        return (signed16 + bias) / 10
     }
 
     /// Whole UI steps round-trip through `uiTone` and `rawTenths`. Half steps

@@ -695,13 +695,7 @@ public struct LoadoutCard: View {
             .frame(height: 20, alignment: .leading)
 
             // Tone Radar
-            ToneCurveRadar(
-                highlight: loadout.highlight,
-                shadow: loadout.shadow,
-                color: loadout.color,
-                sharpness: loadout.sharpness,
-                accentColor: accent
-            )
+            ToneCurveRadar(tones: loadout.toneTenths, accentColor: accent)
             .frame(height: 36, alignment: .leading)
         }
     }
@@ -767,14 +761,15 @@ public struct SlotEditorSheet: View {
         self._selectedWB = State(initialValue: loadout.wb)
         self._colorTemperature = State(initialValue: Int(loadout.colorTempK ?? 5600))
         self._draftName = State(initialValue: loadout.name)
-        self._highlight = State(initialValue: loadout.highlight ?? 0)
-        self._shadow = State(initialValue: loadout.shadow ?? 0)
-        self._color = State(initialValue: loadout.color ?? 0)
-        self._sharpness = State(initialValue: loadout.sharpness ?? 0)
-        self._includesHighlight = State(initialValue: loadout.highlight != nil)
-        self._includesShadow = State(initialValue: loadout.shadow != nil)
-        self._includesColor = State(initialValue: loadout.color != nil)
-        self._includesSharpness = State(initialValue: loadout.sharpness != nil)
+        let tones = loadout.toneTenths
+        self._highlight = State(initialValue: tones.highlight ?? 0)
+        self._shadow = State(initialValue: tones.shadow ?? 0)
+        self._color = State(initialValue: tones.color ?? 0)
+        self._sharpness = State(initialValue: tones.sharpness ?? 0)
+        self._includesHighlight = State(initialValue: tones.highlight != nil)
+        self._includesShadow = State(initialValue: tones.shadow != nil)
+        self._includesColor = State(initialValue: tones.color != nil)
+        self._includesSharpness = State(initialValue: tones.sharpness != nil)
     }
 
     public var body: some View {
@@ -862,10 +857,10 @@ public struct SlotEditorSheet: View {
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.textTertiary)
 
-                            optionalStepperRow(title: "Highlight Tone", included: $includesHighlight, value: $highlight, range: CSlotPresetEncoder.highlightShadowRange)
-                            optionalStepperRow(title: "Shadow Tone", included: $includesShadow, value: $shadow, range: CSlotPresetEncoder.highlightShadowRange)
-                            optionalStepperRow(title: "Color Saturation", included: $includesColor, value: $color, range: CSlotPresetEncoder.colorSharpnessRange)
-                            optionalStepperRow(title: "Sharpness", included: $includesSharpness, value: $sharpness, range: CSlotPresetEncoder.colorSharpnessRange)
+                            optionalStepperRow(title: "Highlight Tone", included: $includesHighlight, tenths: $highlight, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
+                            optionalStepperRow(title: "Shadow Tone", included: $includesShadow, tenths: $shadow, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
+                            optionalStepperRow(title: "Color Saturation", included: $includesColor, tenths: $color, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
+                            optionalStepperRow(title: "Sharpness", included: $includesSharpness, tenths: $sharpness, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
                         }
                         .glassCard()
                         if let writeMessage {
@@ -896,7 +891,8 @@ public struct SlotEditorSheet: View {
         .defaultFocus($isNameFocused, true)
     }
 
-    private func stepperRow(title: String, value: Binding<Int32>, range: ClosedRange<Int32>) -> some View {
+    /// `range` is in whole UI steps; `tenths` and `step` are C-slot tenths.
+    private func stepperRow(title: String, tenths value: Binding<Int32>, range: ClosedRange<Int32>, step: Int32) -> some View {
         HStack {
             Text(title)
                 .font(.subheadline)
@@ -905,7 +901,7 @@ public struct SlotEditorSheet: View {
             HStack(spacing: 8) {
                 Button {
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                        if value.wrappedValue > range.lowerBound { value.wrappedValue -= 1 }
+                        if value.wrappedValue - step >= range.lowerBound * 10 { value.wrappedValue -= step }
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")
@@ -914,9 +910,9 @@ public struct SlotEditorSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Decrease \(title)")
-                .accessibilityHint("Decreases \(title) by one.")
+                .accessibilityHint("Decreases \(title) by \(ToneTenths.text(step).dropFirst()).")
 
-                Text(value.wrappedValue.formatValue)
+                Text(ToneTenths.text(value.wrappedValue))
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
                     .foregroundStyle(value.wrappedValue == 0 ? Theme.textTertiary : (value.wrappedValue > 0 ? Theme.fujiAmber : Theme.cyanAccent))
                     .frame(width: 36)
@@ -924,7 +920,7 @@ public struct SlotEditorSheet: View {
 
                 Button {
                     withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                        if value.wrappedValue < range.upperBound { value.wrappedValue += 1 }
+                        if value.wrappedValue + step <= range.upperBound * 10 { value.wrappedValue += step }
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -933,16 +929,16 @@ public struct SlotEditorSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Increase \(title)")
-                .accessibilityHint("Increases \(title) by one.")
+                .accessibilityHint("Increases \(title) by \(ToneTenths.text(step).dropFirst()).")
             }
         }
     }
 
-    private func optionalStepperRow(title: String, included: Binding<Bool>, value: Binding<Int32>, range: ClosedRange<Int32>) -> some View {
+    private func optionalStepperRow(title: String, included: Binding<Bool>, tenths: Binding<Int32>, range: ClosedRange<Int32>, step: Int32) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Toggle("Include \(title)", isOn: included)
                 .font(.caption)
-            stepperRow(title: title, value: value, range: range)
+            stepperRow(title: title, tenths: tenths, range: range, step: step)
                 .disabled(!included.wrappedValue)
                 .opacity(included.wrappedValue ? 1 : 0.45)
         }
@@ -955,10 +951,16 @@ public struct SlotEditorSheet: View {
         loadout.grain = selectedGrain
         loadout.wb = selectedWB
         loadout.colorTempK = selectedWB == .colorTemperature ? UInt32(colorTemperature) : nil
-        loadout.highlight = includesHighlight ? highlight : nil
-        loadout.shadow = includesShadow ? shadow : nil
-        loadout.color = includesColor ? color : nil
-        loadout.sharpness = includesSharpness ? sharpness : nil
+        var raw = loadout.rawPreset ?? LoadoutRawPresetState()
+        raw.highlight = includesHighlight ? highlight : nil
+        raw.shadow = includesShadow ? shadow : nil
+        raw.color = includesColor ? color : nil
+        raw.sharpness = includesSharpness ? sharpness : nil
+        loadout.rawPreset = raw.hasAnyValue ? raw : nil
+        loadout.highlight = raw.highlight.map { $0 / 10 }
+        loadout.shadow = raw.shadow.map { $0 / 10 }
+        loadout.color = raw.color.map { $0 / 10 }
+        loadout.sharpness = raw.sharpness.map { $0 / 10 }
         store.saveLocalDraft(loadout)
     }
 

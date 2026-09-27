@@ -22,10 +22,9 @@ public enum CSlotPresetEncoder {
     /// `0x8000` is Fuji's unset sentinel and must not be treated as -3276.8.
     ///
     /// Half-stops truncate toward zero (`15` → `1`, `5` → `0`). Camera sync
-    /// depends on that: raw `+1.5` must stay distinct from UI `+2`, or an
-    /// editor change to `+2` looks unchanged and the stored tenth is kept.
-    /// Catalog display rounding lives in `RecipeLoader.catalogTone`. Exact
-    /// recipe writes use `Recipe.sourceRawPreset`.
+    /// and the catalog both depend on that: raw `+1.5` must stay distinct
+    /// from UI `+2`, or an editor change to `+2` looks unchanged and the
+    /// stored tenth is kept. Display and exact writes use `ToneTenths`.
     public static func uiTone(from raw: Int32?) -> Int32? {
         guard let raw else { return nil }
         let signed16 = Int32(Int16(truncatingIfNeeded: raw))
@@ -239,6 +238,47 @@ public enum CSlotPresetEncoder {
         default:
             return false
         }
+    }
+}
+
+/// Tone values in C-slot tenths, the unit the camera stores: `-15` is −1.5.
+/// A raw tenth wins over its whole-step value, which truncates half steps.
+/// `nil` means the recipe or slot leaves that setting unchanged.
+public struct ToneTenths: Equatable, Sendable {
+    public var highlight: Int32?
+    public var shadow: Int32?
+    public var color: Int32?
+    public var sharpness: Int32?
+
+    init(highlight: Int32?, shadow: Int32?, color: Int32?, sharpness: Int32?, raw: LoadoutRawPresetState?) {
+        func tenths(_ raw: Int32?, _ whole: Int32?) -> Int32? {
+            guard let raw else { return whole.map { $0 * 10 } }
+            let signed16 = Int32(Int16(truncatingIfNeeded: raw))
+            return signed16 == Int32(Int16.min) ? nil : signed16
+        }
+        self.highlight = tenths(raw?.highlight, highlight)
+        self.shadow = tenths(raw?.shadow, shadow)
+        self.color = tenths(raw?.color, color)
+        self.sharpness = tenths(raw?.sharpness, sharpness)
+    }
+
+    /// Formats tenths the way recipe cards write them: "-1.5", "+0.5", "+2", "0".
+    public static func text(_ tenths: Int32) -> String {
+        let sign = tenths > 0 ? "+" : (tenths < 0 ? "-" : "")
+        let magnitude = tenths.magnitude
+        return magnitude % 10 == 0 ? "\(sign)\(magnitude / 10)" : "\(sign)\(magnitude / 10).\(magnitude % 10)"
+    }
+}
+
+public extension Recipe {
+    var toneTenths: ToneTenths {
+        ToneTenths(highlight: highlight, shadow: shadow, color: color, sharpness: sharpness, raw: sourceRawPreset)
+    }
+}
+
+public extension Loadout {
+    var toneTenths: ToneTenths {
+        ToneTenths(highlight: highlight, shadow: shadow, color: color, sharpness: sharpness, raw: rawPreset)
     }
 }
 

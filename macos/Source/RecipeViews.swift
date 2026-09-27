@@ -2336,61 +2336,42 @@ public struct RecipeQuickLookView: View {
                 Divider().overlay(Color.white.opacity(0.1))
 
                 // Footer Bar with 1-click Dial Staging (C1–C7)
-                HStack(spacing: 8) {
-                    Text("STAGE TO DIAL:")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Theme.textTertiary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        stageToDialLabel
+                        stageSlotButtons
+                        Spacer()
+                        footerActions
+                    }
 
-                    ForEach(1...7, id: \.self) { slot in
-                        let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
-                            ? "Empty"
-                            : (loadouts.loadout(for: slot)?.name ?? "Empty")
-                        Button {
-                            onStageToSlot(slot)
-                        } label: {
-                            Text("C\(slot)")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(slotAccent(slot))
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(slotAccent(slot).opacity(0.16))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(slotAccent(slot).opacity(0.4), lineWidth: 0.8)
-                                )
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            stageToDialLabel
+                            stageSlotButtons
                         }
-                        .buttonStyle(.plain)
-                        .help("Stage to C\(slot): \(slotName)")
-                        .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
-                    }
-
-                    Spacer()
-
-                    if let onDuplicate = onDuplicate {
-                        Button {
-                            onDuplicate()
-                        } label: {
-                            Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+                        HStack(spacing: 8) {
+                            Spacer()
+                            footerActions
                         }
-                        .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
-                        .accessibilityIdentifier("recipe-quick-look-duplicate")
                     }
 
-                    Button("Done") {
-                        onDismiss()
+                    VStack(alignment: .leading, spacing: 8) {
+                        stageToDialLabel
+                        HStack(spacing: 8) {
+                            stageSlotButtons
+                        }
+                        HStack(spacing: 8) {
+                            Spacer()
+                            footerActions
+                        }
                     }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
                 .background(Color.black.opacity(0.2))
             }
-            .frame(width: 640)
-            .fixedSize(horizontal: true, vertical: true)
+            .frame(maxWidth: 640)
+            .fixedSize(horizontal: false, vertical: true)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Theme.deepCharcoal.opacity(0.96))
@@ -2411,6 +2392,59 @@ public struct RecipeQuickLookView: View {
             .accessibilityIdentifier("recipe-quick-look-modal")
             .padding(24)
         }
+    }
+
+    private var stageToDialLabel: some View {
+        Text("STAGE TO DIAL:")
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundStyle(Theme.textTertiary)
+    }
+
+    private var stageSlotButtons: some View {
+        ForEach(1...7, id: \.self) { slot in
+            let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
+                ? "Empty"
+                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+            Button {
+                onStageToSlot(slot)
+            } label: {
+                Text("C\(slot)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(slotAccent(slot))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(slotAccent(slot).opacity(0.16))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(slotAccent(slot).opacity(0.4), lineWidth: 0.8)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("Stage to C\(slot): \(slotName)")
+            .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
+        }
+    }
+
+    @ViewBuilder
+    private var footerActions: some View {
+        if let onDuplicate = onDuplicate {
+            Button {
+                onDuplicate()
+            } label: {
+                Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+            }
+            .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
+            .accessibilityIdentifier("recipe-quick-look-duplicate")
+        }
+
+        Button("Done") {
+            onDismiss()
+        }
+        .keyboardShortcut(.defaultAction)
+        .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
     }
 }
 

@@ -56,6 +56,26 @@ final class LoadoutStoreRecoveryTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: notice.backupKey), unreadable)
     }
 
+    @MainActor
+    func testDraftsSavedBeforeProvenanceExistedStayLocalDrafts() {
+        let stored = Data(#"""
+            [{"slot":1,"name":"Night Walk","recipeName":"Night Walk","filmSim":11},
+             {"slot":2,"name":"C2"},
+             {"slot":3,"name":"Harbor","filmSim":17,"provenance":"cameraSynced"}]
+            """#.utf8)
+        defaults.set(stored, forKey: loadoutsKey)
+
+        let store = LoadoutStore(defaults: defaults)
+        store.syncFromCameraPresetData([PTPClientPresetData(slot: 1, name: "Camera Slot", filmSimulation: 1)])
+
+        XCTAssertNil(store.recoveryNotice)
+        XCTAssertEqual(store.loadout(for: 1)?.provenance, .localDraft)
+        XCTAssertEqual(store.loadout(for: 1)?.filmSim, .classicChrome)
+        XCTAssertEqual(store.loadout(for: 3)?.provenance, .cameraSynced)
+        XCTAssertEqual(store.dirtySlots, [1])
+        XCTAssertEqual(store.stagedSlots, [1])
+    }
+
     func testRecoveryNoticeMessageNamesTheBackupKey() {
         let notice = LoadoutRecoveryNotice(
             backupKey: "com.ant.fuji-recipes.loadouts.unreadable-20260927-012400",

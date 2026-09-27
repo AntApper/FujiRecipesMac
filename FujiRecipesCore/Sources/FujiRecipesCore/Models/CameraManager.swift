@@ -294,7 +294,7 @@ public final class CameraManager: ObservableObject {
     /// acquisition and calls private bodies, never public operations.
     private func exclusive<T>(
         _ op: CameraOperation?,
-        _ body: (PTPClientProtocol, Int) async throws -> T
+        _ body: @MainActor (PTPClientProtocol, Int) async throws -> T
     ) async throws -> T {
         guard status == .connected, let client, client.isConnected else {
             throw CameraError.notConnected

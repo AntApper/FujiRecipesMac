@@ -118,7 +118,7 @@ public enum RecipeLoader {
         let filmSim = jsonRecipe.filmSimEnum.flatMap { UInt32(exactly: $0) }.flatMap(FilmSimulation.init(rawValue:))
         let wb = (jsonRecipe.ptpSettings["whiteBalance"] ?? preset["whiteBalance"])
             .flatMap { UInt32(exactly: $0) }
-            .flatMap(WhiteBalanceMode.init(rawValue:))
+            .flatMap(whiteBalance(cameraValue:))
         let colorTemp = resolveColorTemperature(from: jsonRecipe, wb: wb)
 
         return Recipe(
@@ -155,6 +155,12 @@ public enum RecipeLoader {
             parseStatus: .ok,
             sourceRawPreset: halfStepRawPreset(from: preset)
         )
+    }
+
+    /// The camera's white balance `6` is Incandescent, but `WhiteBalanceMode`
+    /// gives that raw value to `.cloudy`. `.tungsten` writes the same `6`.
+    static func whiteBalance(cameraValue: UInt32) -> WhiteBalanceMode? {
+        cameraValue == WhiteBalanceMode.tungsten.actualPTPValue ? .tungsten : WhiteBalanceMode(rawValue: cameraValue)
     }
 
     /// Nearest whole stop for catalog display. Camera sync uses truncating

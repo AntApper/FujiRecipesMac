@@ -107,9 +107,7 @@ public struct LoadoutsView: View {
     private func refreshCameraSlots(overwriteDrafts: Bool) {
         Task {
             let result = await cameraManager.refreshCameraSlots(into: loadouts, overwriteDirtyDrafts: overwriteDrafts)
-            refreshMessage = result.isComplete
-                ? "Read all 7 camera slots."
-                : "Read \(result.presets.count)/7 slots. Failed: \(result.failures.map { "C\($0.slot)" }.joined(separator: ", "))."
+            refreshMessage = result.summary
         }
     }
 

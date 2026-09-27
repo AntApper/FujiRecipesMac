@@ -240,10 +240,10 @@ public final class CameraManager: ObservableObject {
 
     // MARK: - Batch Write Staged Slots
 
-    public func writeAllStagedSlots(from loadouts: LoadoutStore) async -> [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] {
+    public func writeAllStagedSlots(from loadouts: LoadoutStore) async -> [SlotWriteOutcome] {
         do {
             return try await exclusive(nil) { client, gen in
-                var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
+                var results: [SlotWriteOutcome] = []
 
                 for slot in loadouts.stagedSlots {
                     guard loadouts.stagedSlots.contains(slot) else { continue }
@@ -529,6 +529,36 @@ public struct SlotRefreshResult: Sendable {
     }
 
     public var isComplete: Bool { failures.isEmpty && presets.count == 7 }
+
+    /// "Read all 7 camera slots." or "Read 5 of 7 slots. C3: reason; C6: reason"
+    public var summary: String {
+        guard !isComplete else { return "Read all 7 camera slots." }
+        return "Read \(presets.count) of 7 slots. \(failures.map(\.description).joined(separator: "; "))"
+    }
+}
+
+public typealias SlotWriteOutcome = (slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)
+
+public enum WriteAllSummary {
+    /// One line for a Write All run: verified slots, slots written with
+    /// differences, and each failure with its reason.
+    public static func text(for outcomes: [SlotWriteOutcome]) -> String {
+        guard !outcomes.isEmpty else { return "No staged slots were written." }
+        let written = outcomes.compactMap { try? $0.result.get() }
+        let failures = outcomes.compactMap { outcome -> String? in
+            guard case .failure(let error) = outcome.result else { return nil }
+            return "C\(outcome.slot): \(error.localizedDescription)"
+        }
+        if failures.isEmpty, written.allSatisfy(\.differences.isEmpty) {
+            return written.count == 1
+                ? "Wrote and verified C\(written[0].slot)."
+                : "Wrote and verified all \(written.count) staged slots."
+        }
+        let count = outcomes.count
+        let head = "Wrote \(written.count) of \(count) slot\(count == 1 ? "" : "s")."
+        let differing = written.filter { !$0.differences.isEmpty }.map(\.summary)
+        return ([head] + differing + failures).joined(separator: " ")
+    }
 }
 
 // MARK: - Camera Error

@@ -119,6 +119,68 @@ final class CameraFeedbackTests: XCTestCase {
         XCTAssertEqual(camera.slot(3).monoWarmCool, 10)
         XCTAssertEqual(result.differences, [])
     }
+
+    // MARK: - Write All and Refresh summaries
+
+    func testWriteAllSummaryForOneAndSeveralVerifiedSlots() {
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [(slot: 3, result: .success(PTPPresetSlotWriteResult(slot: 3)))]),
+            "Wrote and verified C3."
+        )
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [2, 3, 5].map { (slot: $0, result: .success(PTPPresetSlotWriteResult(slot: $0))) }),
+            "Wrote and verified all 3 staged slots."
+        )
+    }
+
+    func testWriteAllSummaryListsDifferencesAndFailuresWithReasons() {
+        let outcomes: [SlotWriteOutcome] = [
+            (slot: 2, result: .success(PTPPresetSlotWriteResult(slot: 2))),
+            (slot: 3, result: .success(PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color]))),
+            (slot: 5, result: .failure(CameraError.notConnected))
+        ]
+
+        XCTAssertEqual(
+            WriteAllSummary.text(for: outcomes),
+            "Wrote 2 of 3 slots. Wrote C3 with 2 differences: Grain, Color. C5: Camera not connected. Connect via USB-C to continue."
+        )
+    }
+
+    func testWriteAllSummaryForASingleFailedSlot() {
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [(slot: 4, result: .failure(PTPError.writeFailed(0xD192, "busy")))]),
+            "Wrote 0 of 1 slot. C4: Failed to write property 0xd192: busy"
+        )
+    }
+
+    @MainActor
+    func testWriteAllReturnsEverySlotAfterAMidRunUnplug() async throws {
+        let camera = ScriptedCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        for slot in [2, 3, 5] {
+            store.applyRecipe(Recipe(id: "r\(slot)", name: "Recipe \(slot)", source: "test", sourceUrl: nil, filmSimulation: .velvia), to: slot)
+        }
+        camera.unplugOnWrite = 2
+
+        let outcomes = await manager.writeAllStagedSlots(from: store)
+
+        XCTAssertEqual(outcomes.map(\.slot), [2, 3, 5])
+        XCTAssertEqual(outcomes.map { (try? $0.result.get()) != nil }, [true, false, false])
+        XCTAssertTrue(WriteAllSummary.text(for: outcomes).hasPrefix("Wrote 1 of 3 slots. C3: "))
+    }
+
+    func testRefreshSummaryListsEachFailedSlotWithItsReason() {
+        let partial = SlotRefreshResult(
+            presets: (1...5).map { PTPClientPresetData(slot: $0) },
+            failures: [SlotRefreshFailure(slot: 6, message: "busy"), SlotRefreshFailure(slot: 7, message: "timeout")]
+        )
+        let complete = SlotRefreshResult(presets: (1...7).map { PTPClientPresetData(slot: $0) }, failures: [])
+
+        XCTAssertEqual(partial.summary, "Read 5 of 7 slots. C6: busy; C7: timeout")
+        XCTAssertEqual(complete.summary, "Read all 7 camera slots.")
+    }
 }
 
 /// Stores every C-slot field. A write applies each field it sets unless the
@@ -133,7 +195,7 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
     private var _failingReads: Set<Int> = []
     private var _rejectedGrain: Set<UInt32> = []
     private var _conversionOutcome: RAFConversionOutcome = .cancelled
-    private var _unplugAfterWrites: Int?
+    private var _unplugOnWrite: Int?
 
     let cameraInfo = PTPCameraInfo(model: "X100VI")
 
@@ -159,10 +221,10 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
         get { lock.withLock { _conversionOutcome } }
         set { lock.withLock { _conversionOutcome = newValue } }
     }
-    /// Unplugs the camera after this many successful slot writes.
-    var unplugAfterWrites: Int? {
-        get { lock.withLock { _unplugAfterWrites } }
-        set { lock.withLock { _unplugAfterWrites = newValue } }
+    /// The cable is pulled as this slot write (1-based) starts.
+    var unplugOnWrite: Int? {
+        get { lock.withLock { _unplugOnWrite } }
+        set { lock.withLock { _unplugOnWrite = newValue } }
     }
 
     func slot(_ index: Int) -> PTPClientPresetData { lock.withLock { slots[index]! } }
@@ -184,7 +246,15 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
 
     func writePresetSlot(_ index: Int, data: PTPClientPresetData) async throws -> PTPPresetSlotWriteResult {
         await Task.yield()
-        let (result, unplug): (PTPPresetSlotWriteResult, (@Sendable () -> Void)?) = try lock.withLock {
+        let unplug: (@Sendable () -> Void)? = lock.withLock {
+            guard let remaining = _unplugOnWrite else { return nil }
+            _unplugOnWrite = remaining - 1
+            guard remaining == 1 else { return nil }
+            connected = false
+            return handler
+        }
+        unplug?()
+        return try lock.withLock {
             guard connected else { throw PTPError.notConnected }
             guard !_failingWrites.contains(index) else { throw PTPError.writeFailed(0xD192, "0x2019 device busy") }
             let old = slots[index]!
@@ -222,18 +292,8 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
                 longExpNr: data.longExpNr ?? old.longExpNr,
                 colorSpace: data.colorSpace ?? old.colorSpace
             )
-            var unplug: (@Sendable () -> Void)?
-            if let remaining = _unplugAfterWrites {
-                _unplugAfterWrites = remaining - 1
-                if remaining - 1 == 0 {
-                    connected = false
-                    unplug = handler
-                }
-            }
-            return (PTPPresetSlotWriteResult(slot: index, warnings: warnings, observedSnapshot: slots[index]), unplug)
+            return PTPPresetSlotWriteResult(slot: index, warnings: warnings, observedSnapshot: slots[index])
         }
-        unplug?()
-        return result
     }
 
     func convertRAF(_ raf: RAFFile, profileModifier: ((inout Data) -> Void)?) async -> RAFConversionOutcome {

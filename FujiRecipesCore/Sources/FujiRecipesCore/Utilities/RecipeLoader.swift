@@ -200,13 +200,13 @@ public enum RecipeLoader {
         return compatibleCameras.contains("X100VI")
     }
 
-    private static let dateFormatter: DateFormatter = {
+    private static let dateFormatters: [DateFormatter] = ["MMMM d, yyyy", "yyyy-MM-dd"].map { format in
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "MMMM d, yyyy"
+        formatter.dateFormat = format
         return formatter
-    }()
+    }
     private static let dateLock = NSLock()
 
     private static let kelvinRegex: NSRegularExpression? = {
@@ -217,7 +217,7 @@ public enum RecipeLoader {
         guard let string else { return nil }
         dateLock.lock()
         defer { dateLock.unlock() }
-        return dateFormatter.date(from: string)
+        return dateFormatters.lazy.compactMap { $0.date(from: string) }.first
     }
 
     /// Resolves the color temperature in Kelvin for a recipe:

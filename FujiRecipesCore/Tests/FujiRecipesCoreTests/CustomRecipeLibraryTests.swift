@@ -412,6 +412,9 @@ final class CustomRecipeLibraryTests: XCTestCase {
         XCTAssertEqual(try backupContents(in: directory), [])
 
         fileManager.failsCopies = false
+        XCTAssertEqual(try error(from: { try library.save(recipe(id: "custom-new", name: "New")) }), .persistenceBlocked)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(library.loadIssue?.backupURL)), original)
+        library.acknowledgeLoadIssue()
         try library.save(recipe(id: "custom-new", name: "New"))
 
         XCTAssertEqual(try backupContents(in: directory), [original])

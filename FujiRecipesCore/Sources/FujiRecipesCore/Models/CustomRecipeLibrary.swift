@@ -169,6 +169,7 @@ public final class CustomRecipeLibrary: ObservableObject {
 
     @discardableResult
     public func saveCopy(of recipe: Recipe) throws -> Recipe {
+        try ensurePersistenceAllowed()
         let baseName = recipe.name.isEmpty ? "Recipe" : recipe.name
         var copy = recipe.duplicated()
         var number = 1
@@ -221,7 +222,13 @@ public final class CustomRecipeLibrary: ObservableObject {
             guard backUpStoredFile() != nil else {
                 throw CustomRecipeLibraryError.backupUnavailable
             }
-            storedFileNeedsBackup = false
+            // A file that can now be copied can usually be read too, and the
+            // change belongs on top of its recipes, not on the empty list the
+            // failed read left.
+            load()
+            if loadIssue != nil {
+                throw CustomRecipeLibraryError.persistenceBlocked
+            }
         }
     }
 

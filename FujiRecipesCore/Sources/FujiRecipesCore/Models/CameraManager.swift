@@ -61,9 +61,10 @@ public final class CameraManager: ObservableObject {
             // USB mode; don't let that fail the whole connection.
             await readActiveSettings()
 
-            // Inspect and sync camera slots so state is verified before reporting connected.
+            // Sync untouched slots from the camera before reporting connected;
+            // drafts staged while offline stay so they can be written.
             if let loadouts {
-                _ = await refreshCameraSlots(into: loadouts, overwriteDirtyDrafts: true)
+                _ = await refreshCameraSlots(into: loadouts)
             }
 
             status = .connected

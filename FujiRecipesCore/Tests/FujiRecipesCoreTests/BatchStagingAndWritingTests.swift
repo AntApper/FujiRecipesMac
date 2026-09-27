@@ -296,7 +296,36 @@ final class BatchStagingAndWritingTests: XCTestCase {
         XCTAssertTrue(store.isDirty(2))
     }
 
+    @MainActor
+    func testConnectKeepsStagedDraftsAndSyncsUntouchedSlots() async {
+        let mockClient = seededCameraClient()
+        let store = LoadoutStore()
+        store.applyRecipe(
+            Recipe(id: "offline", name: "Offline Draft", source: "test", sourceUrl: nil, filmSimulation: .velvia),
+            to: 1
+        )
+
+        await CameraManager().connect(using: mockClient, loadouts: store)
+
+        XCTAssertEqual(store.loadout(for: 1)?.name, "Offline Draft")
+        XCTAssertTrue(store.isDirty(1))
+        XCTAssertEqual(store.loadout(for: 2)?.name, "Camera 2")
+        XCTAssertEqual(store.loadout(for: 2)?.provenance, .cameraSynced)
+    }
+
     // MARK: - Helpers
+
+    private func seededCameraClient() -> BatchMockPTPClient {
+        let client = BatchMockPTPClient()
+        for slot in 1...7 {
+            client.slotPresets[slot] = PTPClientPresetData(
+                slot: slot,
+                name: "Camera \(slot)",
+                filmSimulation: FilmSimulation.classicChrome.rawValue
+            )
+        }
+        return client
+    }
 
     private func makeRecipeJSON(
         presetSettings: [String: Double],
@@ -328,7 +357,7 @@ private final class BatchMockPTPClient: PTPClientProtocol, @unchecked Sendable {
     var cameraInfo = PTPCameraInfo(model: "FUJIFILM X100VI")
     var failSlots: Set<Int> = []
     private(set) var writtenSlots: [Int] = []
-    private var slotPresets: [Int: PTPClientPresetData] = [:]
+    var slotPresets: [Int: PTPClientPresetData] = [:]
 
     init() {
         for slot in 1...7 {

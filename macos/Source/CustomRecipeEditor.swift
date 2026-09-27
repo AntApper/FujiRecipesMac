@@ -75,6 +75,10 @@ struct CustomRecipeEditor: View {
         )
     }
 
+    static func duplicate(from recipe: Recipe) -> Recipe {
+        recipe.duplicated()
+    }
+
     // MARK: - Real-Time Validation
 
     private var trimmedName: String {
@@ -291,7 +295,7 @@ struct CustomRecipeEditor: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 540, minHeight: 620)
-        .navigationTitle(recipe.name.isEmpty ? "New Custom Recipe" : "Edit Custom Recipe")
+        .navigationTitle(recipe.source.starts(with: "Customized from") ? "Customize Recipe" : (recipe.name.isEmpty ? "New Custom Recipe" : "Edit Custom Recipe"))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }

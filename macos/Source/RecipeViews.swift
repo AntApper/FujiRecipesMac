@@ -1033,6 +1033,7 @@ public struct RecipeListView: View {
                 Button("Try Loading Recipes Again") {
                     Task { await store.loadRecipes() }
                 }
+                .keyboardShortcut(.defaultAction)
                 .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 32))
                 .frame(width: 220)
                 .padding(.top, 6)

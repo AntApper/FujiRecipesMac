@@ -281,6 +281,22 @@ final class CameraOperationSerializationTests: XCTestCase {
     }
 
     @MainActor
+    func testSlotReadsLeaveTheCameraOnTheSlotItWasOn() async {
+        let camera = SlotRegisterCamera(selected: 3)
+        let store = LoadoutStore()
+        let manager = CameraManager()
+
+        await manager.connect(using: camera, loadouts: store)
+
+        XCTAssertEqual(camera.selectedSlot, 3, "connecting left the camera on another C slot")
+        XCTAssertEqual(store.loadout(for: 7)?.name, "Camera 7")
+        let result = await manager.refreshCameraSlots(into: store)
+        XCTAssertEqual(camera.selectedSlot, 3, "refreshing left the camera on another C slot")
+        XCTAssertEqual(result.presets.map(\.name), ["Camera 1", "Camera 2", "Camera 3", "Camera 4", "Camera 5", "Camera 6", "Camera 7"])
+        XCTAssertEqual(result.failures, [])
+    }
+
+    @MainActor
     func testDisconnectDuringConnectSlotReadEndsDisconnected() async {
         let camera = SlotRegisterCamera()
         let store = LoadoutStore()
@@ -380,7 +396,7 @@ final class CameraOperationSerializationTests: XCTestCase {
 private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
     private let lock = NSLock()
     private var slots: [Int: PTPClientPresetData] = [:]
-    private var selected = 1
+    private var selected: Int
     private var connected = false
     private var operationsInFlight = 0
     private var _maxConcurrentOperations = 0
@@ -390,7 +406,8 @@ private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
 
     let cameraInfo = PTPCameraInfo(model: "X100VI")
 
-    init() {
+    init(selected: Int = 1) {
+        self.selected = selected
         for slot in 1...7 {
             slots[slot] = PTPClientPresetData(slot: slot, name: "Camera \(slot)", filmSimulation: FilmSimulation.classicChrome.rawValue)
         }
@@ -400,6 +417,7 @@ private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
     var maxConcurrentOperations: Int { lock.withLock { _maxConcurrentOperations } }
     var crossSlotAccesses: [String] { lock.withLock { _crossSlotAccesses } }
     var writeOrder: [Int] { lock.withLock { _writeOrder } }
+    var selectedSlot: Int { lock.withLock { selected } }
     func slot(_ index: Int) -> PTPClientPresetData { lock.withLock { slots[index]! } }
 
     func connect() async throws { lock.withLock { connected = true } }
@@ -482,7 +500,10 @@ private final class SlotRegisterCamera: PTPClientProtocol, @unchecked Sendable {
         }
     }
 
-    func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse { .unsupported }
+    func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
+        guard code == PTPProperty.presetSlot else { return .unsupported }
+        return .uint32(UInt32(selectedSlot))
+    }
     func writeProperty(_ code: UInt16, value: Int32) async throws {}
     func readNativeProfile() async throws -> Data { Data() }
     func writePTPSettings(from recipe: Recipe) async throws {}

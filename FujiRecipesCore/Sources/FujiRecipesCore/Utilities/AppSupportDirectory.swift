@@ -2,7 +2,7 @@ import Foundation
 
 /// Only the release bundle identifier maps to the original "FujiRecipes"
 /// folder, so Debug, test, and unbundled runs never read or rewrite a release
-/// install's recipes or crash reports.
+/// install's data.
 public enum AppSupportDirectory {
     public static let releaseBundleIdentifier = "com.ant.fuji-recipes-mac"
 

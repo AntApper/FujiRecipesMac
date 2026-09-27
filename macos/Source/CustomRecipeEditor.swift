@@ -362,7 +362,7 @@ struct CustomRecipeEditor: View {
             "highIsoNr": signed(highIsoNR),
             "clarity": signed(clarity)
         ]
-        // Half-step tones live only in the raw preset, so keep each raw value
+        // Half-step values live only in the raw preset, so keep each raw value
         // until the user moves that slider off its initial whole-step value.
         var rawPreset = recipe.sourceRawPreset
         if highlight != Int(recipe.highlight ?? 0) { rawPreset?.highlight = nil }

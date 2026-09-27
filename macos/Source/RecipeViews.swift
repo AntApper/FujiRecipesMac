@@ -70,6 +70,11 @@ public struct RecipeListView: View {
                 if store.loadingState == .loading {
                     recipeLoadingState
                 } else {
+                    if store.loadingState == .failed {
+                        emptyState
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+
                     // Recipe Cards Grid
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(store.filteredRecipes) { recipe in
@@ -129,7 +134,7 @@ public struct RecipeListView: View {
                     }
                     .animation(.spring(response: 0.32, dampingFraction: 0.8), value: store.filteredRecipes.map(\.id))
 
-                    if store.filteredRecipes.isEmpty {
+                    if store.filteredRecipes.isEmpty && store.loadingState != .failed {
                         emptyState
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
@@ -215,18 +220,6 @@ public struct RecipeListView: View {
                 dismissToast(activeHUDToast, after: .seconds(3))
             }
         }
-        .alert("Couldn’t Load Recipes", isPresented: Binding(
-            get: { store.lastError != nil },
-            set: { if !$0 { store.lastError = nil } }
-        )) {
-            Button("Try Again") {
-                Task { await store.loadRecipes() }
-            }
-            .keyboardShortcut(.defaultAction)
-            Button("Dismiss", role: .cancel) { store.lastError = nil }
-        } message: {
-            Text(store.lastError ?? "")
-        }
         .sheet(item: $recipeToLoad) { recipe in
             CSlotPickerSheet(
                 recipe: recipe,
@@ -257,9 +250,18 @@ public struct RecipeListView: View {
         ) {
             Button("Delete Recipe", role: .destructive) {
                 if let recipe = recipeToDelete {
+                    let visible = store.filteredRecipes
                     do {
                         try store.customRecipes.delete(id: recipe.id)
                         store.favorites.removeFavorite(recipe.id)
+                        if selectedRecipeID == recipe.id {
+                            let remaining = visible.filter { $0.id != recipe.id }
+                            if let index = visible.firstIndex(where: { $0.id == recipe.id }), !remaining.isEmpty {
+                                selectedRecipeID = remaining[min(index, remaining.count - 1)].id
+                            } else {
+                                selectedRecipeID = nil
+                            }
+                        }
                     } catch {
                         customRecipeMessage = error.localizedDescription
                     }
@@ -271,7 +273,7 @@ public struct RecipeListView: View {
             Text(recipeToDelete.map { "“\($0.name)” will be removed from My Recipes." } ?? "")
         }
         .confirmationDialog(
-            pendingStageTop.map { "Replace Local Drafts in \($0.replacedSlotList)?" } ?? "",
+            pendingStageTop.map { "Replace Local Draft\($0.replacedSlots.count == 1 ? "" : "s") in \($0.replacedSlotList)?" } ?? "",
             isPresented: Binding(
                 get: { pendingStageTop != nil },
                 set: { if !$0 { pendingStageTop = nil } }
@@ -279,12 +281,12 @@ public struct RecipeListView: View {
             titleVisibility: .visible,
             presenting: pendingStageTop
         ) { pending in
-            Button("Replace Drafts", role: .destructive) {
+            Button("Replace Draft\(pending.replacedSlots.count == 1 ? "" : "s")", role: .destructive) {
                 stageToDial(pending.recipes)
             }
             Button("Cancel", role: .cancel) {}
         } message: { pending in
-            Text("Stage Top \(pending.recipes.count) replaces your unsynced drafts in \(pending.replacedSlotList) with the top filtered recipes. The camera isn’t changed.")
+            Text("Stage Top \(pending.recipes.count) replaces your unsynced draft\(pending.replacedSlots.count == 1 ? "" : "s") in \(pending.replacedSlotList) with the top filtered recipe\(pending.recipes.count == 1 ? "" : "s"). The camera isn’t changed.")
         }
         .sheet(item: $recipeToEdit) { recipe in
             CustomRecipeEditor(
@@ -554,8 +556,10 @@ public struct RecipeListView: View {
         let count = recipes.count
         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
             activeHUDToast = HUDToast(
-                title: "✓ Staged Top \(count) to Dial",
-                message: "Assigned recipes to slots C1–C\(count). Ready to write in Camera & Staging.",
+                title: count == 1 ? "✓ Staged 1 Recipe to Dial" : "✓ Staged Top \(count) to Dial",
+                message: count == 1
+                    ? "Assigned it to slot C1. Ready to write in Camera & Staging."
+                    : "Assigned recipes to slots C1–C\(count). Ready to write in Camera & Staging.",
                 isError: false
             )
         }
@@ -739,7 +743,7 @@ public struct RecipeListView: View {
                     .glassPrimary()
                     .lineLimit(1)
 
-                Text("\(store.filteredRecipes.count) RECIPES")
+                Text("\(store.filteredRecipes.count) RECIPE\(store.filteredRecipes.count == 1 ? "" : "S")")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(Theme.fujiAmber)
                     .padding(.horizontal, 7)
@@ -770,45 +774,48 @@ public struct RecipeListView: View {
     }
 
     private var filterAndSortBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    // Film Sim Family Quick Filters
+                    ForEach(RecipeStore.FilmSimFamily.allCases) { family in
+                        let isSelected = store.selectedFilmSimFamily == family
+                        let accent = family == .all ? Theme.fujiAmber : Theme.filmSimColor(for: family.rawValue)
+                        filterPill(
+                            title: family.rawValue,
+                            icon: family.icon,
+                            isSelected: isSelected,
+                            accent: accent
+                        ) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                store.selectedFilmSimFamily = family
+                            }
+                        }
+                    }
+
+                    Divider()
+                        .frame(height: 16)
+                        .overlay(Theme.specularBorder)
+
+                    // DR Filter
+                    ForEach(RecipeStore.DRFilter.allCases) { dr in
+                        let isSelected = store.selectedDRFilter == dr
+                        filterPill(
+                            title: dr.rawValue,
+                            isSelected: isSelected,
+                            accent: Theme.emeraldGreen
+                        ) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                store.selectedDRFilter = dr
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
             HStack(spacing: 8) {
-                // Film Sim Family Quick Filters
-                ForEach(RecipeStore.FilmSimFamily.allCases) { family in
-                    let isSelected = store.selectedFilmSimFamily == family
-                    let accent = family == .all ? Theme.fujiAmber : Theme.filmSimColor(for: family.rawValue)
-                    filterPill(
-                        title: family.rawValue,
-                        icon: family.icon,
-                        isSelected: isSelected,
-                        accent: accent
-                    ) {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            store.selectedFilmSimFamily = family
-                        }
-                    }
-                }
-
-                Divider()
-                    .frame(height: 16)
-                    .overlay(Theme.specularBorder)
-
-                // DR Filter
-                ForEach(RecipeStore.DRFilter.allCases) { dr in
-                    let isSelected = store.selectedDRFilter == dr
-                    filterPill(
-                        title: dr.rawValue,
-                        isSelected: isSelected,
-                        accent: Theme.emeraldGreen
-                    ) {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            store.selectedDRFilter = dr
-                        }
-                    }
-                }
-
                 metadataFilterMenus
-
-                Spacer(minLength: 4)
 
                 // Sort Order Menu
                 Menu {
@@ -846,9 +853,11 @@ public struct RecipeListView: View {
                         Capsule().stroke(Theme.specularBorder, lineWidth: 0.8)
                     )
                 }
-                .menuStyle(.borderlessButton)
             }
-            .padding(.vertical, 2)
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
         }
     }
 
@@ -871,10 +880,10 @@ public struct RecipeListView: View {
             } label: {
                 filterMenuLabel(
                     title: store.selectedWhiteBalance?.displayName ?? "White Balance",
-                    icon: "thermometer.medium"
+                    icon: "thermometer.medium",
+                    isActive: store.selectedWhiteBalance != nil
                 )
             }
-            .menuStyle(.borderlessButton)
 
             if !store.availableKeywords.isEmpty {
                 Menu {
@@ -893,10 +902,10 @@ public struct RecipeListView: View {
                 } label: {
                     filterMenuLabel(
                         title: store.selectedKeyword ?? "Keywords",
-                        icon: "tag"
+                        icon: "tag",
+                        isActive: store.selectedKeyword != nil
                     )
                 }
-                .menuStyle(.borderlessButton)
             }
         }
     }
@@ -929,21 +938,22 @@ public struct RecipeListView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 
-    private func filterMenuLabel(title: String, icon: String) -> some View {
+    private func filterMenuLabel(title: String, icon: String, isActive: Bool) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .semibold))
             Text(title)
-                .font(.caption.weight(.medium))
+                .font(.caption.weight(isActive ? .semibold : .medium))
                 .lineLimit(1)
+                .frame(maxWidth: 120)
             Image(systemName: "chevron.down")
                 .font(.system(size: 8, weight: .bold))
         }
-        .foregroundStyle(Theme.textSecondary)
+        .foregroundStyle(isActive ? Color.black : Theme.textSecondary)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(Capsule().fill(Color.white.opacity(0.04)))
-        .overlay(Capsule().stroke(Theme.specularBorder, lineWidth: 0.8))
+        .background(Capsule().fill(isActive ? Theme.fujiAmber : Color.white.opacity(0.04)))
+        .overlay(Capsule().stroke(isActive ? Theme.fujiAmber : Theme.specularBorder, lineWidth: 0.8))
     }
 
     private var quickDialBar: some View {
@@ -1085,7 +1095,7 @@ public struct RecipeListView: View {
 
     private var emptyTitle: String {
         if store.loadingState == .failed {
-            return "No recipes found"
+            return "Couldn’t Load Recipes"
         }
         if hasActiveFilters {
             return "No matching recipes"
@@ -1316,8 +1326,8 @@ private struct GallerySlotPill: View {
                     .frame(maxWidth: 85)
             } else {
                 Text("Empty")
-                    .font(.system(size: 9, weight: .regular))
-                    .foregroundStyle(Theme.textTertiary.opacity(0.6))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
         .padding(.horizontal, 8)
@@ -1801,8 +1811,8 @@ private struct RecipeCard: View {
                     .foregroundStyle(Theme.textTertiary)
                 Spacer()
                 Text("CLICK TO ZOOM")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.textMuted)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
             }
             .padding(.horizontal, 12)
 
@@ -2215,15 +2225,17 @@ public struct RecipeQuickLookView: View {
                             .foregroundStyle(Theme.textSecondary)
 
                             if let tags = recipe.tags, !tags.isEmpty {
-                                HStack(spacing: 6) {
-                                    ForEach(tags, id: \.self) { tag in
-                                        Text("#\(tag)")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .foregroundStyle(accent.opacity(0.85))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(accent.opacity(0.12))
-                                            .clipShape(Capsule())
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(tags, id: \.self) { tag in
+                                            Text("#\(tag)")
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundStyle(accent.opacity(0.85))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(accent.opacity(0.12))
+                                                .clipShape(Capsule())
+                                        }
                                     }
                                 }
                                 .padding(.top, 2)
@@ -2330,61 +2342,42 @@ public struct RecipeQuickLookView: View {
                 Divider().overlay(Color.white.opacity(0.1))
 
                 // Footer Bar with 1-click Dial Staging (C1–C7)
-                HStack(spacing: 8) {
-                    Text("STAGE TO DIAL:")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Theme.textTertiary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        stageToDialLabel
+                        stageSlotButtons
+                        Spacer()
+                        footerActions
+                    }
 
-                    ForEach(1...7, id: \.self) { slot in
-                        let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
-                            ? "Empty"
-                            : (loadouts.loadout(for: slot)?.name ?? "Empty")
-                        Button {
-                            onStageToSlot(slot)
-                        } label: {
-                            Text("C\(slot)")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(slotAccent(slot))
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(slotAccent(slot).opacity(0.16))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(slotAccent(slot).opacity(0.4), lineWidth: 0.8)
-                                )
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            stageToDialLabel
+                            stageSlotButtons
                         }
-                        .buttonStyle(.plain)
-                        .help("Stage to C\(slot): \(slotName)")
-                        .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
-                    }
-
-                    Spacer()
-
-                    if let onDuplicate = onDuplicate {
-                        Button {
-                            onDuplicate()
-                        } label: {
-                            Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+                        HStack(spacing: 8) {
+                            Spacer()
+                            footerActions
                         }
-                        .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
-                        .accessibilityIdentifier("recipe-quick-look-duplicate")
                     }
 
-                    Button("Done") {
-                        onDismiss()
+                    VStack(alignment: .leading, spacing: 8) {
+                        stageToDialLabel
+                        HStack(spacing: 8) {
+                            stageSlotButtons
+                        }
+                        HStack(spacing: 8) {
+                            Spacer()
+                            footerActions
+                        }
                     }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
                 .background(Color.black.opacity(0.2))
             }
-            .frame(width: 640)
-            .fixedSize(horizontal: true, vertical: true)
+            .frame(maxWidth: 640)
+            .fixedSize(horizontal: false, vertical: true)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Theme.deepCharcoal.opacity(0.96))
@@ -2405,6 +2398,59 @@ public struct RecipeQuickLookView: View {
             .accessibilityIdentifier("recipe-quick-look-modal")
             .padding(24)
         }
+    }
+
+    private var stageToDialLabel: some View {
+        Text("STAGE TO DIAL:")
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundStyle(Theme.textTertiary)
+    }
+
+    private var stageSlotButtons: some View {
+        ForEach(1...7, id: \.self) { slot in
+            let slotName = loadouts.loadout(for: slot)?.name.isEmpty ?? true
+                ? "Empty"
+                : (loadouts.loadout(for: slot)?.name ?? "Empty")
+            Button {
+                onStageToSlot(slot)
+            } label: {
+                Text("C\(slot)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(slotAccent(slot))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(slotAccent(slot).opacity(0.16))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(slotAccent(slot).opacity(0.4), lineWidth: 0.8)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("Stage to C\(slot): \(slotName)")
+            .accessibilityIdentifier("recipe-quick-look-stage-\(slot)")
+        }
+    }
+
+    @ViewBuilder
+    private var footerActions: some View {
+        if let onDuplicate = onDuplicate {
+            Button {
+                onDuplicate()
+            } label: {
+                Label("Duplicate to My Recipes", systemImage: "plus.square.on.square")
+            }
+            .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
+            .accessibilityIdentifier("recipe-quick-look-duplicate")
+        }
+
+        Button("Done") {
+            onDismiss()
+        }
+        .keyboardShortcut(.defaultAction)
+        .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 28))
     }
 }
 

@@ -28,7 +28,6 @@ public final class RecipeStore: ObservableObject {
     @Published public var selectedKeyword: String?
     @Published public var sortOrder: SortOrder = .recommended
     @Published public var searchQuery: String = ""
-    @Published public var lastError: String?
 
     public enum FilterCategory: String, CaseIterable, Identifiable, Hashable {
         case favorites
@@ -123,8 +122,8 @@ public final class RecipeStore: ObservableObject {
             throw RecipeLoaderError.fileNotFound
         }
         self.customRecipes = customRecipes
-        customRecipeSubscription = customRecipes.$recipes.dropFirst().sink { [weak self] _ in
-            self?.rebuildGallery()
+        customRecipeSubscription = customRecipes.$recipes.dropFirst().sink { [weak self] custom in
+            self?.rebuildGallery(with: custom)
         }
         favoritesSubscription = favorites.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
@@ -132,7 +131,7 @@ public final class RecipeStore: ObservableObject {
         loadoutsSubscription = loadouts.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
-        rebuildGallery()
+        rebuildGallery(with: customRecipes.recipes)
     }
 
     private struct FilterKey: Equatable {
@@ -195,12 +194,10 @@ public final class RecipeStore: ObservableObject {
     public func loadRecipesSynchronously() {
         do {
             bundledRecipes = try recipeLoading()
-            rebuildGallery()
-            lastError = nil
+            rebuildGallery(with: customRecipes.recipes)
             loadingState = .loaded
             DebugLogger.info("Loaded \(recipes.count) recipes", category: .recipes)
         } catch {
-            lastError = error.localizedDescription
             loadingState = .failed
             DebugLogger.error("Failed to load recipes: \(error.localizedDescription)", category: .recipes)
         }
@@ -210,11 +207,13 @@ public final class RecipeStore: ObservableObject {
         customRecipes.recipes.contains { $0.id == recipe.id }
     }
 
-    private func rebuildGallery() {
+    /// Takes the custom recipes as an argument because `$recipes` publishes
+    /// before `customRecipes.recipes` holds the new value.
+    private func rebuildGallery(with custom: [Recipe]) {
         // A locally imported recipe intentionally wins on ID collision: it is
         // the editable user-owned copy in this application's gallery.
-        let localIDs = Set(customRecipes.recipes.map(\.id))
-        recipes = bundledRecipes.filter { !localIDs.contains($0.id) } + customRecipes.recipes
+        let localIDs = Set(custom.map(\.id))
+        recipes = bundledRecipes.filter { !localIDs.contains($0.id) } + custom
         catalog = RecipeCatalog(recipes: recipes)
         galleryVersion += 1
         cachedFilterKey = nil

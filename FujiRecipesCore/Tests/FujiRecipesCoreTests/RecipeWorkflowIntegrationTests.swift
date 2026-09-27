@@ -362,6 +362,23 @@ final class RecipeWorkflowIntegrationTests: XCTestCase {
         XCTAssertEqual(store.filteredRecipes.map(\.id), ["1", "2"])
     }
 
+    @MainActor
+    func testGalleryFollowsEachCustomRecipeChange() throws {
+        let library = CustomRecipeLibrary(storageURL: tempDirectory.appendingPathComponent("custom-recipes-v1.json"))
+        let store = RecipeStore(
+            recipeLoading: { [Recipe(id: "bundled", name: "Bundled", source: "A", sourceUrl: nil, filmSimulation: .velvia)] },
+            customRecipes: library
+        )
+        store.loadRecipesSynchronously()
+
+        try library.save(Recipe(id: "custom-alpha", name: "Alpha", source: "My Recipes", sourceUrl: nil, filmSimulation: .classicChrome))
+        XCTAssertEqual(store.recipes.map(\.name), ["Bundled", "Alpha"])
+
+        try library.save(Recipe(id: "custom-bravo", name: "Bravo", source: "My Recipes", sourceUrl: nil, filmSimulation: .classicChrome))
+        try library.delete(id: "custom-alpha")
+        XCTAssertEqual(store.recipes.map(\.name), ["Bundled", "Bravo"])
+    }
+
     // MARK: - Helpers
 
     private func loadBundledRecipes() throws -> [Recipe] {

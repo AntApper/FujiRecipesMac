@@ -22,6 +22,7 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
     case duplicateID(String)
     case invalidFile(String)
     case persistenceBlocked
+    case backupUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ public enum CustomRecipeLibraryError: LocalizedError, Equatable {
             return "Couldn’t import this recipe library: \(message)"
         case .persistenceBlocked:
             return "My Recipes didn’t load cleanly. Dismiss the notice about it before saving changes."
+        case .backupUnavailable:
+            return "FujiRecipes still can’t make a copy of the original My Recipes file, so it won’t replace that file. Your change wasn’t saved."
         }
     }
 }
@@ -67,9 +70,17 @@ public struct CustomRecipeLibraryLoadIssue: Equatable, Sendable {
             let list = skipped.map { "“\($0.name)” (\($0.reason))" }.joined(separator: ", ")
             finding = "\(recipes) couldn’t be read and \(verb) left out: \(list)."
         }
-        let backup = backupURL.map { "The original file was copied to “\($0.lastPathComponent)”." }
-            ?? "FujiRecipes couldn’t make a copy of the original file, so it was left untouched."
-        return "\(finding) \(backup) Changes to My Recipes won’t be saved until you dismiss this."
+        guard let backupURL else {
+            return "\(finding) FujiRecipes couldn’t make a copy of the original file, so it was left untouched. My Recipes won’t save changes until FujiRecipes can make that copy."
+        }
+        let copied = "The original file was copied to “\(backupURL.lastPathComponent)”"
+        switch problem {
+        case .unreadableFile:
+            return "\(finding) \(copied), which keeps its contents. After you dismiss this, your next change to My Recipes replaces the main file."
+        case .skippedRecipes(let skipped):
+            let pronoun = skipped.count == 1 ? "it" : "them"
+            return "\(finding) \(copied), which keeps \(pronoun). After you dismiss this, your next change to My Recipes saves the main file without \(pronoun)."
+        }
     }
 }
 
@@ -80,12 +91,14 @@ public struct CustomRecipeLibraryLoadIssue: Equatable, Sendable {
 @MainActor
 public final class CustomRecipeLibrary: ObservableObject {
     @Published public private(set) var recipes: [Recipe] = []
-    /// While set, every change is refused so the next save can't replace a
-    /// file that still holds recipes this library couldn't read.
+    /// While set, every change is refused so nothing replaces the stored file
+    /// before the person has read what the next save leaves out. After it is
+    /// dismissed, saves stay refused until that file has been copied aside.
     @Published public private(set) var loadIssue: CustomRecipeLibraryLoadIssue?
 
     public let storageURL: URL
     private let fileManager: FileManager
+    private var storedFileNeedsBackup = false
 
     public init(
         storageURL: URL = CustomRecipeLibrary.defaultStorageURL(),
@@ -103,6 +116,7 @@ public final class CustomRecipeLibrary: ObservableObject {
         guard fileManager.fileExists(atPath: storageURL.path) else {
             recipes = []
             loadIssue = nil
+            storedFileNeedsBackup = false
             return
         }
         let problem: CustomRecipeLibraryLoadIssue.Problem?
@@ -114,7 +128,9 @@ public final class CustomRecipeLibrary: ObservableObject {
             recipes = []
             problem = .unreadableFile(reason: storedDataFailureReason(error))
         }
-        loadIssue = problem.map { CustomRecipeLibraryLoadIssue(problem: $0, backupURL: backUpStoredFile()) }
+        let backupURL = problem == nil ? nil : backUpStoredFile()
+        storedFileNeedsBackup = problem != nil && backupURL == nil
+        loadIssue = problem.map { CustomRecipeLibraryLoadIssue(problem: $0, backupURL: backupURL) }
     }
 
     public func acknowledgeLoadIssue() {
@@ -201,6 +217,12 @@ public final class CustomRecipeLibrary: ObservableObject {
         if loadIssue != nil {
             throw CustomRecipeLibraryError.persistenceBlocked
         }
+        if storedFileNeedsBackup {
+            guard backUpStoredFile() != nil else {
+                throw CustomRecipeLibraryError.backupUnavailable
+            }
+            storedFileNeedsBackup = false
+        }
     }
 
     private func persist() throws {
@@ -217,6 +239,17 @@ public final class CustomRecipeLibrary: ObservableObject {
         let directory = storageURL.deletingLastPathComponent()
         let stem = storageURL.deletingPathExtension().lastPathComponent
         let pathExtension = storageURL.pathExtension.isEmpty ? "" : ".\(storageURL.pathExtension)"
+        let existingBackups = ((try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [])
+            .filter {
+                $0.lastPathComponent.hasPrefix("\(stem).unreadable-") &&
+                $0.lastPathComponent.hasSuffix(pathExtension)
+            }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        if let identical = existingBackups.first(where: {
+            fileManager.contentsEqual(atPath: $0.path, andPath: storageURL.path)
+        }) {
+            return directory.appendingPathComponent(identical.lastPathComponent)
+        }
         let baseName = "\(stem).unreadable-\(storedDataRecoveryTimestamp())"
         var attempt = 1
         var backupURL = directory.appendingPathComponent(baseName + pathExtension)

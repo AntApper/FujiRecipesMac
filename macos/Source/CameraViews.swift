@@ -22,7 +22,7 @@ public struct CameraConnectionView: View {
     @State private var confirmClearAllStaged = false
     @State private var slotPendingLocalClear: Int?
     @State private var slotToEdit: Loadout?
-    @State private var selectedDialSlot: Int = 1
+    @Binding public var selectedDialSlot: Int
     @State private var isWritingAll = false
     @State private var writeAllProgress: String?
     @State private var writeStatusFeedback: String?
@@ -35,65 +35,79 @@ public struct CameraConnectionView: View {
     public init(
         manager: CameraManager,
         loadouts: LoadoutStore,
+        selectedDialSlot: Binding<Int> = .constant(1),
         cameraSessionFactory: @escaping CameraSessionFactory = { ImageCaptureCorePTPClient() }
     ) {
         self.manager = manager
         self.loadouts = loadouts
+        self._selectedDialSlot = selectedDialSlot
         self.cameraSessionFactory = cameraSessionFactory
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Section Header
-                SectionHeader(
-                    title: "Camera & Staging",
-                    subtitle: "Unified hardware control & C1–C7 preset dial staging for Fujifilm X100VI. Stage offline, verify live, and write over USB-C.",
-                    icon: "camera.fill",
-                    trailingValue: manager.status.formattedLabel,
-                    trailingLabel: "STATUS",
-                    accentColor: manager.status.tint
-                )
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Section Header
+                    SectionHeader(
+                        title: "Camera & Staging",
+                        subtitle: "Unified hardware control & C1–C7 preset dial staging for Fujifilm X100VI. Stage offline, verify live, and write over USB-C.",
+                        icon: "camera.fill",
+                        trailingValue: manager.status.formattedLabel,
+                        trailingLabel: "STATUS",
+                        accentColor: manager.status.tint
+                    )
 
-                // Top Hero Hardware & Connection Cards
-                if manager.status != .connected {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 14) {
-                            hardwareStatusCard
-                                .frame(maxWidth: .infinity)
-                            connectionGuideCard
-                                .frame(maxWidth: 480)
+                    // Top Hero Hardware & Connection Cards
+                    if manager.status != .connected {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: 14) {
+                                hardwareStatusCard
+                                    .frame(maxWidth: .infinity)
+                                connectionGuideCard
+                                    .frame(maxWidth: 480)
+                            }
+                            VStack(spacing: 14) {
+                                hardwareStatusCard
+                                connectionGuideCard
+                            }
                         }
-                        VStack(spacing: 14) {
-                            hardwareStatusCard
-                            connectionGuideCard
-                        }
+                    } else {
+                        hardwareStatusCard
                     }
-                } else {
-                    hardwareStatusCard
+
+                    // Error / Warning Diagnostic HUD
+                    if let error = manager.lastError {
+                        errorHUD(error)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -6)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95))
+                            ))
+                    }
+
+                    // Primary Action Banner (Write All / Refresh / Clear)
+                    primaryActionBanner
+
+                    // Dial Rack (Slots C1 through C7)
+                    dialRackGrid
                 }
-
-                // Error / Warning Diagnostic HUD
-                if let error = manager.lastError {
-                    errorHUD(error)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -6)),
-                            removal: .opacity.combined(with: .scale(scale: 0.95))
-                        ))
-                }
-
-                // Primary Action Banner (Write All / Refresh / Clear)
-                primaryActionBanner
-
-                // Dial Rack (Slots C1 through C7)
-                dialRackGrid
+                .padding(16)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.status)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.lastError)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isWritingAll)
             }
-            .padding(16)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.status)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: manager.lastError)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isWritingAll)
+            .navigationTitle("Camera & Staging")
+            .onChange(of: selectedDialSlot) { _, newSlot in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    scrollProxy.scrollTo("slot-\(newSlot)", anchor: .center)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.async {
+                    scrollProxy.scrollTo("slot-\(selectedDialSlot)", anchor: .center)
+                }
+            }
         }
-        .navigationTitle("Camera & Staging")
         .sheet(isPresented: $showLimitationsAlert) {
             LimitationsView(isPresented: $showLimitationsAlert)
         }
@@ -631,6 +645,7 @@ public struct CameraConnectionView: View {
                             }
                         }
                     )
+                    .id("slot-\(slot)")
                 }
             }
         }

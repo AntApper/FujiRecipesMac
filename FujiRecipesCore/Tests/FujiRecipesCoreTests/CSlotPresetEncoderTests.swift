@@ -164,6 +164,219 @@ final class CSlotPresetEncoderTests: XCTestCase {
         XCTAssertEqual(preset.colorTemp, 5_500)
     }
 
+    // MARK: - Objective 3: Extreme Kelvin Boundary Tests
+
+    func testExtremeKelvinValuesAndBoundaryRejections() throws {
+        // Valid exact lower bound: 2500K
+        let minKelvin = try CSlotPresetEncoder.encode(
+            recipe: recipe(wb: .colorTemperature, colorTemp: 2_500),
+            slot: 1
+        )
+        XCTAssertEqual(minKelvin.colorTemp, 2_500)
+
+        // Valid exact upper bound: 10000K
+        let maxKelvin = try CSlotPresetEncoder.encode(
+            recipe: recipe(wb: .colorTemperature, colorTemp: 10_000),
+            slot: 1
+        )
+        XCTAssertEqual(maxKelvin.colorTemp, 10_000)
+
+        // Out of bounds: 2499K (1 Kelvin below minimum)
+        XCTAssertThrowsError(
+            try CSlotPresetEncoder.encode(
+                recipe: recipe(wb: .colorTemperature, colorTemp: 2_499),
+                slot: 1
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? CSlotPresetEncodingError,
+                .outOfRange(property: 0xD19C, value: 2_499, valid: "2500...10000 K")
+            )
+        }
+
+        // Out of bounds: 10001K (1 Kelvin above maximum)
+        XCTAssertThrowsError(
+            try CSlotPresetEncoder.encode(
+                recipe: recipe(wb: .colorTemperature, colorTemp: 10_001),
+                slot: 1
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? CSlotPresetEncodingError,
+                .outOfRange(property: 0xD19C, value: 10_001, valid: "2500...10000 K")
+            )
+        }
+
+        // Extreme values: 0 and 25000
+        XCTAssertThrowsError(
+            try CSlotPresetEncoder.encode(
+                recipe: recipe(wb: .colorTemperature, colorTemp: 0),
+                slot: 1
+            )
+        )
+        XCTAssertThrowsError(
+            try CSlotPresetEncoder.encode(
+                recipe: recipe(wb: .colorTemperature, colorTemp: 25_000),
+                slot: 1
+            )
+        )
+
+        // Non-colorTemperature WB mode ignores Kelvin value and encodes nil
+        let autoWithKelvin = try CSlotPresetEncoder.encode(
+            recipe: recipe(wb: .auto, colorTemp: 2_500),
+            slot: 1
+        )
+        XCTAssertNil(autoWithKelvin.colorTemp)
+        XCTAssertEqual(autoWithKelvin.whiteBalance, 2)
+    }
+
+    // MARK: - Objective 3: Tone Curves (-4 to +4) and Boundary Validation
+
+    func testExtremeToneCurvesAndBoundaryValidation() throws {
+        // Highlight range is -2...4
+        let minHighlight = try CSlotPresetEncoder.encode(recipe: recipe(highlight: -2), slot: 1)
+        XCTAssertEqual(minHighlight.highlight, -20)
+        let maxHighlight = try CSlotPresetEncoder.encode(recipe: recipe(highlight: 4), slot: 1)
+        XCTAssertEqual(maxHighlight.highlight, 40)
+
+        // Highlight below -2 (e.g. -3, -4) must throw
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(highlight: -3), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19D, value: -3, valid: "-2...4"))
+        }
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(highlight: -4), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19D, value: -4, valid: "-2...4"))
+        }
+        // Highlight above +4 must throw
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(highlight: 5), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19D, value: 5, valid: "-2...4"))
+        }
+
+        // Shadow range is -2...4
+        let minShadow = try CSlotPresetEncoder.encode(recipe: recipe(shadow: -2), slot: 1)
+        XCTAssertEqual(minShadow.shadow, -20)
+        let maxShadow = try CSlotPresetEncoder.encode(recipe: recipe(shadow: 4), slot: 1)
+        XCTAssertEqual(maxShadow.shadow, 40)
+
+        // Shadow below -2 must throw
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(shadow: -3), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19E, value: -3, valid: "-2...4"))
+        }
+        // Shadow above +4 must throw
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(shadow: 5), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19E, value: 5, valid: "-2...4"))
+        }
+
+        // Color range is -4...4
+        for val: Int32 in -4...4 {
+            let encoded = try CSlotPresetEncoder.encode(recipe: recipe(filmSimulation: .provia, color: val), slot: 1)
+            XCTAssertEqual(encoded.color, val * 10, "Color \(val) should encode to \(val * 10)")
+        }
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(color: -5), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19F, value: -5, valid: "-4...4"))
+        }
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(color: 5), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD19F, value: 5, valid: "-4...4"))
+        }
+
+        // Sharpness range is -4...4
+        for val: Int32 in -4...4 {
+            let encoded = try CSlotPresetEncoder.encode(recipe: recipe(sharpness: val), slot: 1)
+            XCTAssertEqual(encoded.sharpness, val * 10, "Sharpness \(val) should encode to \(val * 10)")
+        }
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(sharpness: -5), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD1A0, value: -5, valid: "-4...4"))
+        }
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(sharpness: 5), slot: 1)) {
+            XCTAssertEqual($0 as? CSlotPresetEncodingError, .outOfRange(property: 0xD1A0, value: 5, valid: "-4...4"))
+        }
+
+        // Clarity range is -5...5
+        let minClarity = try CSlotPresetEncoder.encode(recipe: recipe(clarity: -5), slot: 1)
+        XCTAssertEqual(minClarity.clarity, -50)
+        let maxClarity = try CSlotPresetEncoder.encode(recipe: recipe(clarity: 5), slot: 1)
+        XCTAssertEqual(maxClarity.clarity, 50)
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(clarity: -6), slot: 1))
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(clarity: 6), slot: 1))
+
+        // White Balance Shift range is -9...9
+        let minWBRed = try CSlotPresetEncoder.encode(recipe: recipe(wbShiftRed: -9), slot: 1)
+        XCTAssertEqual(minWBRed.wbShiftRed, -9)
+        let maxWBRed = try CSlotPresetEncoder.encode(recipe: recipe(wbShiftRed: 9), slot: 1)
+        XCTAssertEqual(maxWBRed.wbShiftRed, 9)
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(wbShiftRed: -10), slot: 1))
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(wbShiftRed: 10), slot: 1))
+
+        let minWBBlue = try CSlotPresetEncoder.encode(recipe: recipe(wbShiftBlue: -9), slot: 1)
+        XCTAssertEqual(minWBBlue.wbShiftBlue, -9)
+        let maxWBBlue = try CSlotPresetEncoder.encode(recipe: recipe(wbShiftBlue: 9), slot: 1)
+        XCTAssertEqual(maxWBBlue.wbShiftBlue, 9)
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(wbShiftBlue: -10), slot: 1))
+        XCTAssertThrowsError(try CSlotPresetEncoder.encode(recipe: recipe(wbShiftBlue: 10), slot: 1))
+
+        // UITone boundary conversions
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 40), 4)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -40), -4)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: 0), 0)
+        XCTAssertEqual(CSlotPresetEncoder.uiTone(from: -20), -2)
+        XCTAssertNil(CSlotPresetEncoder.uiTone(from: nil))
+        XCTAssertNil(CSlotPresetEncoder.uiTone(from: Int32(Int16.min)))
+    }
+
+    // MARK: - Objective 3: Monochrome Recipe Edge Cases
+
+    func testAllMonochromeSimulationsOmitColorAndRetainMonochromeToning() throws {
+        let monochromeSimulations: [FilmSimulation] = [
+            .monochrome,
+            .monochromeY,
+            .monochromeR,
+            .monochromeG,
+            .sepia,
+            .acros,
+            .acrosY,
+            .acrosR,
+            .acrosG
+        ]
+
+        for sim in monochromeSimulations {
+            // Recipe specifies color: 4, but monochrome must force raw.color to nil
+            let r = recipe(
+                filmSimulation: sim,
+                highlight: 2,
+                color: 4,
+                shadow: -1,
+                sharpness: 3,
+                clarity: -2
+            )
+            let encoded = try CSlotPresetEncoder.encode(recipe: r, slot: 1)
+
+            XCTAssertNil(encoded.color, "\(sim) must omit color property (0xD19F)")
+            XCTAssertEqual(encoded.highlight, 20, "\(sim) must preserve highlight tenths")
+            XCTAssertEqual(encoded.shadow, -10, "\(sim) must preserve shadow tenths")
+            XCTAssertEqual(encoded.sharpness, 30, "\(sim) must preserve sharpness tenths")
+            XCTAssertEqual(encoded.clarity, -20, "\(sim) must preserve clarity tenths")
+        }
+
+        // Test Loadout with monochrome toning (monoWarmCool, monoMagentaGreen)
+        var loadout = Loadout(slot: 2, name: "Acros Warm", filmSim: .acros)
+        loadout.color = 4 // Staged color
+        loadout.monoWarmCool = 3
+        loadout.monoMagentaGreen = -2
+        loadout.highlight = 1
+        loadout.shadow = -1
+
+        let encodedLoadout = try CSlotPresetEncoder.encode(loadout: loadout, slot: 2)
+        XCTAssertNil(encodedLoadout.color, "Acros loadout must omit color")
+        XCTAssertEqual(encodedLoadout.monoWarmCool, 3, "Acros loadout must pass monoWarmCool")
+        XCTAssertEqual(encodedLoadout.monoMagentaGreen, -2, "Acros loadout must pass monoMagentaGreen")
+        XCTAssertEqual(encodedLoadout.highlight, 10)
+        XCTAssertEqual(encodedLoadout.shadow, -10)
+
+        // Non-monochrome simulation MUST include color
+        let proviaRecipe = recipe(filmSimulation: .provia, color: 3)
+        let encodedProvia = try CSlotPresetEncoder.encode(recipe: proviaRecipe, slot: 1)
+        XCTAssertEqual(encodedProvia.color, 30, "Color film simulation must encode color tenths")
+    }
+
     private func recipe(
         filmSimulation: FilmSimulation? = .classicChrome,
         dynamicRange: DynamicRange? = nil,

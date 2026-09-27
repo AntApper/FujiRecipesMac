@@ -164,4 +164,33 @@ final class RecipeDragAndDropTests: XCTestCase {
         XCTAssertTrue(store.isDirty(7))
         XCTAssertFalse(store.isDirty(4))
     }
+
+    @MainActor
+    func testSlotClearPreservesSlotIndexAndSetsDirty() async throws {
+        let defaults = UserDefaults.standard
+        let original = defaults.data(forKey: loadoutsKey)
+        defer {
+            if let original {
+                defaults.set(original, forKey: loadoutsKey)
+            } else {
+                defaults.removeObject(forKey: loadoutsKey)
+            }
+        }
+        defaults.removeObject(forKey: loadoutsKey)
+
+        let store = LoadoutStore()
+        let recipe = Recipe(id: "rec-3", name: "Classic Chrome Street", source: "test", sourceUrl: nil, filmSimulation: .classicChrome)
+        store.applyRecipe(recipe, to: 3)
+        XCTAssertEqual(store.loadout(for: 3)?.recipeName, "Classic Chrome Street")
+        XCTAssertTrue(store.isDirty(3))
+
+        store.clearLoadout(for: 3)
+        let cleared = try XCTUnwrap(store.loadout(for: 3))
+        XCTAssertEqual(cleared.slot, 3)
+        XCTAssertEqual(cleared.name, "C3")
+        XCTAssertNil(cleared.recipeName)
+        XCTAssertNil(cleared.filmSim)
+        XCTAssertFalse(cleared.hasAnySettings)
+        XCTAssertTrue(store.isDirty(3))
+    }
 }

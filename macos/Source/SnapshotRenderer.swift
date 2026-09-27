@@ -224,9 +224,10 @@ private struct SnapshotSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             brandHeader
-            navSection
+            librarySection
+            dialRackSection
             filmSimSection
-            dialBankSection
+            utilitiesSection
             Spacer(minLength: 8)
             statusFooter
         }
@@ -265,92 +266,120 @@ private struct SnapshotSidebar: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 14)
+        .padding(.bottom, 12)
     }
 
-    private var navSection: some View {
-        VStack(spacing: 2) {
-            ForEach(AppTab.allCases) { tab in
-                HStack(spacing: 9) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(selection == tab ? tab.accentColor : Color.white.opacity(0.05))
-                            .frame(width: 24, height: 24)
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(selection == tab ? (tab.accentColor == Theme.fujiAmber ? Color.black : Color.white) : Color.white.opacity(0.65))
-                    }
-                    Text(tab.title)
-                        .font(.system(size: 12, weight: selection == tab ? .semibold : .regular))
-                        .foregroundStyle(selection == tab ? Color.white : Color.white.opacity(0.7))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    if let badge = badge(for: tab) {
-                        Text(badge)
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(selection == tab ? Color.black : Theme.fujiAmber)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(selection == tab ? Color.white : Theme.fujiAmber.opacity(0.18)))
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(selection == tab ? Color.white.opacity(0.10) : Color.clear)
-                )
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 14)
-    }
-
-    private var filmSimSection: some View {
+    private var librarySection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("FILM SIMULATIONS")
+            Text("LIBRARY")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundStyle(Color.white.opacity(0.4))
                 .padding(.horizontal, 14)
 
-            simRow("All Simulations", Theme.fujiAmber, count: recipeStore.recipes.count)
-            simRow("Classic Chrome", Theme.filmSimColor(for: "Classic Chrome"))
-            simRow("Reala Ace", Theme.filmSimColor(for: "Reala Ace"))
-            simRow("Classic Negative", Theme.filmSimColor(for: "Classic Negative"))
-            simRow("Velvia", Theme.filmSimColor(for: "Velvia"))
-            simRow("Acros / Monochrome", Theme.filmSimColor(for: "Acros"))
+            libraryRow("All Recipes", "photo.stack.fill", Theme.fujiAmber, selection == .recipes, count: recipeStore.recipes.count)
+            libraryRow("Favorites", "star.fill", Theme.fujiAmber, false, count: recipeStore.favorites.favoriteIDs.count)
+            libraryRow("My Recipes", "folder.badge.gearshape", Theme.emeraldGreen, false, count: recipeStore.customRecipes.recipes.count)
         }
-        .padding(.bottom, 14)
+        .padding(.bottom, 12)
     }
 
-    private var dialBankSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var dialRackSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("CUSTOM DIAL BANK")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.4))
+                HStack(spacing: 4) {
+                    Image(systemName: "dial.low.fill")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("CAMERA DIAL PRESETS")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                }
+                .foregroundStyle(selection == .camera ? Color.white : Color.white.opacity(0.4))
                 Spacer()
-                Text("\(recipeStore.loadouts.loadoutCountWithSettings())/7")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.fujiAmber)
+                let armed = recipeStore.loadouts.loadoutCountWithSettings()
+                Text("\(armed)/7")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(armed > 0 ? Theme.fujiAmber : Color.white.opacity(0.4))
             }
             .padding(.horizontal, 14)
 
-            HStack(spacing: 3) {
+            VStack(spacing: 2) {
                 ForEach(1...7, id: \.self) { slot in
-                    let filled = recipeStore.loadouts.loadout(for: slot)?.hasAnySettings ?? false
-                    Text("C\(slot)")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundStyle(filled ? Color.black : Color.white.opacity(0.4))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(filled ? Theme.fujiAmber : Color.white.opacity(0.05))
-                        )
+                    let loadout = recipeStore.loadouts.loadout(for: slot)
+                    let accent = slotAccent(slot)
+                    let hasSettings = loadout?.hasAnySettings ?? false
+                    let name: String = {
+                        if let recipeName = loadout?.recipeName, !recipeName.isEmpty { return recipeName }
+                        if let slotName = loadout?.name, !slotName.isEmpty, slotName != "C\(slot)" { return slotName }
+                        return "Empty Slot"
+                    }()
+                    let isSelected = selection == .camera && slot == 1
+
+                    HStack(spacing: 6) {
+                        Text("C\(slot)")
+                            .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(isSelected ? Color.black : accent)
+                            .frame(width: 22, height: 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                    .fill(isSelected ? accent : accent.opacity(0.16))
+                            )
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(name)
+                                .font(.system(size: 10, weight: isSelected ? .semibold : (hasSettings ? .medium : .regular)))
+                                .foregroundStyle(isSelected ? Color.white : (hasSettings ? Color.white.opacity(0.9) : Color.white.opacity(0.4)))
+                                .lineLimit(1)
+
+                            if let sim = loadout?.filmSim {
+                                Text(sim.displayName)
+                                    .font(.system(size: 8, weight: .medium))
+                                    .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Theme.filmSimColor(for: sim.displayName))
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer(minLength: 2)
+
+                        Circle()
+                            .fill(hasSettings ? (loadout?.provenance == .cameraSynced ? Theme.emeraldGreen : Theme.fujiAmber) : Color.white.opacity(0.18))
+                            .frame(width: 5, height: 5)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isSelected ? accent.opacity(0.15) : Color.white.opacity(0.02))
+                    )
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
+        }
+        .padding(.bottom, 12)
+    }
+
+    private var filmSimSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("FILM SIMULATION BASES")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundStyle(Color.white.opacity(0.4))
+                .padding(.horizontal, 14)
+
+            simRow("Classic Chrome", Theme.filmSimColor(for: "Classic Chrome"), count: recipeStore.recipes.filter { RecipeStore.FilmSimFamily.classicChrome.matches($0.filmSimulation) }.count)
+            simRow("Reala Ace", Theme.filmSimColor(for: "Reala Ace"), count: recipeStore.recipes.filter { RecipeStore.FilmSimFamily.realaAce.matches($0.filmSimulation) }.count)
+            simRow("Classic Neg", Theme.filmSimColor(for: "Classic Negative"), count: recipeStore.recipes.filter { RecipeStore.FilmSimFamily.classicNeg.matches($0.filmSimulation) }.count)
+            simRow("Velvia", Theme.filmSimColor(for: "Velvia"), count: recipeStore.recipes.filter { RecipeStore.FilmSimFamily.velvia.matches($0.filmSimulation) }.count)
+            simRow("Acros / B&W", Theme.filmSimColor(for: "Acros"), count: recipeStore.recipes.filter { RecipeStore.FilmSimFamily.acros.matches($0.filmSimulation) }.count)
+        }
+        .padding(.bottom, 12)
+    }
+
+    private var utilitiesSection: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("UTILITIES")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundStyle(Color.white.opacity(0.4))
+                .padding(.horizontal, 14)
+
+            libraryRow("RAF Darkroom", "moon.stars.fill", Theme.cyanAccent, selection == .darkroom, count: nil)
         }
     }
 
@@ -360,19 +389,63 @@ private struct SnapshotSidebar: View {
                 .fill(cameraManager.status.tint)
                 .frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 1) {
-                Text(cameraManager.status.formattedLabel)
+                Text(cameraManager.status == .connected ? "X100VI Online" : "X100VI Disconnected")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text("X100VI USB RAW")
+                Text(cameraManager.status == .connected ? "USB PTP • Verified" : "USB RAW Mode")
                     .font(.system(size: 8, weight: .medium, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(0.4))
+                    .lineLimit(1)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 4)
+
+            Text("Connect")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Theme.emeraldGreen)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Theme.emeraldGreen.opacity(0.18)))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.04))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+        .padding(.horizontal, 10)
+    }
+
+    private func libraryRow(_ title: String, _ icon: String, _ accent: Color, _ isSelected: Bool, count: Int?) -> some View {
+        HStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isSelected ? accent : Color.white.opacity(0.05))
+                    .frame(width: 20, height: 20)
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isSelected ? (accent == Theme.fujiAmber ? Color.black : Color.white) : Color.white.opacity(0.65))
+            }
+            Text(title)
+                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.75))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if let count {
+                Text("\(count)")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(isSelected ? Color.black : Theme.fujiAmber)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(Capsule().fill(isSelected ? Color.white : Theme.fujiAmber.opacity(0.18)))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isSelected ? Color.white.opacity(0.10) : Color.clear)
+        )
     }
 
     private func simRow(_ title: String, _ color: Color, count: Int? = nil) -> some View {
@@ -391,21 +464,5 @@ private struct SnapshotSidebar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 3)
-    }
-
-    private func badge(for tab: AppTab) -> String? {
-        switch tab {
-        case .recipes:
-            let n = recipeStore.favorites.favoriteIDs.count
-            return n > 0 ? "\(n)" : nil
-        case .camera:
-            if cameraManager.status == .connected {
-                return "ON"
-            }
-            let n = recipeStore.loadouts.loadoutCountWithSettings()
-            return n > 0 ? "\(n)/7" : nil
-        case .darkroom:
-            return nil
-        }
     }
 }

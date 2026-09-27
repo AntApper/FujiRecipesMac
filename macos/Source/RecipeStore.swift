@@ -33,12 +33,14 @@ public final class RecipeStore: ObservableObject {
 
     public enum FilterCategory: String, CaseIterable, Identifiable, Hashable {
         case favorites
+        case myRecipes
 
         public var id: String { rawValue }
 
         public var displayName: String {
             switch self {
             case .favorites: return "Favorites"
+            case .myRecipes: return "My Recipes"
             }
         }
     }
@@ -102,6 +104,8 @@ public final class RecipeStore: ObservableObject {
     private var catalog = RecipeCatalog(recipes: [])
     private var bundledRecipes: [Recipe] = []
     private var customRecipeSubscription: AnyCancellable?
+    private var favoritesSubscription: AnyCancellable?
+    private var loadoutsSubscription: AnyCancellable?
 
     /// The loader is injectable so previews and macOS UI tests can exercise
     /// loaded, empty, and failure states without relying on the app bundle.
@@ -127,6 +131,12 @@ public final class RecipeStore: ObservableObject {
         customRecipeSubscription = customRecipes.$recipes.dropFirst().sink { [weak self] _ in
             self?.rebuildGallery()
         }
+        favoritesSubscription = favorites.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        loadoutsSubscription = loadouts.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
     public var filteredRecipes: [Recipe] {
@@ -139,8 +149,15 @@ public final class RecipeStore: ObservableObject {
         filters.searchText = searchQuery
         filters.sortOrder = sortOrder.catalogSortOrder
 
-        return catalog.recipes(matching: filters)
+        var result = catalog.recipes(matching: filters)
             .filter { selectedFilmSimFamily.matches($0.filmSimulation) }
+
+        if selectedFilterCategory == .myRecipes {
+            let customIDs = Set(customRecipes.recipes.map(\.id))
+            result = result.filter { customIDs.contains($0.id) }
+        }
+
+        return result
     }
 
     public var availableWhiteBalances: [WhiteBalanceMode] { catalog.whiteBalances }
@@ -182,7 +199,7 @@ public final class RecipeStore: ObservableObject {
     }
 }
 
-private extension RecipeStore.FilmSimFamily {
+public extension RecipeStore.FilmSimFamily {
     func matches(_ simulation: FilmSimulation?) -> Bool {
         guard self != .all else { return true }
         let name = simulation?.displayName ?? ""

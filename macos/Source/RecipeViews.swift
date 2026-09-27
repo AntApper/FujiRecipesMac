@@ -549,7 +549,8 @@ public struct RecipeListView: View {
         GlassPillToggle(
             options: [
                 (value: Optional<RecipeStore.FilterCategory>.none, label: "All (\(store.recipes.count))"),
-                (value: Optional<RecipeStore.FilterCategory>.some(.favorites), label: "★ Favorites (\(store.favorites.favoriteIDs.count))")
+                (value: Optional<RecipeStore.FilterCategory>.some(.favorites), label: "★ Favorites (\(store.favorites.favoriteIDs.count))"),
+                (value: Optional<RecipeStore.FilterCategory>.some(.myRecipes), label: "My Recipes (\(store.customRecipes.recipes.count))")
             ],
             selection: $store.selectedFilterCategory,
             accentColor: Theme.fujiAmber
@@ -854,14 +855,22 @@ public struct RecipeListView: View {
         if !store.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
             return "magnifyingglass"
         }
-        return store.selectedFilterCategory == .favorites ? "star.slash" : "film.stack"
+        switch store.selectedFilterCategory {
+        case .favorites: return "star.slash"
+        case .myRecipes: return "folder.badge.minus"
+        case nil: return "film.stack"
+        }
     }
 
     private var emptyTitle: String {
         if !store.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
             return "No matching recipes"
         }
-        return store.selectedFilterCategory == .favorites ? "No favorites starred" : "No recipes found"
+        switch store.selectedFilterCategory {
+        case .favorites: return "No favorites starred"
+        case .myRecipes: return "No custom recipes yet"
+        case nil: return "No recipes found"
+        }
     }
 
     private var emptyMessage: String {
@@ -871,9 +880,14 @@ public struct RecipeListView: View {
         if store.loadingState == .failed {
             return "The bundled recipe library could not be loaded. Try again or reinstall the app if this persists."
         }
-        return store.selectedFilterCategory == .favorites
-            ? "Click the star icon on any recipe to add it to your favorites."
-            : "Ensure recipes-data.json is loaded."
+        switch store.selectedFilterCategory {
+        case .favorites:
+            return "Click the star icon on any recipe to add it to your favorites."
+        case .myRecipes:
+            return "Create custom recipes or import a recipe collection from the My Recipes menu."
+        case nil:
+            return "Ensure recipes-data.json is loaded."
+        }
     }
 
     private var recipeLoadingState: some View {

@@ -61,8 +61,7 @@ public final class CameraManager: ObservableObject {
             // USB mode; don't let that fail the whole connection.
             await readActiveSettings()
 
-            // Sync untouched slots from the camera before reporting connected;
-            // drafts staged while offline stay so they can be written.
+            // Keep dirty drafts: anything staged while offline still needs writing.
             if let loadouts {
                 _ = await refreshCameraSlots(into: loadouts)
             }
@@ -216,9 +215,6 @@ public final class CameraManager: ObservableObject {
 
     // MARK: - Batch Write Staged Slots
 
-    /// Writes each of `loadouts.stagedSlots` sequentially to the camera, syncs the
-    /// observed snapshot back to the store, marks the write verified, and collects
-    /// the result.
     public func writeAllStagedSlots(from loadouts: LoadoutStore) async -> [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] {
         var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
 

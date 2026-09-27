@@ -31,20 +31,21 @@ private enum MacAppLaunchConfiguration {
         ProcessInfo.processInfo.environment["FUJI_RECIPES_TRANSPORT"] != "helper"
     }
 
-    /// UI tests supply a unique path so their custom-library fixture cannot
-    /// read or alter a person's persisted recipes.
+    /// UI tests supply a unique library path and defaults suite so their
+    /// fixtures cannot read or alter a person's recipes, favorites, or drafts.
     @MainActor
     static func recipeStore() -> RecipeStore {
         #if DEBUG
-        if let path = ProcessInfo.processInfo.environment["FUJI_RECIPES_CUSTOM_LIBRARY_PATH"],
-           !path.isEmpty {
-            return RecipeStore(
-                recipeLoading: loadBundledRecipes,
-                customRecipes: CustomRecipeLibrary(storageURL: URL(fileURLWithPath: path))
-            )
-        }
-        #endif
+        let environment = ProcessInfo.processInfo.environment
+        let defaults = environment["FUJI_RECIPES_DEFAULTS_SUITE"]
+            .flatMap { $0.isEmpty ? nil : UserDefaults(suiteName: $0) } ?? .standard
+        let library = environment["FUJI_RECIPES_CUSTOM_LIBRARY_PATH"]
+            .flatMap { $0.isEmpty ? nil : CustomRecipeLibrary(storageURL: URL(fileURLWithPath: $0)) }
+            ?? CustomRecipeLibrary()
+        return RecipeStore(recipeLoading: loadBundledRecipes, defaults: defaults, customRecipes: library)
+        #else
         return RecipeStore(recipeLoading: loadBundledRecipes)
+        #endif
     }
 }
 

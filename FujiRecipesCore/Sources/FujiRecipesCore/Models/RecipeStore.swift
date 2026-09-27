@@ -15,8 +15,8 @@ public final class RecipeStore: ObservableObject {
 
     public typealias RecipeLoading = @MainActor () throws -> [Recipe]
 
-    public let favorites = FavoritesStore()
-    public let loadouts = LoadoutStore()
+    public let favorites: FavoritesStore
+    public let loadouts: LoadoutStore
     public let customRecipes: CustomRecipeLibrary
 
     @Published public var recipes: [Recipe] = []
@@ -110,8 +110,11 @@ public final class RecipeStore: ObservableObject {
     /// loaded, empty, and failure states without relying on the app bundle.
     public init(
         recipeLoading: RecipeLoading? = nil,
+        defaults: UserDefaults = .standard,
         customRecipes: CustomRecipeLibrary = CustomRecipeLibrary()
     ) {
+        favorites = FavoritesStore(defaults: defaults)
+        loadouts = LoadoutStore(defaults: defaults)
         self.recipeLoading = recipeLoading ?? {
             if let recipes = try? RecipeLoader.loadRecipes(from: .main) {
                 return recipes

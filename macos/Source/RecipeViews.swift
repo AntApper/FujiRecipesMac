@@ -70,6 +70,11 @@ public struct RecipeListView: View {
                 if store.loadingState == .loading {
                     recipeLoadingState
                 } else {
+                    if store.loadingState == .failed {
+                        emptyState
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+
                     // Recipe Cards Grid
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(store.filteredRecipes) { recipe in
@@ -129,7 +134,7 @@ public struct RecipeListView: View {
                     }
                     .animation(.spring(response: 0.32, dampingFraction: 0.8), value: store.filteredRecipes.map(\.id))
 
-                    if store.filteredRecipes.isEmpty {
+                    if store.filteredRecipes.isEmpty && store.loadingState != .failed {
                         emptyState
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     }
@@ -214,18 +219,6 @@ public struct RecipeListView: View {
             if !isError {
                 dismissToast(activeHUDToast, after: .seconds(3))
             }
-        }
-        .alert("Couldn’t Load Recipes", isPresented: Binding(
-            get: { store.lastError != nil },
-            set: { if !$0 { store.lastError = nil } }
-        )) {
-            Button("Try Again") {
-                Task { await store.loadRecipes() }
-            }
-            .keyboardShortcut(.defaultAction)
-            Button("Dismiss", role: .cancel) { store.lastError = nil }
-        } message: {
-            Text(store.lastError ?? "")
         }
         .sheet(item: $recipeToLoad) { recipe in
             CSlotPickerSheet(
@@ -1093,7 +1086,7 @@ public struct RecipeListView: View {
 
     private var emptyTitle: String {
         if store.loadingState == .failed {
-            return "No recipes found"
+            return "Couldn’t Load Recipes"
         }
         if hasActiveFilters {
             return "No matching recipes"

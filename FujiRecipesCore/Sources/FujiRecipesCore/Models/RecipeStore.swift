@@ -28,7 +28,6 @@ public final class RecipeStore: ObservableObject {
     @Published public var selectedKeyword: String?
     @Published public var sortOrder: SortOrder = .recommended
     @Published public var searchQuery: String = ""
-    @Published public var lastError: String?
 
     public enum FilterCategory: String, CaseIterable, Identifiable, Hashable {
         case favorites
@@ -196,11 +195,9 @@ public final class RecipeStore: ObservableObject {
         do {
             bundledRecipes = try recipeLoading()
             rebuildGallery()
-            lastError = nil
             loadingState = .loaded
             DebugLogger.info("Loaded \(recipes.count) recipes", category: .recipes)
         } catch {
-            lastError = error.localizedDescription
             loadingState = .failed
             DebugLogger.error("Failed to load recipes: \(error.localizedDescription)", category: .recipes)
         }

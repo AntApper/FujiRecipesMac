@@ -176,21 +176,6 @@ public struct SidebarView: View {
                                 .accessibilityIdentifier("sidebar-slot-\(slot)")
                             }
                         }
-                        .background {
-                            // Fast keyboard navigation for C1–C7 slots (⌥1..⌥7)
-                            ForEach(1...7, id: \.self) { slot in
-                                Button("Select C\(slot)") {
-                                    withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
-                                        selection = .camera
-                                        selectedDialSlot = slot
-                                    }
-                                }
-                                .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
-                                .opacity(0)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                            }
-                        }
                     }
 
                     // 3. FILM SIMULATION BASES Section

@@ -314,6 +314,20 @@ final class BatchStagingAndWritingTests: XCTestCase {
     }
 
     @MainActor
+    func testConnectKeepsDraftsStagedBeforeRelaunch() async {
+        LoadoutStore().applyRecipe(
+            Recipe(id: "offline", name: "Offline Draft", source: "test", sourceUrl: nil, filmSimulation: .velvia),
+            to: 3
+        )
+        let relaunched = LoadoutStore()
+
+        await CameraManager().connect(using: seededCameraClient(), loadouts: relaunched)
+
+        XCTAssertEqual(relaunched.loadout(for: 3)?.name, "Offline Draft")
+        XCTAssertEqual(relaunched.stagedSlots, [3])
+    }
+
+    @MainActor
     func testWriteAllStagedSlotsSkipsCameraSyncedAndClearedSlots() async {
         let mockClient = seededCameraClient()
         let store = LoadoutStore()

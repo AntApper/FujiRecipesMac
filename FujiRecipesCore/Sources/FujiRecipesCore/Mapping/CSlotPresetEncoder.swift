@@ -230,7 +230,7 @@ public enum CSlotPresetEncoder {
         return raw
     }
 
-    private static func isMonochrome(_ simulation: FilmSimulation) -> Bool {
+    static func isMonochrome(_ simulation: FilmSimulation) -> Bool {
         switch simulation {
         case .monochrome, .monochromeY, .monochromeR, .monochromeG,
              .sepia, .acros, .acrosY, .acrosR, .acrosG:

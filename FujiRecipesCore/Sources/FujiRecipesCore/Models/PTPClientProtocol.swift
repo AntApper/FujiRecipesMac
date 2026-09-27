@@ -254,6 +254,8 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
     /// succeeded. A non-nil value is the observed camera state associated with
     /// this success, rather than an inferred copy of the requested data.
     public let observedSnapshot: PTPClientPresetData?
+    /// Requested settings that `observedSnapshot` reads back differently.
+    public let differences: [PresetField]
 
     public init(
         slot: Int,
@@ -261,7 +263,8 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         warnings: [String] = [],
         baseline: PTPPresetSlotBaseline? = nil,
         rollback: PTPPresetSlotRollbackOutcome = .notNeeded,
-        observedSnapshot: PTPClientPresetData? = nil
+        observedSnapshot: PTPClientPresetData? = nil,
+        differences: [PresetField] = []
     ) {
         self.slot = slot
         self.createdFromEmpty = createdFromEmpty
@@ -269,6 +272,92 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         self.baseline = baseline
         self.rollback = rollback
         self.observedSnapshot = observedSnapshot
+        self.differences = differences
+    }
+
+    public var summary: String {
+        guard !differences.isEmpty else {
+            return "\(createdFromEmpty ? "Created" : "Wrote") and verified C\(slot)."
+        }
+        let count = differences.count
+        let names = differences.map(\.displayName).joined(separator: ", ")
+        return "Wrote C\(slot) with \(count) difference\(count == 1 ? "" : "s"): \(names)."
+    }
+}
+
+public enum PresetField: Sendable {
+    case name, imageQuality, imageSize, dynamicRange, filmSimulation
+    case monoWarmCool, monoMagentaGreen, grainEffect, colorChrome, colorChromeFxBlue
+    case smoothSkin, whiteBalance, wbShiftRed, wbShiftBlue, colorTemp
+    case highlight, shadow, color, sharpness, highIsoNr, clarity, longExpNr, colorSpace
+
+    public var displayName: String {
+        switch self {
+        case .name: return "Name"
+        case .imageQuality: return "Image Quality"
+        case .imageSize: return "Image Size"
+        case .dynamicRange: return "Dynamic Range"
+        case .filmSimulation: return "Film Simulation"
+        case .monoWarmCool: return "Monochrome Warm/Cool"
+        case .monoMagentaGreen: return "Monochrome Magenta/Green"
+        case .grainEffect: return "Grain"
+        case .colorChrome: return "Color Chrome"
+        case .colorChromeFxBlue: return "Color Chrome FX Blue"
+        case .smoothSkin: return "Smooth Skin"
+        case .whiteBalance: return "White Balance"
+        case .wbShiftRed: return "WB Shift Red"
+        case .wbShiftBlue: return "WB Shift Blue"
+        case .colorTemp: return "Color Temperature"
+        case .highlight: return "Highlight"
+        case .shadow: return "Shadow"
+        case .color: return "Color"
+        case .sharpness: return "Sharpness"
+        case .highIsoNr: return "High ISO NR"
+        case .clarity: return "Clarity"
+        case .longExpNr: return "Long Exposure NR"
+        case .colorSpace: return "Color Space"
+        }
+    }
+}
+
+extension PTPClientPresetData {
+    /// Fields this request sets that `observed` holds differently. Unset
+    /// fields keep whatever the camera had. Monochrome tones only apply
+    /// under a monochrome film, and the X100VI rejects them otherwise.
+    public func differences(from observed: PTPClientPresetData) -> [PresetField] {
+        let monochrome = observed.filmSimulation
+            .flatMap(FilmSimulation.init(rawValue:))
+            .map(CSlotPresetEncoder.isMonochrome) ?? false
+        func differs<T: Equatable>(_ requested: T?, _ actual: T?) -> Bool {
+            requested != nil && requested != actual
+        }
+        let requestedName = name.trimmingCharacters(in: .whitespaces)
+        let checks: [(PresetField, Bool)] = [
+            (.name, !requestedName.isEmpty && requestedName != observed.name.trimmingCharacters(in: .whitespaces)),
+            (.imageQuality, differs(imageQuality, observed.imageQuality)),
+            (.imageSize, differs(imageSize, observed.imageSize)),
+            (.dynamicRange, differs(dynamicRange, observed.dynamicRange)),
+            (.filmSimulation, differs(filmSimulation, observed.filmSimulation)),
+            (.monoWarmCool, monochrome && differs(monoWarmCool, observed.monoWarmCool)),
+            (.monoMagentaGreen, monochrome && differs(monoMagentaGreen, observed.monoMagentaGreen)),
+            (.grainEffect, differs(grainEffect, observed.grainEffect)),
+            (.colorChrome, differs(colorChrome, observed.colorChrome)),
+            (.colorChromeFxBlue, differs(colorChromeFxBlue, observed.colorChromeFxBlue)),
+            (.smoothSkin, differs(smoothSkin, observed.smoothSkin)),
+            (.whiteBalance, differs(whiteBalance, observed.whiteBalance)),
+            (.wbShiftRed, differs(wbShiftRed, observed.wbShiftRed)),
+            (.wbShiftBlue, differs(wbShiftBlue, observed.wbShiftBlue)),
+            (.colorTemp, differs(colorTemp, observed.colorTemp)),
+            (.highlight, differs(highlight, observed.highlight)),
+            (.shadow, differs(shadow, observed.shadow)),
+            (.color, differs(color, observed.color)),
+            (.sharpness, differs(sharpness, observed.sharpness)),
+            (.highIsoNr, differs(highIsoNr, observed.highIsoNr)),
+            (.clarity, differs(clarity, observed.clarity)),
+            (.longExpNr, differs(longExpNr, observed.longExpNr)),
+            (.colorSpace, differs(colorSpace, observed.colorSpace))
+        ]
+        return checks.filter(\.1).map(\.0)
     }
 }
 

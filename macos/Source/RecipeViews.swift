@@ -486,18 +486,17 @@ public struct RecipeListView: View {
                     }
                     return
                 }
-                let warningSuffix = result.warnings.isEmpty
-                    ? ""
-                    : " (skipped inapplicable: \(result.warnings.joined(separator: ", ")))"
-                let action = result.createdFromEmpty ? "created & verified" : "updated & verified"
+                let verified = result.differences.isEmpty
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     activeHUDToast = HUDToast(
-                        title: "✓ Synced to C\(slot)",
-                        message: "\"\(recipe.name)\" \(action) on camera.\(warningSuffix)",
-                        isError: false
+                        title: verified ? "✓ Synced to C\(slot)" : "C\(slot) Differs from \"\(recipe.name)\"",
+                        message: result.summary,
+                        isError: !verified
                     )
                 }
-                dismissToast(activeHUDToast, after: .seconds(4))
+                if verified {
+                    dismissToast(activeHUDToast, after: .seconds(4))
+                }
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     activeHUDToast = HUDToast(

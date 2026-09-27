@@ -1,0 +1,67 @@
+import XCTest
+@testable import FujiRecipesCore
+
+@MainActor
+final class SlotEditorFormTests: XCTestCase {
+    private let loadoutsKey = "com.ant.fuji-recipes.loadouts"
+
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: loadoutsKey)
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: loadoutsKey)
+        super.tearDown()
+    }
+
+    private func storeWithCameraSyncedC3() -> LoadoutStore {
+        let store = LoadoutStore()
+        store.syncFromCameraPresetData([PTPClientPresetData(slot: 3, name: "Appalachian Neg", dynamicRange: 400, filmSimulation: 19, grainEffect: 2, colorChrome: 3, colorChromeFxBlue: 1, smoothSkin: 1, whiteBalance: 4, wbShiftRed: 2, wbShiftBlue: -2, colorTemp: 10000, highlight: 0, shadow: 0, color: 40, sharpness: 20, highIsoNr: 0x8000, clarity: 0)], overwriteDirtyDrafts: true)
+        return store
+    }
+
+    func testSavingAnUneditedFormLeavesACameraSyncedSlotClean() throws {
+        let store = storeWithCameraSyncedC3()
+        let loadout = try XCTUnwrap(store.loadout(for: 3))
+
+        store.saveEditorForm(SlotEditorForm(loadout), slot: 3)
+
+        XCTAssertFalse(store.isDirty(3))
+        XCTAssertEqual(store.loadout(for: 3)?.provenance, .cameraSynced)
+    }
+
+    func testRevertingTheFormAfterAnEarlierSaveRestoresTheOriginalValues() throws {
+        let store = storeWithCameraSyncedC3()
+        let original = SlotEditorForm(try XCTUnwrap(store.loadout(for: 3)))
+        var edited = original
+        edited.filmSim = .classicChrome
+        store.saveEditorForm(edited, slot: 3)
+
+        store.saveEditorForm(original, slot: 3)
+
+        XCTAssertEqual(store.loadout(for: 3)?.filmSim, .nostalgicNegative)
+    }
+
+    func testEditingAFormReloadedFromTheReadbackKeepsTheCameraLabel() throws {
+        let store = storeWithCameraSyncedC3()
+        let loadout = try XCTUnwrap(store.loadout(for: 3))
+        var form = SlotEditorForm(loadout)
+        form.filmSim = .classicChrome
+
+        store.saveEditorForm(form, slot: 3)
+
+        XCTAssertTrue(store.isDirty(3))
+        let saved = try XCTUnwrap(store.loadout(for: 3))
+        XCTAssertEqual(saved.filmSim, .classicChrome)
+        XCTAssertEqual(saved.name, "Appalachian Neg")
+    }
+
+    func testUneditedFormDraftEncodesTheSameCameraRequest() throws {
+        let store = storeWithCameraSyncedC3()
+        let loadout = try XCTUnwrap(store.loadout(for: 3))
+        let form = SlotEditorForm(loadout)
+
+        XCTAssertEqual(try CSlotPresetEncoder.encode(loadout: form.draft(updating: loadout), slot: 3), try CSlotPresetEncoder.encode(loadout: loadout, slot: 3))
+    }
+}

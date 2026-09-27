@@ -13,13 +13,17 @@ public extension UTType {
 
 // MARK: - 2026 Camera Studio & Hardware Telemetry Hub
 
+private struct ActionFeedback: Equatable {
+    let text: String
+    let succeeded: Bool
+}
+
 public struct CameraConnectionView: View {
     @ObservedObject public var manager: CameraManager
     @ObservedObject public var loadouts: LoadoutStore
     @State private var isConnecting = false
     @State private var showLimitationsAlert = false
     @State private var showTroubleshooting = false
-    @State private var slotRefreshMessage: String?
     @State private var confirmOverwriteDrafts = false
     @State private var confirmWriteAll = false
     @State private var confirmClearAllStaged = false
@@ -27,8 +31,10 @@ public struct CameraConnectionView: View {
     @State private var slotToEdit: Loadout?
     @Binding public var selectedDialSlot: Int
     @State private var isWritingAll = false
-    @State private var writeAllProgress: String?
-    @State private var writeStatusFeedback: String?
+    /// Captured when Write All starts, because `stagedSlots` shrinks as each
+    /// slot verifies and the "2 of 5" progress needs the original list.
+    @State private var writeAllPlan: [Int] = []
+    @State private var feedback: ActionFeedback?
     private let cameraSessionFactory: CameraSessionFactory
 
     private var isConnectionInFlight: Bool {
@@ -84,8 +90,8 @@ public struct CameraConnectionView: View {
                     }
 
                     // Error / Warning Diagnostic HUD
-                    if let error = manager.lastError {
-                        errorHUD(error)
+                    if let failure = manager.lastError {
+                        errorHUD(failure)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: -6)),
                                 removal: .opacity.combined(with: .scale(scale: 0.95))
@@ -122,9 +128,8 @@ public struct CameraConnectionView: View {
             TroubleshootingView(isPresented: $showTroubleshooting)
         }
         .onChange(of: manager.status) { _, status in
-            if status != .connected {
-                slotRefreshMessage = nil
-                writeStatusFeedback = nil
+            if status == .connecting {
+                feedback = nil
             }
         }
         .sheet(item: $slotToEdit) { loadout in
@@ -336,25 +341,21 @@ public struct CameraConnectionView: View {
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
-    private func errorHUD(_ error: String) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.title3)
-                    .foregroundStyle(Theme.fujiAmber)
-                    .symbolEffect(.pulse)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Connection Diagnostic")
-                        .font(.subheadline.weight(.semibold))
-                        .glassPrimary()
-                    Text(error)
-                        .font(.caption)
-                        .glassSecondary()
-                }
-
-                Spacer(minLength: 8)
-
+    private func errorHUD(_ failure: CameraFailure) -> some View {
+        let title: String
+        let offersTroubleshooting: Bool
+        switch failure.kind {
+        case .connection:
+            (title, offersTroubleshooting) = ("Connection Failed", true)
+        case .slotRead:
+            (title, offersTroubleshooting) = ("Some Slots Couldn’t Be Read", true)
+        case .slotWrite(let slot):
+            (title, offersTroubleshooting) = ("C\(slot) Write Failed", false)
+        case .rawConversion:
+            (title, offersTroubleshooting) = ("RAW Conversion Failed", false)
+        }
+        let actions = HStack(spacing: 8) {
+            if offersTroubleshooting {
                 Button("Troubleshooting") {
                     showTroubleshooting = true
                 }
@@ -362,28 +363,51 @@ public struct CameraConnectionView: View {
                 .frame(width: 150)
                 .accessibilityHint("Opens USB camera connection troubleshooting steps.")
             }
+            Button("Dismiss") {
+                manager.lastError = nil
+            }
+            .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.textSecondary, height: 30))
+            .frame(width: 90)
+        }
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title3)
+                    .foregroundStyle(Theme.fujiAmber)
+                    .symbolEffect(.pulse)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .glassPrimary()
+                    Text(failure.message)
+                        .font(.caption)
+                        .glassSecondary()
+                }
+
+                Spacer(minLength: 8)
+
+                actions
+            }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.title3)
                         .foregroundStyle(Theme.fujiAmber)
-                    Text("Connection Diagnostic")
+                    Text(title)
                         .font(.subheadline.weight(.semibold))
                         .glassPrimary()
                 }
-                Text(error)
+                Text(failure.message)
                     .font(.caption)
                     .glassSecondary()
-                Button("Troubleshooting Guide") {
-                    showTroubleshooting = true
-                }
-                .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 30))
-                .frame(maxWidth: .infinity)
-                .accessibilityHint("Opens USB camera connection troubleshooting steps.")
+                actions
             }
         }
         .glassCard(padding: 14, tint: Theme.fujiAmber.opacity(0.06), borderColor: Theme.fujiAmber.opacity(0.3))
-        .accessibilityLabel("Connection diagnostic: \(error)")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(title): \(failure.message)")
     }
 
     // MARK: - Primary Action Banner & Controls
@@ -409,26 +433,25 @@ public struct CameraConnectionView: View {
                 }
             }
 
-            if manager.status == .connected, let writeStatusFeedback {
-                HStack(spacing: 6) {
-                    Image(systemName: writeStatusFeedback.hasPrefix("✓") ? "checkmark.circle.fill" : "info.circle.fill")
+            if let feedback {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: feedback.succeeded ? "checkmark.circle.fill" : "info.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(writeStatusFeedback.hasPrefix("✓") ? Theme.emeraldGreen : Theme.fujiAmber)
-                    Text(writeStatusFeedback)
+                        .foregroundStyle(feedback.succeeded ? Theme.emeraldGreen : Theme.fujiAmber)
+                    Text(feedback.text)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(writeStatusFeedback.hasPrefix("✓") ? Theme.emeraldGreen : Theme.textSecondary)
+                        .foregroundStyle(feedback.succeeded ? Theme.emeraldGreen : Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(
-                    Capsule().fill(Color.white.opacity(0.04))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.04))
                 )
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("camera-action-feedback")
                 .transition(.opacity)
-            } else if let slotRefreshMessage {
-                Text(slotRefreshMessage)
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textSecondary)
-                    .transition(.opacity)
             }
         }
         .padding(14)
@@ -439,10 +462,20 @@ public struct CameraConnectionView: View {
         loadouts.stagedSlots.map { "C\($0)" }.formatted(.list(type: .and))
     }
 
+    private var writeAllProgress: String {
+        guard case .writingSlot(let slot) = manager.operation,
+              let index = writeAllPlan.firstIndex(of: slot) else {
+            return "Writing to Camera…"
+        }
+        return "Writing C\(slot) (\(index + 1) of \(writeAllPlan.count))"
+    }
+
     private var writeAllButton: some View {
         let stagedCount = loadouts.stagedSlots.count
         let isConnected = manager.status == .connected
         let canWrite = isConnected && stagedCount > 0 && !manager.isBusy
+        let isSynced = isConnected && stagedCount == 0 && loadouts.dirtySlots.isEmpty
+        let clearedSlots = loadouts.dirtySlots.subtracting(loadouts.stagedSlots).sorted().map { "C\($0)" }
 
         return Button {
             confirmWriteAll = true
@@ -455,7 +488,7 @@ public struct CameraConnectionView: View {
 
                     if isWritingAll {
                         ProgressView().controlSize(.small)
-                    } else if isConnected && stagedCount == 0 {
+                    } else if isSynced {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Theme.emeraldGreen)
@@ -468,18 +501,20 @@ public struct CameraConnectionView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isWritingAll
-                        ? (writeAllProgress ?? "Writing to Camera…")
+                        ? writeAllProgress
                         : (stagedCount == 0
-                            ? (isConnected ? "All 7 Slots Synced with Camera" : "No Staged Changes")
+                            ? (isSynced ? "All 7 Slots Synced with Camera" : "No Staged Changes")
                             : "Write \(stagedCount) Staged Slot\(stagedCount == 1 ? "" : "s") to Camera"))
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(canWrite ? Color.black : (isConnected && stagedCount == 0 ? Theme.emeraldGreen : Theme.textTertiary))
+                        .foregroundStyle(canWrite ? Color.black : (isSynced ? Theme.emeraldGreen : Theme.textTertiary))
 
                     Text(!isConnected
                         ? "Connect camera via USB to sync"
-                        : (stagedCount == 0
-                            ? "Camera presets match local library"
-                            : "\(stagedCount) unsynced draft\(stagedCount == 1 ? "" : "s") ready to upload over USB-C"))
+                        : (stagedCount > 0
+                            ? "\(stagedCount) unsynced draft\(stagedCount == 1 ? "" : "s") ready to upload over USB-C"
+                            : (isSynced
+                                ? "Camera presets match local library"
+                                : "Cleared locally, still on the camera: \(clearedSlots.formatted(.list(type: .and))). Refresh to reload.")))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textMuted)
                 }
@@ -501,7 +536,7 @@ public struct CameraConnectionView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(canWrite ? Color.white.opacity(0.3) : (isConnected && stagedCount == 0 ? Theme.emeraldGreen.opacity(0.3) : Color.white.opacity(0.08)), lineWidth: 1)
+                    .stroke(canWrite ? Color.white.opacity(0.3) : (isSynced ? Theme.emeraldGreen.opacity(0.3) : Color.white.opacity(0.08)), lineWidth: 1)
             )
             .shadow(color: canWrite ? Theme.emeraldGreen.opacity(0.4) : Color.clear, radius: 10, y: 3)
         }
@@ -643,32 +678,16 @@ public struct CameraConnectionView: View {
         guard manager.status == .connected, !loadouts.stagedSlots.isEmpty else { return }
 
         Task {
+            writeAllPlan = loadouts.stagedSlots
             isWritingAll = true
-            writeStatusFeedback = nil
-            writeAllProgress = "Writing staged slots to camera…"
+            feedback = nil
 
-            let results = await manager.writeAllStagedSlots(from: loadouts)
+            let outcomes = await manager.writeAllStagedSlots(from: loadouts)
 
             isWritingAll = false
-            writeAllProgress = nil
-
-            let successes = results.filter {
-                if case .success = $0.result { return true }
-                return false
-            }
-            let failures = results.filter {
-                if case .failure = $0.result { return true }
-                return false
-            }
-
-            if results.isEmpty {
-                writeStatusFeedback = "No staged slots were eligible to write, or camera disconnected."
-            } else if failures.isEmpty {
-                writeStatusFeedback = "✓ Successfully wrote & verified all \(successes.count) staged slots on camera!"
-            } else {
-                let failedSlots = failures.map { "C\($0.slot)" }.joined(separator: ", ")
-                writeStatusFeedback = "Wrote \(successes.count) slots. Failed: \(failedSlots)."
-            }
+            writeAllPlan = []
+            let verified = !outcomes.isEmpty && outcomes.allSatisfy { (try? $0.result.get())?.differences.isEmpty == true }
+            feedback = ActionFeedback(text: WriteAllSummary.text(for: outcomes), succeeded: verified)
         }
     }
 
@@ -676,17 +695,15 @@ public struct CameraConnectionView: View {
         guard manager.status == .connected else { return }
         Task {
             do {
-                writeStatusFeedback = "Writing C\(slot) to camera…"
+                feedback = ActionFeedback(text: "Writing C\(slot) to camera…", succeeded: false)
                 let result = try await manager.writeSlot(slot, from: loadouts)
                 guard !loadouts.isDirty(slot) else {
-                    writeStatusFeedback = "Wrote C\(slot) to the camera. You edited it during the write, so the newer draft is still staged."
+                    feedback = ActionFeedback(text: "Wrote C\(slot) to the camera. You edited it during the write, so the newer draft is still staged.", succeeded: false)
                     return
                 }
-                let action = result.createdFromEmpty ? "Created & verified" : "Updated & verified"
-                let warnSuffix = result.warnings.isEmpty ? "" : " (warnings: \(result.warnings.joined(separator: ", ")))"
-                writeStatusFeedback = "✓ \(action) camera slot C\(slot)\(warnSuffix)."
+                feedback = ActionFeedback(text: result.summary, succeeded: result.differences.isEmpty)
             } catch {
-                writeStatusFeedback = "Failed to write C\(slot): \(error.localizedDescription)"
+                feedback = ActionFeedback(text: "C\(slot): \(error.localizedDescription)", succeeded: false)
             }
         }
     }
@@ -694,16 +711,15 @@ public struct CameraConnectionView: View {
     private func clearAllStagedSlots() {
         withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
             loadouts.clearAllStaged()
-            writeStatusFeedback = "Cleared all 7 local staged slots."
+            feedback = ActionFeedback(text: "Cleared all 7 local drafts. The camera slots are unchanged.", succeeded: false)
         }
     }
 
     private func refreshSlots(overwriteDrafts: Bool) {
         Task {
+            feedback = nil
             let result = await manager.refreshCameraSlots(into: loadouts, overwriteDirtyDrafts: overwriteDrafts)
-            slotRefreshMessage = result.isComplete
-                ? "Read all seven camera slots."
-                : "Partial read: \(result.presets.count)/7. \(result.failures.map(\.description).joined(separator: "; "))"
+            feedback = ActionFeedback(text: result.summary, succeeded: result.isComplete)
         }
     }
 

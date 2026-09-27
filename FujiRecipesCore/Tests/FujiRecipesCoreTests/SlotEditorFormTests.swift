@@ -150,6 +150,18 @@ final class SlotEditorFormTests: XCTestCase {
         XCTAssertFalse(store.isDirty(3))
     }
 
+    func testClearingTheNameOfAnUnnamedSlotLeavesTheSlotClean() throws {
+        let store = LoadoutStore()
+        store.syncFromCameraPresetData([PTPClientPresetData(slot: 3, name: "", filmSimulation: 19)], overwriteDirtyDrafts: true)
+        var session = SlotEditorSession(try XCTUnwrap(store.loadout(for: 3)))
+        session.form.name = " "
+
+        store.save(&session)
+
+        XCTAssertFalse(store.isDirty(3))
+        XCTAssertEqual(store.loadout(for: 3)?.name, "C3")
+    }
+
     func testTheFormShowsTheKelvinTheCameraWillGet() throws {
         let loadout = Loadout(slot: 3, name: "Kelvin", wb: .colorTemperature)
 

@@ -145,7 +145,8 @@ public struct Recipe: Identifiable, Codable, Sendable {
         clarity != nil
     }
 
-    /// Creates a customized copy of this recipe ready to be customized and saved into My Recipes.
+    /// Creates a copy to customize and save into My Recipes. Unset settings
+    /// stay unset, so the copy never claims a value the original lacked.
     public func duplicated(name customName: String? = nil, source customSource: String? = nil) -> Recipe {
         let baseName = name.isEmpty ? "Recipe" : name
         let targetName = customName ?? "\(baseName) (Custom)"
@@ -162,22 +163,22 @@ public struct Recipe: Identifiable, Codable, Sendable {
             imageUrls: imageUrls,
             date: Date(),
             dateString: nil,
-            filmSimulation: filmSimulation ?? .provia,
-            dynamicRange: dynamicRange ?? .dr100,
-            grainEffect: grainEffect ?? .off,
+            filmSimulation: filmSimulation,
+            dynamicRange: dynamicRange,
+            grainEffect: grainEffect,
             colorChrome: colorChrome,
             colorChromeFxBlue: colorChromeFxBlue,
             smoothSkin: smoothSkin,
-            whiteBalanceMode: whiteBalanceMode ?? .auto,
-            wbShiftRed: wbShiftRed ?? 0,
-            wbShiftBlue: wbShiftBlue ?? 0,
-            colorTempK: colorTempK ?? (whiteBalanceMode == .colorTemperature ? 5_600 : nil),
-            highlight: highlight ?? 0,
-            shadow: shadow ?? 0,
-            color: color ?? 0,
-            sharpness: sharpness ?? 0,
-            highIsoNr: highIsoNr ?? 0,
-            clarity: clarity ?? 0,
+            whiteBalanceMode: whiteBalanceMode,
+            wbShiftRed: wbShiftRed,
+            wbShiftBlue: wbShiftBlue,
+            colorTempK: colorTempK,
+            highlight: highlight,
+            shadow: shadow,
+            color: color,
+            sharpness: sharpness,
+            highIsoNr: highIsoNr,
+            clarity: clarity,
             iso: iso,
             exposureCompensation: exposureCompensation,
             settings: copiedSettings,

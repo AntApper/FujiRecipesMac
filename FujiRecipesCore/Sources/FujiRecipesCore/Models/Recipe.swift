@@ -45,6 +45,10 @@ public struct Recipe: Identifiable, Codable, Sendable {
     public let compatibleCameras: [String]?
     public let tags: [String]?
     public let parseStatus: ParseStatus
+    /// Exact C-slot tone tenths that are not whole UI steps, such as shadow
+    /// `+0.5` stored as `5`. Integer tone fields cannot represent a half step,
+    /// so camera writes prefer these raw values when they are present.
+    public let sourceRawPreset: LoadoutRawPresetState?
 
     public enum ParseStatus: String, Codable, Sendable {
         case ok
@@ -82,7 +86,8 @@ public struct Recipe: Identifiable, Codable, Sendable {
         sensorGeneration: String? = nil,
         compatibleCameras: [String]? = nil,
         tags: [String]? = nil,
-        parseStatus: ParseStatus = .ok
+        parseStatus: ParseStatus = .ok,
+        sourceRawPreset: LoadoutRawPresetState? = nil
     ) {
         self.id = id
         self.name = name
@@ -115,6 +120,7 @@ public struct Recipe: Identifiable, Codable, Sendable {
         self.compatibleCameras = compatibleCameras
         self.tags = tags
         self.parseStatus = parseStatus
+        self.sourceRawPreset = sourceRawPreset
     }
 
     // Computed: whether this recipe has any unmapped settings
@@ -178,7 +184,8 @@ public struct Recipe: Identifiable, Codable, Sendable {
             sensorGeneration: sensorGeneration ?? "X-Trans V",
             compatibleCameras: compatibleCameras ?? ["X100VI"],
             tags: ["My Recipes"],
-            parseStatus: .ok
+            parseStatus: .ok,
+            sourceRawPreset: sourceRawPreset
         )
     }
 
@@ -217,6 +224,15 @@ public struct Recipe: Identifiable, Codable, Sendable {
 
         let resolvedWB = whiteBalanceMode ?? self.whiteBalanceMode
         let resolvedKelvin = colorTempK ?? self.colorTempK
+        var preservedRaw = sourceRawPreset
+        if highlight != nil { preservedRaw?.highlight = nil }
+        if shadow != nil { preservedRaw?.shadow = nil }
+        if color != nil { preservedRaw?.color = nil }
+        if sharpness != nil { preservedRaw?.sharpness = nil }
+        if clarity != nil { preservedRaw?.clarity = nil }
+        if preservedRaw?.hasAnyValue != true {
+            preservedRaw = nil
+        }
 
         return Recipe(
             id: id,
@@ -249,7 +265,8 @@ public struct Recipe: Identifiable, Codable, Sendable {
             sensorGeneration: sensorGeneration,
             compatibleCameras: compatibleCameras,
             tags: tags,
-            parseStatus: parseStatus
+            parseStatus: parseStatus,
+            sourceRawPreset: preservedRaw
         )
     }
 }

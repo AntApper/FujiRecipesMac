@@ -137,21 +137,60 @@ public enum RecipeLoader {
             wbShiftRed: jsonRecipe.presetSettings["wbShiftRed"]?.int32Value,
             wbShiftBlue: jsonRecipe.presetSettings["wbShiftBlue"]?.int32Value,
             colorTempK: colorTemp,
-            highlight: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["highlightTone"]?.int32Value),
-            shadow: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["shadowTone"]?.int32Value),
-            color: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["color"]?.int32Value),
-            sharpness: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["sharpness"]?.int32Value),
+            highlight: catalogTone(from: jsonRecipe.presetSettings["highlightTone"]?.int32Value),
+            shadow: catalogTone(from: jsonRecipe.presetSettings["shadowTone"]?.int32Value),
+            color: catalogTone(from: jsonRecipe.presetSettings["color"]?.int32Value),
+            sharpness: catalogTone(from: jsonRecipe.presetSettings["sharpness"]?.int32Value),
             highIsoNr: CSlotPresetEncoder.uiHighIsoNR(
                 from: jsonRecipe.presetSettings["highIsoNr"].flatMap { UInt32(exactly: $0) }
             ),
-            clarity: CSlotPresetEncoder.uiTone(from: jsonRecipe.presetSettings["clarity"]?.int32Value),
+            clarity: catalogTone(from: jsonRecipe.presetSettings["clarity"]?.int32Value),
             iso: jsonRecipe.settings["iso"],
             exposureCompensation: jsonRecipe.settings["exposureCompensation"],
             settings: jsonRecipe.settings,
             sensorGeneration: jsonRecipe.sensorGeneration,
             compatibleCameras: jsonRecipe.compatibleCameras,
             tags: jsonRecipe.tags,
-            parseStatus: .ok
+            parseStatus: .ok,
+            sourceRawPreset: halfStepRawPreset(from: jsonRecipe.presetSettings)
+        )
+    }
+
+    /// Nearest whole stop for catalog display. Camera sync uses truncating
+    /// `uiTone` so raw `+1.5` stays distinct from UI `+2`.
+    static func catalogTone(from raw: Int32?) -> Int32? {
+        guard let raw else { return nil }
+        let signed16 = Int32(Int16(truncatingIfNeeded: raw))
+        guard signed16 != Int32(Int16.min) else { return nil }
+        let bias: Int32 = signed16 >= 0 ? 5 : -5
+        return (signed16 + bias) / 10
+    }
+
+    /// Whole UI steps round-trip through `uiTone` and `rawTenths`. Half steps
+    /// such as `+0.5` (raw `5`) and `-1.5` (raw `-15`) do not, so keep the
+    /// original tenths for the encoder's raw-preset path.
+    static func halfStepRawPreset(from preset: [String: Double]) -> LoadoutRawPresetState? {
+        func fractionalTenths(_ key: String) -> Int32? {
+            guard let value = preset[key] else { return nil }
+            let raw = Int32(value.rounded(.towardZero))
+            guard raw % 10 != 0 else { return nil }
+            return raw
+        }
+
+        let highlight = fractionalTenths("highlightTone")
+        let shadow = fractionalTenths("shadowTone")
+        let color = fractionalTenths("color")
+        let sharpness = fractionalTenths("sharpness")
+        let clarity = fractionalTenths("clarity")
+        guard highlight != nil || shadow != nil || color != nil || sharpness != nil || clarity != nil else {
+            return nil
+        }
+        return LoadoutRawPresetState(
+            highlight: highlight,
+            shadow: shadow,
+            color: color,
+            sharpness: sharpness,
+            clarity: clarity
         )
     }
 

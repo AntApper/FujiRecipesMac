@@ -30,4 +30,26 @@ final class SlotEditorFormTests: XCTestCase {
         XCTAssertFalse(store.isDirty(3))
         XCTAssertEqual(store.loadout(for: 3)?.provenance, .cameraSynced)
     }
+
+    func testEditingAFormReloadedFromTheReadbackKeepsTheCameraLabel() throws {
+        let store = storeWithCameraSyncedC3()
+        let loadout = try XCTUnwrap(store.loadout(for: 3))
+        var form = SlotEditorForm(loadout)
+        form.filmSim = .classicChrome
+
+        store.saveEditorForm(form, editing: loadout)
+
+        XCTAssertTrue(store.isDirty(3))
+        let saved = try XCTUnwrap(store.loadout(for: 3))
+        XCTAssertEqual(saved.filmSim, .classicChrome)
+        XCTAssertEqual(saved.name, "Appalachian Neg")
+    }
+
+    func testUneditedFormDraftEncodesTheSameCameraRequest() throws {
+        let store = storeWithCameraSyncedC3()
+        let loadout = try XCTUnwrap(store.loadout(for: 3))
+        let form = SlotEditorForm(loadout)
+
+        XCTAssertEqual(try CSlotPresetEncoder.encode(loadout: form.draft(updating: loadout), slot: 3), try CSlotPresetEncoder.encode(loadout: loadout, slot: 3))
+    }
 }

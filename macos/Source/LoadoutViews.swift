@@ -712,21 +712,8 @@ public struct SlotEditorSheet: View {
     @ObservedObject public var cameraManager: CameraManager
     @Binding public var isPresented: Bool
 
-    @State private var selectedFilmSim: FilmSimulation?
-    @State private var selectedDR: DynamicRange?
-    @State private var selectedGrain: GrainEffect?
-    @State private var selectedWB: WhiteBalanceMode?
-    @State private var colorTemperature: Int
-    @State private var draftName: String
+    @State private var form: SlotEditorForm
     @State private var writeMessage: String?
-    @State private var highlight: Int32 = 0
-    @State private var shadow: Int32 = 0
-    @State private var color: Int32 = 0
-    @State private var sharpness: Int32 = 0
-    @State private var includesHighlight: Bool
-    @State private var includesShadow: Bool
-    @State private var includesColor: Bool
-    @State private var includesSharpness: Bool
     @FocusState private var isNameFocused: Bool
 
     public init(loadout: Loadout, store: LoadoutStore, cameraManager: CameraManager, isPresented: Binding<Bool>) {
@@ -734,21 +721,7 @@ public struct SlotEditorSheet: View {
         self.store = store
         self.cameraManager = cameraManager
         self._isPresented = isPresented
-        self._selectedFilmSim = State(initialValue: loadout.filmSim)
-        self._selectedDR = State(initialValue: loadout.dr)
-        self._selectedGrain = State(initialValue: loadout.grain)
-        self._selectedWB = State(initialValue: loadout.wb)
-        self._colorTemperature = State(initialValue: Int(loadout.colorTempK ?? 5600))
-        self._draftName = State(initialValue: loadout.name)
-        let tones = loadout.toneTenths
-        self._highlight = State(initialValue: tones.highlight ?? 0)
-        self._shadow = State(initialValue: tones.shadow ?? 0)
-        self._color = State(initialValue: tones.color ?? 0)
-        self._sharpness = State(initialValue: tones.sharpness ?? 0)
-        self._includesHighlight = State(initialValue: tones.highlight != nil)
-        self._includesShadow = State(initialValue: tones.shadow != nil)
-        self._includesColor = State(initialValue: tones.color != nil)
-        self._includesSharpness = State(initialValue: tones.sharpness != nil)
+        self._form = State(initialValue: SlotEditorForm(loadout))
     }
 
     public var body: some View {
@@ -764,7 +737,7 @@ public struct SlotEditorSheet: View {
                             icon: "slider.horizontal.3",
                             accentColor: slotAccent(loadout.slot)
                         )
-                        TextField("Slot name", text: $draftName)
+                        TextField("Slot name", text: $form.name)
                             .textFieldStyle(.roundedBorder)
                             .focused($isNameFocused)
 
@@ -774,7 +747,7 @@ public struct SlotEditorSheet: View {
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.textTertiary)
 
-                            Picker("Film Sim", selection: $selectedFilmSim) {
+                            Picker("Film Sim", selection: $form.filmSim) {
                                 Text("None").tag(Optional<FilmSimulation>.none)
                                 ForEach(FilmSimulation.allCases, id: \.self) { sim in
                                     Text(sim.displayName).tag(Optional(sim))
@@ -785,27 +758,27 @@ public struct SlotEditorSheet: View {
                             .glassCard(padding: 4, radius: 10)
                         }
 
-                        pickerSection("DYNAMIC RANGE", selection: $selectedDR, values: [.auto, .dr100, .dr200, .dr400]) { $0.displayName }
-                        pickerSection("GRAIN EFFECT", selection: $selectedGrain, values: [.off, .weakSmall, .strongSmall, .weakLarge, .strongLarge]) { $0.displayName }
-                        pickerSection("WHITE BALANCE", selection: $selectedWB, values: [.asShot, .auto, .daylight, .cloudy, .tungsten, .fluorescent1, .fluorescent2, .fluorescent3, .shade, .colorTemperature, .ambiencePriority, .underwater]) { $0.displayName }
+                        pickerSection("DYNAMIC RANGE", selection: $form.dynamicRange, values: [.auto, .dr100, .dr200, .dr400]) { $0.displayName }
+                        pickerSection("GRAIN EFFECT", selection: $form.grain, values: [.off, .weakSmall, .strongSmall, .weakLarge, .strongLarge]) { $0.displayName }
+                        pickerSection("WHITE BALANCE", selection: $form.whiteBalance, values: [.asShot, .auto, .daylight, .cloudy, .tungsten, .fluorescent1, .fluorescent2, .fluorescent3, .shade, .colorTemperature, .ambiencePriority, .underwater]) { $0.displayName }
 
                         // Kelvin Temperature Slider & Stepper (when White Balance is Color Temperature)
-                        if selectedWB == .colorTemperature {
+                        if form.whiteBalance == .colorTemperature {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text("COLOR TEMPERATURE (KELVIN)")
                                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                                         .foregroundStyle(Theme.textTertiary)
                                     Spacer()
-                                    Text("\(colorTemperature) K")
+                                    Text("\(form.colorTemperature) K")
                                         .font(.system(size: 13, weight: .bold, design: .monospaced))
                                         .foregroundStyle(Theme.fujiAmber)
                                 }
 
                                 Slider(
                                     value: Binding(
-                                        get: { Double(colorTemperature) },
-                                        set: { colorTemperature = Int((($0 / 100).rounded()) * 100) }
+                                        get: { Double(form.colorTemperature) },
+                                        set: { form.colorTemperature = Int((($0 / 100).rounded()) * 100) }
                                     ),
                                     in: 2500...10000,
                                     step: 100
@@ -817,7 +790,7 @@ public struct SlotEditorSheet: View {
                                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                                         .foregroundStyle(Theme.textTertiary)
                                     Spacer()
-                                    Stepper("", value: $colorTemperature, in: 2500...10000, step: 100)
+                                    Stepper("", value: $form.colorTemperature, in: 2500...10000, step: 100)
                                         .labelsHidden()
                                     Spacer()
                                     Text("10000K (Cool Shade)")
@@ -836,10 +809,10 @@ public struct SlotEditorSheet: View {
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.textTertiary)
 
-                            optionalStepperRow(title: "Highlight Tone", included: $includesHighlight, tenths: $highlight, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
-                            optionalStepperRow(title: "Shadow Tone", included: $includesShadow, tenths: $shadow, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
-                            optionalStepperRow(title: "Color Saturation", included: $includesColor, tenths: $color, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
-                            optionalStepperRow(title: "Sharpness", included: $includesSharpness, tenths: $sharpness, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
+                            optionalStepperRow(title: "Highlight Tone", included: $form.includesHighlight, tenths: $form.highlight, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
+                            optionalStepperRow(title: "Shadow Tone", included: $form.includesShadow, tenths: $form.shadow, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
+                            optionalStepperRow(title: "Color Saturation", included: $form.includesColor, tenths: $form.color, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
+                            optionalStepperRow(title: "Sharpness", included: $form.includesSharpness, tenths: $form.sharpness, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
                         }
                         .glassCard()
                         if let writeMessage {
@@ -924,23 +897,7 @@ public struct SlotEditorSheet: View {
     }
 
     private func saveChanges() {
-        loadout.name = draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "C\(loadout.slot)" : draftName
-        loadout.filmSim = selectedFilmSim
-        loadout.dr = selectedDR
-        loadout.grain = selectedGrain
-        loadout.wb = selectedWB
-        loadout.colorTempK = selectedWB == .colorTemperature ? UInt32(colorTemperature) : nil
-        var raw = loadout.rawPreset ?? LoadoutRawPresetState()
-        raw.highlight = includesHighlight ? highlight : nil
-        raw.shadow = includesShadow ? shadow : nil
-        raw.color = includesColor ? color : nil
-        raw.sharpness = includesSharpness ? sharpness : nil
-        loadout.rawPreset = raw.hasAnyValue ? raw : nil
-        loadout.highlight = raw.highlight.map { $0 / 10 }
-        loadout.shadow = raw.shadow.map { $0 / 10 }
-        loadout.color = raw.color.map { $0 / 10 }
-        loadout.sharpness = raw.sharpness.map { $0 / 10 }
-        store.saveLocalDraft(loadout)
+        store.saveEditorForm(form, editing: loadout)
     }
 
     private func writeToCamera() {
@@ -958,6 +915,7 @@ public struct SlotEditorSheet: View {
                 }
                 if let observedLoadout = store.loadout(for: loadout.slot) {
                     loadout = observedLoadout
+                    form = SlotEditorForm(observedLoadout)
                 }
                 writeMessage = result.summary
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {

@@ -168,6 +168,22 @@ final class CameraOperationSerializationTests: XCTestCase {
     }
 
     @MainActor
+    func testImportLinksTheSlotToTheWrittenRecipe() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        let recipe = Recipe(id: "tmax-hard", name: "Kodak T-Max 100 Hard Tone - A Film Simulation Recipe", source: "test", sourceUrl: nil, filmSimulation: .acros)
+
+        _ = try await manager.importRecipeToCState(recipe, slot: 3, updating: store)
+
+        let slot = try XCTUnwrap(store.loadout(for: 3))
+        XCTAssertEqual(slot.name, "Kodak T-Max 100 Hard Tone")
+        XCTAssertEqual(slot.recipeName, "Kodak T-Max 100 Hard Tone - A Film Simulation Recipe")
+        XCTAssertEqual(slot.recipeID, "tmax-hard")
+    }
+
+    @MainActor
     func testImportKeepsEditMadeWhileItWasWriting() async throws {
         let camera = SlotRegisterCamera()
         let store = LoadoutStore()

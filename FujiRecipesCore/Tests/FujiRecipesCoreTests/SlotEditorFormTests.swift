@@ -162,6 +162,18 @@ final class SlotEditorFormTests: XCTestCase {
         XCTAssertEqual(store.loadout(for: 3)?.name, "C3")
     }
 
+    func testFollowingAnUnchangedSlotKeepsWhatTheUserTyped() throws {
+        let store = LoadoutStore()
+        store.syncFromCameraPresetData([PTPClientPresetData(slot: 2, name: "", filmSimulation: 19)], overwriteDirtyDrafts: true)
+        var session = SlotEditorSession(try XCTUnwrap(store.loadout(for: 2)))
+        session.form.name = "Foo"
+        session.form.name = ""
+
+        session.follow(try XCTUnwrap(store.loadout(for: 2)))
+
+        XCTAssertEqual(session.form.name, "", "the name field snapped back to the slot label while the user was typing")
+    }
+
     func testTheFormShowsTheKelvinTheCameraWillGet() throws {
         let loadout = Loadout(slot: 3, name: "Kelvin", wb: .colorTemperature)
 

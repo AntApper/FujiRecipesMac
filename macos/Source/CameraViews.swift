@@ -550,56 +550,6 @@ public struct CameraConnectionView: View {
         .help("Clears all 7 local recipe drafts")
     }
 
-    // MARK: - Rotary Dial Strip
-
-    private var rotaryDialStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(1...7, id: \.self) { slot in
-                    let loadout = loadouts.loadout(for: slot)
-                    let isSelected = selectedDialSlot == slot
-                    let accent = slotAccent(slot)
-                    let isConfigured = loadout?.hasAnySettings ?? false
-
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            selectedDialSlot = slot
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(isConfigured ? accent : Color.white.opacity(0.2))
-                                .frame(width: 7, height: 7)
-
-                            Text("C\(slot)")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-
-                            if let name = loadout?.name, !name.isEmpty {
-                                Text(name)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .lineLimit(1)
-                                    .frame(maxWidth: 80)
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(isSelected ? accent.opacity(0.25) : Color.white.opacity(0.04))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(isSelected ? accent : Color.white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.8)
-                        )
-                        .foregroundStyle(isSelected ? Color.white : Theme.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
     // MARK: - Dial Rack (C1 to C7)
 
     private let columns = [

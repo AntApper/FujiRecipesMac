@@ -77,6 +77,7 @@ public final class RecipeStore: ObservableObject {
         case dr400 = "DR400"
         case dr200 = "DR200"
         case dr100 = "DR100"
+        case auto = "DR Auto"
 
         public var id: String { rawValue }
     }
@@ -245,6 +246,7 @@ private extension RecipeStore.DRFilter {
         case .dr100: .dr100
         case .dr200: .dr200
         case .dr400: .dr400
+        case .auto: .auto
         }
     }
 }

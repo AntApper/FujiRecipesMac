@@ -1468,14 +1468,19 @@ private struct RecipeCard: View {
         }
     }
 
+    /// The second click of a double-click belongs to Quick Look, so it must
+    /// not toggle the card a second time.
+    private func toggleExpandOnClick() {
+        guard (NSApp.currentEvent?.clickCount ?? 1) < 2 else { return }
+        onSelect?()
+        onToggleExpand()
+    }
+
     private var headerWithActions: some View {
         HStack(alignment: .top, spacing: 12) {
             // Recipe Thumbnail (clean, completely unobstructed)
             previewThumbnail
-                .onTapGesture {
-                    onSelect?()
-                    onToggleExpand()
-                }
+                .onTapGesture(perform: toggleExpandOnClick)
 
             // Recipe Details (Tappable to expand formula)
             VStack(alignment: .leading, spacing: 4) {
@@ -1515,10 +1520,7 @@ private struct RecipeCard: View {
                 toneAndKelvinCluster
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect?()
-                onToggleExpand()
-            }
+            .onTapGesture(perform: toggleExpandOnClick)
 
             Spacer(minLength: 4)
 

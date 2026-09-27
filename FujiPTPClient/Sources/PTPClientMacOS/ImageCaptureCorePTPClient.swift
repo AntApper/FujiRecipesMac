@@ -172,10 +172,10 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
 
         // 8. Write tone and saturation settings respecting monochrome eligibility
         if isMono {
-            if let warmCool = data.monoWarmCool, warmCool != 0 {
+            if let warmCool = data.monoWarmCool {
                 await writeConditionalProperty(0xD193, value: warmCool, warnings: &warnings)
             }
-            if let magentaGreen = data.monoMagentaGreen, magentaGreen != 0 {
+            if let magentaGreen = data.monoMagentaGreen {
                 await writeConditionalProperty(0xD194, value: magentaGreen, warnings: &warnings)
             }
         } else {

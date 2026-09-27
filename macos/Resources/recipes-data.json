@@ -4465,7 +4465,7 @@
         "grainEffect": "Weak, Small",
         "colorChromeEffect": "Weak",
         "colorChromeFxBlue": "Strong",
-        "whiteBalance": "Cloudy, -2 Red & +3 Blue",
+        "whiteBalance": "Shade, -2 Red & +3 Blue",
         "highlight": "-1",
         "shadow": "-0.5",
         "color": "-3",
@@ -4490,7 +4490,7 @@
         "exposureCompensation": 0,
         "wbShiftRed": -2.0,
         "wbShiftBlue": 3.0,
-        "whiteBalance": 6
+        "whiteBalance": 32774
       },
       "presetSettings": {
         "filmSimulation": 11,
@@ -4506,7 +4506,7 @@
         "highIsoNr": 32768,
         "wbShiftRed": -2.0,
         "wbShiftBlue": 3.0,
-        "whiteBalance": 6
+        "whiteBalance": 32774
       },
       "sourceUrl": null,
       "sourceType": "curated-original",

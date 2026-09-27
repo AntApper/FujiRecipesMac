@@ -16,16 +16,16 @@ public enum CSlotPresetEncoder {
     /// Converts a signed raw C-slot tone payload back to its app/UI unit.
     /// `0x8000` is Fuji's unset sentinel and must not be treated as -3276.8.
     ///
-    /// The app model stores whole stops (`-2...+4`). Fuji half-stops arrive as
-    /// tenths (`+0.5` is `5`, `-1.5` is `-15`). This integer view rounds to the
-    /// nearest stop so `±0.5` is not shown as `0`. C-slot writes keep the
-    /// original tenths through `Recipe.sourceRawPreset`.
+    /// Half-stops truncate toward zero (`15` → `1`, `5` → `0`). Camera sync
+    /// depends on that: raw `+1.5` must stay distinct from UI `+2`, or an
+    /// editor change to `+2` looks unchanged and the stored tenth is kept.
+    /// Catalog display rounding lives in `RecipeLoader.catalogTone`. Exact
+    /// recipe writes use `Recipe.sourceRawPreset`.
     public static func uiTone(from raw: Int32?) -> Int32? {
         guard let raw else { return nil }
         let signed16 = Int32(Int16(truncatingIfNeeded: raw))
         guard signed16 != Int32(Int16.min) else { return nil }
-        let bias: Int32 = signed16 >= 0 ? 5 : -5
-        return (signed16 + bias) / 10
+        return signed16 / 10
     }
 
     /// Converts Fuji's raw C-slot High ISO NR bit pattern to its UI value.

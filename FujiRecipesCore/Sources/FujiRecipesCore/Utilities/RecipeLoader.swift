@@ -111,11 +111,14 @@ public enum RecipeLoader {
     /// `presetSettings` are raw C-slot values, so decode them before passing
     /// the result to `CSlotPresetEncoder` for a future write.
     static func recipe(from jsonRecipe: RecipeJSON) -> Recipe {
-        let filmSim = jsonRecipe.filmSimEnum.flatMap { FilmSimulation(rawValue: UInt32($0)) }
-        let dr = jsonRecipe.presetSettings["dynamicRange"].flatMap { DynamicRange(rawValue: UInt32($0)) }
-        let grain = jsonRecipe.presetSettings["grainEffect"].flatMap { GrainEffect(rawValue: UInt32($0)) }
-        let wb = (jsonRecipe.ptpSettings["whiteBalance"] ?? jsonRecipe.presetSettings["whiteBalance"])
-            .flatMap { WhiteBalanceMode(rawValue: UInt32($0)) }
+        let preset = jsonRecipe.presetSettings
+        func unsigned(_ key: String) -> UInt32? { preset[key].flatMap { UInt32(exactly: $0) } }
+        func signed(_ key: String) -> Int32? { preset[key].flatMap { Int32(exactly: $0) } }
+
+        let filmSim = jsonRecipe.filmSimEnum.flatMap { UInt32(exactly: $0) }.flatMap(FilmSimulation.init(rawValue:))
+        let wb = (jsonRecipe.ptpSettings["whiteBalance"] ?? preset["whiteBalance"])
+            .flatMap { UInt32(exactly: $0) }
+            .flatMap(WhiteBalanceMode.init(rawValue:))
         let colorTemp = resolveColorTemperature(from: jsonRecipe, wb: wb)
 
         return Recipe(
@@ -128,23 +131,21 @@ public enum RecipeLoader {
             date: date(from: jsonRecipe.date),
             dateString: jsonRecipe.date,
             filmSimulation: filmSim,
-            dynamicRange: dr,
-            grainEffect: grain,
-            colorChrome: jsonRecipe.presetSettings["colorChromeEffect"].flatMap { EffectIntensity(rawValue: UInt32($0)) },
-            colorChromeFxBlue: jsonRecipe.presetSettings["colorChromeFxBlue"].flatMap { EffectIntensity(rawValue: UInt32($0)) },
-            smoothSkin: jsonRecipe.presetSettings["smoothSkin"].flatMap { EffectIntensity(rawValue: UInt32($0)) },
+            dynamicRange: unsigned("dynamicRange").flatMap(DynamicRange.init(rawValue:)),
+            grainEffect: unsigned("grainEffect").flatMap(GrainEffect.init(rawValue:)),
+            colorChrome: unsigned("colorChromeEffect").flatMap(EffectIntensity.init(rawValue:)),
+            colorChromeFxBlue: unsigned("colorChromeFxBlue").flatMap(EffectIntensity.init(rawValue:)),
+            smoothSkin: unsigned("smoothSkin").flatMap(EffectIntensity.init(rawValue:)),
             whiteBalanceMode: wb,
-            wbShiftRed: jsonRecipe.presetSettings["wbShiftRed"]?.int32Value,
-            wbShiftBlue: jsonRecipe.presetSettings["wbShiftBlue"]?.int32Value,
+            wbShiftRed: signed("wbShiftRed"),
+            wbShiftBlue: signed("wbShiftBlue"),
             colorTempK: colorTemp,
-            highlight: catalogTone(from: jsonRecipe.presetSettings["highlightTone"]?.int32Value),
-            shadow: catalogTone(from: jsonRecipe.presetSettings["shadowTone"]?.int32Value),
-            color: catalogTone(from: jsonRecipe.presetSettings["color"]?.int32Value),
-            sharpness: catalogTone(from: jsonRecipe.presetSettings["sharpness"]?.int32Value),
-            highIsoNr: CSlotPresetEncoder.uiHighIsoNR(
-                from: jsonRecipe.presetSettings["highIsoNr"].flatMap { UInt32(exactly: $0) }
-            ),
-            clarity: catalogTone(from: jsonRecipe.presetSettings["clarity"]?.int32Value),
+            highlight: catalogTone(from: signed("highlightTone")),
+            shadow: catalogTone(from: signed("shadowTone")),
+            color: catalogTone(from: signed("color")),
+            sharpness: catalogTone(from: signed("sharpness")),
+            highIsoNr: CSlotPresetEncoder.uiHighIsoNR(from: unsigned("highIsoNr")),
+            clarity: catalogTone(from: signed("clarity")),
             iso: jsonRecipe.settings["iso"],
             exposureCompensation: jsonRecipe.settings["exposureCompensation"],
             settings: jsonRecipe.settings,
@@ -152,7 +153,7 @@ public enum RecipeLoader {
             compatibleCameras: jsonRecipe.compatibleCameras,
             tags: jsonRecipe.tags,
             parseStatus: .ok,
-            sourceRawPreset: halfStepRawPreset(from: jsonRecipe.presetSettings)
+            sourceRawPreset: halfStepRawPreset(from: preset)
         )
     }
 
@@ -171,9 +172,7 @@ public enum RecipeLoader {
     /// original tenths for the encoder's raw-preset path.
     static func halfStepRawPreset(from preset: [String: Double]) -> LoadoutRawPresetState? {
         func fractionalTenths(_ key: String) -> Int32? {
-            guard let value = preset[key] else { return nil }
-            let raw = Int32(value.rounded(.towardZero))
-            guard raw % 10 != 0 else { return nil }
+            guard let raw = preset[key].flatMap({ Int32(exactly: $0) }), raw % 10 != 0 else { return nil }
             return raw
         }
 
@@ -231,10 +230,10 @@ public enum RecipeLoader {
     /// 3. Extracts Kelvin from `settings["whiteBalance"]` matching `(\d{4,5})\s*K`
     /// 4. Defaults to 5500 if white balance is `.colorTemperature`
     static func resolveColorTemperature(from jsonRecipe: RecipeJSON, wb: WhiteBalanceMode?) -> UInt32? {
-        if let temp = jsonRecipe.presetSettings["colorTemp"].flatMap({ UInt32(exactly: $0) ?? ($0 >= 0 ? UInt32($0) : nil) }) {
+        if let temp = jsonRecipe.presetSettings["colorTemp"].flatMap({ UInt32(exactly: $0) }) {
             return temp
         }
-        if let temp = jsonRecipe.ptpSettings["colorTemp"].flatMap({ UInt32(exactly: $0) ?? ($0 >= 0 ? UInt32($0) : nil) }) {
+        if let temp = jsonRecipe.ptpSettings["colorTemp"].flatMap({ UInt32(exactly: $0) }) {
             return temp
         }
         if let wbSetting = jsonRecipe.settings["whiteBalance"],
@@ -271,13 +270,6 @@ public enum RecipeLoaderError: Error, LocalizedError {
             return "recipes-data.json was not found in the app bundle."
         }
     }
-}
-
-// MARK: - Numeric Helpers
-
-extension Double {
-    public var intValue: Int { Int(self) }
-    public var int32Value: Int32 { Int32(self) }
 }
 
 private extension String {

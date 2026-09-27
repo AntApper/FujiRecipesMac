@@ -80,8 +80,7 @@ final class CSlotPresetEncoderTests: XCTestCase {
     }
 
     func testUniversalNegativeC4SourceRawValuesRoundTripThroughEncoder() throws {
-        // This is the production record selected in the C4 UI hardware
-        // validation, which read back D197 = 2 (Weak) for a card that says Strong.
+        // This is the production record selected in the C4 UI hardware validation.
         let source = try XCTUnwrap(bundledRecipeCatalog().recipes.first {
             $0.id == "universal-negative-14-fujifilm-x100vi-x-trans-v-film-simulation-recipes-yes-14"
         })

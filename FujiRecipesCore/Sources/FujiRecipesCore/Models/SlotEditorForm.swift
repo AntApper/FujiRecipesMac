@@ -2,6 +2,7 @@ import Foundation
 
 /// The slot editor's visible fields. Tones are in C-slot tenths.
 public struct SlotEditorForm: Equatable, Sendable {
+    private let slot: Int
     public var name: String
     public var filmSim: FilmSimulation?
     public var dynamicRange: DynamicRange?
@@ -18,6 +19,7 @@ public struct SlotEditorForm: Equatable, Sendable {
     public var includesSharpness: Bool
 
     public init(_ loadout: Loadout) {
+        slot = loadout.slot
         name = loadout.name
         filmSim = loadout.filmSim
         dynamicRange = loadout.dr
@@ -37,7 +39,7 @@ public struct SlotEditorForm: Equatable, Sendable {
 
     public func draft(updating loadout: Loadout) -> Loadout {
         var loadout = loadout
-        loadout.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "C\(loadout.slot)" : name
+        loadout.name = draftName
         loadout.filmSim = filmSim
         loadout.dr = dynamicRange
         loadout.grain = grain
@@ -56,10 +58,10 @@ public struct SlotEditorForm: Equatable, Sendable {
         return loadout
     }
 
-    /// Equal forms write the same draft, so hidden Kelvin and switched-off
-    /// tone values don't count.
+    /// Equal forms write the same draft, so a blank name, hidden Kelvin, and
+    /// switched-off tone values don't count.
     public static func == (lhs: SlotEditorForm, rhs: SlotEditorForm) -> Bool {
-        lhs.name == rhs.name
+        lhs.draftName == rhs.draftName
             && lhs.filmSim == rhs.filmSim
             && lhs.dynamicRange == rhs.dynamicRange
             && lhs.grain == rhs.grain
@@ -71,6 +73,7 @@ public struct SlotEditorForm: Equatable, Sendable {
             && lhs.sharpnessTenths == rhs.sharpnessTenths
     }
 
+    private var draftName: String { name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "C\(slot)" : name }
     private var kelvin: Int? { whiteBalance == .colorTemperature ? colorTemperature : nil }
     private var highlightTenths: Int32? { includesHighlight ? highlight : nil }
     private var shadowTenths: Int32? { includesShadow ? shadow : nil }

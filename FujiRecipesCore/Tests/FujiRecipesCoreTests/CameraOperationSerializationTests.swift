@@ -146,6 +146,26 @@ final class CameraOperationSerializationTests: XCTestCase {
         XCTAssertEqual(store.stagedSlots, [4])
     }
 
+    @MainActor
+    func testImportQueuedBehindRefreshAdoptsItsReadback() async throws {
+        let camera = SlotRegisterCamera()
+        let store = LoadoutStore()
+        let manager = CameraManager()
+        await manager.connect(using: camera, loadouts: store)
+        let recipe = Recipe(id: "four", name: "Four", source: "test", sourceUrl: nil, filmSimulation: .eterna)
+
+        let refresh = Task { await manager.refreshCameraSlots(into: store) }
+        await camera.waitUntilBusy()
+        let importTask = Task { try await manager.importRecipeToCState(recipe, slot: 4, updating: store) }
+        _ = await refresh.value
+        _ = try await importTask.value
+
+        XCTAssertEqual(camera.slot(4).name, "Four")
+        XCTAssertEqual(store.loadout(for: 4)?.name, "Four", "the camera holds the recipe but the store kept the pre-import slot")
+        XCTAssertEqual(store.loadout(for: 4)?.filmSim, .eterna)
+        XCTAssertFalse(store.isDirty(4))
+    }
+
     // MARK: - Item 15: disconnect during connect
 
     @MainActor

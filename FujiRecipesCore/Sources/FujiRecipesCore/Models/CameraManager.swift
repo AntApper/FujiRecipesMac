@@ -244,6 +244,7 @@ public final class CameraManager: ObservableObject {
                 var results: [(slot: Int, result: Result<PTPPresetSlotWriteResult, Error>)] = []
 
                 for slot in loadouts.stagedSlots {
+                    guard gen == generation else { break }
                     guard loadouts.stagedSlots.contains(slot) else { continue }
 
                     do {
@@ -360,7 +361,7 @@ public final class CameraManager: ObservableObject {
         using client: PTPClientProtocol,
         gen: Int
     ) async throws -> PTPPresetSlotWriteResult {
-        operation = .writingSlot(slot)
+        if gen == generation { operation = .writingSlot(slot) }
         defer { if gen == generation, operation == .writingSlot(slot) { operation = .idle } }
         do {
             return try await writePresetSlotRecoverably(data(), to: slot, using: client)

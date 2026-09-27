@@ -467,22 +467,22 @@ public struct RecipeListView: View {
                     }
                     return
                 }
-                let verified = result.isVerified
+                let matches = result.differences.isEmpty
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     activeHUDToast = HUDToast(
-                        title: verified ? "✓ Synced to C\(slot)" : "C\(slot) Differs from \"\(recipe.name)\"",
+                        title: matches ? "✓ Synced to C\(slot)" : "C\(slot) Differs from \"\(recipe.name)\"",
                         message: result.summary,
-                        isError: !verified
+                        isError: !matches
                     )
                 }
-                if verified {
+                if result.isVerified {
                     dismissToast(activeHUDToast, after: .seconds(4))
                 }
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     activeHUDToast = HUDToast(
                         title: "C\(slot) Write Error",
-                        message: cSlotWriteFailureMessage(recoveryError),
+                        message: recoveryError.localizedDescription,
                         isError: true
                     )
                 }
@@ -543,28 +543,6 @@ public struct RecipeListView: View {
             )
         }
         dismissToast(activeHUDToast, after: .seconds(3))
-    }
-
-    private func cSlotWriteFailureMessage(_ error: PTPPresetSlotWriteRecoveryError) -> String {
-        let failure: String
-        switch error.failurePhase {
-        case .write:
-            failure = "Camera slot C\(error.slot) write failed before post-write verification"
-        case .postWriteVerification:
-            failure = "Camera slot C\(error.slot) write completed, but post-write verification failed"
-        }
-        let recovery: String
-        switch error.rollback {
-        case .restored:
-            recovery = "The previous camera settings were restored."
-        case .notAttemptedEmptySentinel:
-            recovery = "The camera slot was previously empty, so there were no settings to restore."
-        case .failed(let message):
-            recovery = "Recovery could not restore the previous camera settings: \(message)"
-        case .notNeeded:
-            recovery = "No recovery was required."
-        }
-        return "\(failure): \(error.writeErrorDescription). \(recovery)"
     }
 
     private var headerControlBar: some View {

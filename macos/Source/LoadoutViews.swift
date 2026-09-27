@@ -491,21 +491,22 @@ public struct LoadoutCard: View {
 // MARK: - In-Place Slot Parameter Editor Sheet
 
 public struct SlotEditorSheet: View {
-    @State public var loadout: Loadout
+    let slot: Int
     @ObservedObject public var store: LoadoutStore
     @ObservedObject public var cameraManager: CameraManager
     @Binding public var isPresented: Bool
 
-    @State private var form: SlotEditorForm
+    @State private var session: SlotEditorSession
+    @State private var pendingAction: (() -> Void)?
     @State private var writeMessage: String?
     @FocusState private var isNameFocused: Bool
 
     public init(loadout: Loadout, store: LoadoutStore, cameraManager: CameraManager, isPresented: Binding<Bool>) {
-        self._loadout = State(initialValue: loadout)
+        self.slot = loadout.slot
         self.store = store
         self.cameraManager = cameraManager
         self._isPresented = isPresented
-        self._form = State(initialValue: SlotEditorForm(loadout))
+        self._session = State(initialValue: SlotEditorSession(loadout))
     }
 
     public var body: some View {
@@ -516,13 +517,13 @@ public struct SlotEditorSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeader(
-                            title: "Edit Custom Slot C\(loadout.slot)",
+                            title: "Edit Custom Slot C\(slot)",
                             subtitle: "Adjust film simulation curve and color shifts for this dial position.",
                             icon: "slider.horizontal.3",
-                            accentColor: slotAccent(loadout.slot)
+                            accentColor: slotAccent(slot)
                         )
                         VStack(alignment: .leading, spacing: 4) {
-                            TextField("Slot name", text: $form.name)
+                            TextField("Slot name", text: $session.form.name)
                                 .textFieldStyle(.roundedBorder)
                                 .focused($isNameFocused)
                             cameraLabelPreview
@@ -534,7 +535,7 @@ public struct SlotEditorSheet: View {
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.textTertiary)
 
-                            Picker("Film Sim", selection: $form.filmSim) {
+                            Picker("Film Sim", selection: $session.form.filmSim) {
                                 Text("None").tag(Optional<FilmSimulation>.none)
                                 ForEach(FilmSimulation.allCases, id: \.self) { sim in
                                     Text(sim.displayName).tag(Optional(sim))
@@ -545,27 +546,27 @@ public struct SlotEditorSheet: View {
                             .glassCard(padding: 4, radius: 10)
                         }
 
-                        pickerSection("DYNAMIC RANGE", selection: $form.dynamicRange, values: [.auto, .dr100, .dr200, .dr400]) { $0.displayName }
-                        pickerSection("GRAIN EFFECT", selection: $form.grain, values: [.off, .weakSmall, .strongSmall, .weakLarge, .strongLarge]) { $0.displayName }
-                        pickerSection("WHITE BALANCE", selection: $form.whiteBalance, values: WhiteBalanceMode.cameraModes) { $0.displayName }
+                        pickerSection("DYNAMIC RANGE", selection: $session.form.dynamicRange, values: [.auto, .dr100, .dr200, .dr400]) { $0.displayName }
+                        pickerSection("GRAIN EFFECT", selection: $session.form.grain, values: [.off, .weakSmall, .strongSmall, .weakLarge, .strongLarge]) { $0.displayName }
+                        pickerSection("WHITE BALANCE", selection: $session.form.whiteBalance, values: WhiteBalanceMode.cameraModes) { $0.displayName }
 
                         // Kelvin Temperature Slider & Stepper (when White Balance is Color Temperature)
-                        if form.whiteBalance == .colorTemperature {
+                        if session.form.whiteBalance == .colorTemperature {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text("COLOR TEMPERATURE (KELVIN)")
                                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                                         .foregroundStyle(Theme.textTertiary)
                                     Spacer()
-                                    Text("\(form.colorTemperature) K")
+                                    Text("\(session.form.colorTemperature) K")
                                         .font(.system(size: 13, weight: .bold, design: .monospaced))
                                         .foregroundStyle(Theme.fujiAmber)
                                 }
 
                                 Slider(
                                     value: Binding(
-                                        get: { Double(form.colorTemperature) },
-                                        set: { form.colorTemperature = Int((($0 / 100).rounded()) * 100) }
+                                        get: { Double(session.form.colorTemperature) },
+                                        set: { session.form.colorTemperature = Int((($0 / 100).rounded()) * 100) }
                                     ),
                                     in: 2500...10000,
                                     step: 100
@@ -577,7 +578,7 @@ public struct SlotEditorSheet: View {
                                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                                         .foregroundStyle(Theme.textTertiary)
                                     Spacer()
-                                    Stepper("", value: $form.colorTemperature, in: 2500...10000, step: 100)
+                                    Stepper("", value: $session.form.colorTemperature, in: 2500...10000, step: 100)
                                         .labelsHidden()
                                     Spacer()
                                     Text("10000K (Cool Shade)")
@@ -596,31 +597,30 @@ public struct SlotEditorSheet: View {
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Theme.textTertiary)
 
-                            optionalStepperRow(title: "Highlight Tone", included: $form.includesHighlight, tenths: $form.highlight, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
-                            optionalStepperRow(title: "Shadow Tone", included: $form.includesShadow, tenths: $form.shadow, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
-                            optionalStepperRow(title: "Color Saturation", included: $form.includesColor, tenths: $form.color, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
-                            optionalStepperRow(title: "Sharpness", included: $form.includesSharpness, tenths: $form.sharpness, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
+                            optionalStepperRow(title: "Highlight Tone", included: $session.form.includesHighlight, tenths: $session.form.highlight, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
+                            optionalStepperRow(title: "Shadow Tone", included: $session.form.includesShadow, tenths: $session.form.shadow, range: CSlotPresetEncoder.highlightShadowRange, step: 5)
+                            optionalStepperRow(title: "Color Saturation", included: $session.form.includesColor, tenths: $session.form.color, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
+                            optionalStepperRow(title: "Sharpness", included: $session.form.includesSharpness, tenths: $session.form.sharpness, range: CSlotPresetEncoder.colorSharpnessRange, step: 10)
                         }
                         .glassCard()
                         if let writeMessage {
                             Text(writeMessage).font(.caption).foregroundStyle(Theme.textSecondary)
                         }
-                        Button("Write C\(loadout.slot) to Camera") { writeToCamera() }
+                        Button("Write C\(slot) to Camera") { writeToCamera() }
                             .buttonStyle(GlassProminentButtonStyle(color: Theme.emeraldGreen, height: 34))
                             .disabled(cameraManager.status != .connected || cameraManager.isBusy)
                     }
                     .padding(16)
                 }
             }
-            .navigationTitle("Slot C\(loadout.slot) Configuration")
+            .navigationTitle("Slot C\(slot) Configuration")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { isPresented = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save Local Draft") {
-                        saveChanges()
-                        isPresented = false
+                        commit { isPresented = false }
                     }
                     .buttonStyle(GlassProminentButtonStyle(color: Theme.fujiAmber, height: 30))
                 }
@@ -628,12 +628,35 @@ public struct SlotEditorSheet: View {
         }
         .frame(minWidth: 440, minHeight: 400)
         .defaultFocus($isNameFocused, true)
+        .onChange(of: store.loadout(for: slot).map(SlotEditorForm.init)) { _, _ in followStore() }
+        .onChange(of: session.isEdited) { _, _ in followStore() }
+        .confirmationDialog(
+            "C\(slot) changed while you were editing",
+            isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
+            Button("Keep My Edits") {
+                store.save(&session)
+                action()
+                pendingAction = nil
+            }
+            Button("Discard My Edits", role: .destructive) {
+                if let current = store.loadout(for: slot) {
+                    session.reload(from: current)
+                }
+                pendingAction = nil
+            }
+            Button("Cancel", role: .cancel) { pendingAction = nil }
+        } message: { _ in
+            Text("A camera write or another edit changed C\(slot) after you opened this editor. Keep My Edits stages the values shown here over the new ones. Discard My Edits shows the new values.")
+        }
     }
 
     private var cameraLabelPreview: some View {
-        let label = CameraPresetName.label(for: form.name, slot: loadout.slot)
+        let label = CameraPresetName.label(for: session.form.name, slot: slot)
         let limit = CameraPresetName.maximumCharacterCount
-        let showsTypedName = label == form.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let showsTypedName = label == session.form.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return HStack {
             Text("Camera will show: \(label)")
                 .lineLimit(1)
@@ -705,52 +728,39 @@ public struct SlotEditorSheet: View {
         }
     }
 
-    private func saveChanges() {
-        store.saveEditorForm(form, slot: loadout.slot)
+    private func followStore() {
+        if let current = store.loadout(for: slot) {
+            session.follow(current)
+        }
+    }
+
+    private func commit(then action: @escaping () -> Void) {
+        if let current = store.loadout(for: slot), session.conflicts(with: current) {
+            pendingAction = action
+            return
+        }
+        store.save(&session)
+        action()
     }
 
     private func writeToCamera() {
-        saveChanges()
-        Task {
-            do {
-                let result = try await cameraManager.writeSlot(loadout.slot, from: store)
-                guard result.observedSnapshot?.slot == loadout.slot else {
-                    writeMessage = "C\(loadout.slot) was sent to the camera, but the post-write camera readback was unavailable. This local draft remains unverified."
-                    return
+        commit {
+            writeMessage = "Writing C\(slot)…"
+            Task {
+                do {
+                    let result = try await cameraManager.writeSlot(slot, from: store)
+                    guard result.observedSnapshot?.slot == slot else {
+                        writeMessage = "C\(slot) was sent to the camera, but the post-write camera readback was unavailable. This local draft remains unverified."
+                        return
+                    }
+                    writeMessage = result.summary
+                } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
+                    writeMessage = recoveryError.localizedDescription
+                } catch {
+                    writeMessage = "Camera did not verify the write: \(error.localizedDescription)"
                 }
-                if !result.draftEditedDuringWrite, let observedLoadout = store.loadout(for: loadout.slot) {
-                    loadout = observedLoadout
-                    form = SlotEditorForm(observedLoadout)
-                }
-                writeMessage = result.summary
-            } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
-                writeMessage = cSlotWriteFailureMessage(recoveryError)
-            } catch {
-                writeMessage = "Camera did not verify the write: \(error.localizedDescription)"
             }
         }
-    }
-
-    private func cSlotWriteFailureMessage(_ error: PTPPresetSlotWriteRecoveryError) -> String {
-        let failure: String
-        switch error.failurePhase {
-        case .write:
-            failure = "C\(error.slot) write failed before post-write verification"
-        case .postWriteVerification:
-            failure = "C\(error.slot) write completed, but post-write verification failed"
-        }
-        let recovery: String
-        switch error.rollback {
-        case .restored:
-            recovery = "Previous camera settings were restored."
-        case .notAttemptedEmptySentinel:
-            recovery = "The camera slot was previously empty, so there were no settings to restore."
-        case .failed(let message):
-            recovery = "Recovery could not restore previous camera settings: \(message)"
-        case .notNeeded:
-            recovery = "No recovery was required."
-        }
-        return "\(failure): \(error.writeErrorDescription). \(recovery)"
     }
 
     private func pickerSection<T: Hashable>(

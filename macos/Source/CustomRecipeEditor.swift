@@ -41,7 +41,7 @@ struct CustomRecipeEditor: View {
         _dynamicRange = State(initialValue: recipe.dynamicRange?.rawValue)
         _grain = State(initialValue: recipe.grainEffect?.rawValue)
         _whiteBalance = State(initialValue: recipe.whiteBalanceMode?.rawValue)
-        _colorTemperature = State(initialValue: Int(recipe.colorTempK ?? 5_600))
+        _colorTemperature = State(initialValue: Int(recipe.colorTempK ?? CSlotPresetEncoder.defaultColorTemperature))
         _redShift = State(initialValue: recipe.wbShiftRed.map(Int.init))
         _blueShift = State(initialValue: recipe.wbShiftBlue.map(Int.init))
         _highlight = State(initialValue: recipe.toneTenths.highlight.map(Int.init))

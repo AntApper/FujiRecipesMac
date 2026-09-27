@@ -69,7 +69,7 @@ final class BatchStagingAndWritingTests: XCTestCase {
         )
         XCTAssertEqual(RecipeLoader.recipe(from: jsonWithSpacedRegex).colorTempK, 5600)
 
-        // 5. Default to 5500 when wb is .colorTemperature and no colorTemp is available
+        // 5. Default to 5600 when wb is .colorTemperature and no colorTemp is available
         let jsonWithColorTempWB = makeRecipeJSON(
             presetSettings: [:],
             ptpSettings: ["whiteBalance": Double(WhiteBalanceMode.colorTemperature.rawValue)],
@@ -77,7 +77,7 @@ final class BatchStagingAndWritingTests: XCTestCase {
         )
         let recipeColorTempWB = RecipeLoader.recipe(from: jsonWithColorTempWB)
         XCTAssertEqual(recipeColorTempWB.whiteBalanceMode, .colorTemperature)
-        XCTAssertEqual(recipeColorTempWB.colorTempK, 5500)
+        XCTAssertEqual(recipeColorTempWB.colorTempK, 5600)
 
         // 6. WB is not .colorTemperature and no colorTemp available -> nil
         let jsonDaylight = makeRecipeJSON(
@@ -90,7 +90,7 @@ final class BatchStagingAndWritingTests: XCTestCase {
         XCTAssertNil(recipeDaylight.colorTempK)
     }
 
-    func testCSlotPresetEncoderColorTempFallbackTo5500() throws {
+    func testCSlotPresetEncoderColorTempFallbackTo5600() throws {
         // Recipe with wb == .colorTemperature and colorTempK == nil
         let recipe = Recipe(
             id: "fallback-test",
@@ -104,7 +104,7 @@ final class BatchStagingAndWritingTests: XCTestCase {
 
         let encoded = try CSlotPresetEncoder.encode(recipe: recipe, slot: 1)
         XCTAssertEqual(encoded.whiteBalance, 0x8007)
-        XCTAssertEqual(encoded.colorTemp, 5500)
+        XCTAssertEqual(encoded.colorTemp, 5600)
 
         // Loadout with wb == .colorTemperature and colorTempK == nil
         let loadout = Loadout(
@@ -116,7 +116,7 @@ final class BatchStagingAndWritingTests: XCTestCase {
         )
         let encodedLoadout = try CSlotPresetEncoder.encode(loadout: loadout, slot: 2)
         XCTAssertEqual(encodedLoadout.whiteBalance, 0x8007)
-        XCTAssertEqual(encodedLoadout.colorTemp, 5500)
+        XCTAssertEqual(encodedLoadout.colorTemp, 5600)
     }
 
     // MARK: - LoadoutStore Batch Staging Tests

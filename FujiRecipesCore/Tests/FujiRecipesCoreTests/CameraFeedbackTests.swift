@@ -185,11 +185,11 @@ final class CameraFeedbackTests: XCTestCase {
             "Created C4 with 1 difference: Grain."
         )
         XCTAssertEqual(
-            PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color], draftEditedDuringWrite: true).summary,
+            PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color], draftChange: .edited).summary,
             "Wrote C3 with 2 differences: Grain, Color. You edited it during the write, so the newer draft is still staged."
         )
         XCTAssertEqual(
-            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, draftEditedDuringWrite: true).summary,
+            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, draftChange: .edited).summary,
             "Created C4. You edited it during the write, so the newer draft is still staged."
         )
     }
@@ -204,6 +204,33 @@ final class CameraFeedbackTests: XCTestCase {
         XCTAssertEqual(
             WriteAllSummary.text(for: outcomes),
             "Wrote 2 of 3 slots. Wrote C3 with 2 differences: Grain, Color. C5: Camera not connected. Connect via USB-C to continue."
+        )
+    }
+
+    func testWriteAllSummaryForOneUnverifiedSlotIsThatSlotsSummary() {
+        XCTAssertEqual(
+            WriteAllSummary.text(for: [(slot: 3, result: .success(PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect])))]),
+            "Wrote C3 with 1 difference: Grain."
+        )
+    }
+
+    func testRecoveryErrorEndsEachSentenceWithOnePeriod() {
+        let restored = PTPPresetSlotWriteRecoveryError(slot: 3, writeError: CameraError.notConnected, baseline: .emptySentinel, rollback: .restored)
+        let rollbackFailed = PTPPresetSlotWriteRecoveryError(
+            slot: 4,
+            writeError: PTPError.writeFailed(0xD192, "busy"),
+            baseline: .emptySentinel,
+            rollback: .failed("Camera not connected. Connect via USB-C to continue."),
+            failurePhase: .postWriteVerification
+        )
+
+        XCTAssertEqual(
+            restored.localizedDescription,
+            "C3 write failed before post-write verification: Camera not connected. Connect via USB-C to continue. Previous camera settings were restored."
+        )
+        XCTAssertEqual(
+            rollbackFailed.localizedDescription,
+            "C4 write completed, but post-write verification failed: Failed to write property 0xd192: busy. Recovery could not restore previous camera settings: Camera not connected. Connect via USB-C to continue."
         )
     }
 

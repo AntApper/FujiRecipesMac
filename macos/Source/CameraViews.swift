@@ -523,7 +523,7 @@ public struct CameraConnectionView: View {
                                 ? "Camera presets match local library"
                                 : "Cleared locally, still on the camera: \(clearedSlots.formatted(.list(type: .and))). Refresh to reload.")))
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textMuted)
+                        .foregroundStyle(canWrite ? Color.black.opacity(0.7) : Theme.textTertiary)
                 }
 
                 Spacer(minLength: 4)

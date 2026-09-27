@@ -34,7 +34,6 @@ public enum Theme {
     public static let textPrimary        = Color.white
     public static let textSecondary      = Color.white.opacity(0.72)
     public static let textTertiary       = Color.white.opacity(0.46)
-    public static let textMuted          = Color.white.opacity(0.28)
     
     // Film Simulation Thematic Tints
     public static func filmSimColor(for simName: String) -> Color {
@@ -569,7 +568,7 @@ public struct ToneCurveRadar: View {
     }
 
     private func toneColor(_ tenths: Int32?) -> Color {
-        guard let tenths else { return Theme.textTertiary.opacity(0.6) }
+        guard let tenths else { return Theme.textTertiary }
         if tenths == 0 { return Theme.textTertiary }
         return tenths > 0 ? accentColor : Theme.cyanAccent
     }

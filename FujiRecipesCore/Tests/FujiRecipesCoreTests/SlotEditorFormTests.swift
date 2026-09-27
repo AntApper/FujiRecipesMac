@@ -57,6 +57,18 @@ final class SlotEditorFormTests: XCTestCase {
         XCTAssertEqual(saved.name, "Appalachian Neg")
     }
 
+    func testSavingAFormOpenedBeforeACameraWriteKeepsTheWrite() throws {
+        let store = storeWithCameraSyncedC3()
+        let opened = SlotEditorForm(try XCTUnwrap(store.loadout(for: 3)))
+        store.adoptCameraWrite(PTPClientPresetData(slot: 3, name: "Kodak Portra", filmSimulation: FilmSimulation.classicChrome.rawValue), ifUnchangedSince: store.revision(of: 3))
+
+        store.saveEditorForm(opened, slot: 3)
+
+        XCTAssertEqual(store.loadout(for: 3)?.filmSim, .classicChrome, "saving an untouched editor reverted the camera write")
+        XCTAssertEqual(store.loadout(for: 3)?.name, "Kodak Portra")
+        XCTAssertFalse(store.isDirty(3))
+    }
+
     func testUneditedFormDraftEncodesTheSameCameraRequest() throws {
         let store = storeWithCameraSyncedC3()
         let loadout = try XCTUnwrap(store.loadout(for: 3))

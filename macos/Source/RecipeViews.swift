@@ -218,7 +218,10 @@ public struct RecipeListView: View {
             Text(recipeToDelete.map { "“\($0.name)” will be removed from My Recipes." } ?? "")
         }
         .sheet(item: $recipeToEdit) { recipe in
-            CustomRecipeEditor(recipe: recipe) { edited in
+            CustomRecipeEditor(
+                recipe: recipe,
+                existingRecipes: store.customRecipes.recipes
+            ) { edited in
                 do {
                     try store.customRecipes.save(edited)
                     recipeToEdit = nil

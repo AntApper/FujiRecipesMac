@@ -52,7 +52,7 @@ public enum SnapshotRenderer {
                     .environment(\.snapshotMode, true)
             )),
             ("darkroom_\(tag).png", .darkroom, AnyView(
-                RAFDarkroomView(manager: camera)
+                RAFDarkroomView(manager: camera, store: store)
                     .environment(\.snapshotMode, true)
             )),
         ]

@@ -240,7 +240,7 @@ public struct FujiRecipesMacRoot: View {
         .environmentObject(recipeStore)
         .environmentObject(cameraManager)
         .environment(\.cameraManager, cameraManager)
-        .dataRecoveryAlerts(library: recipeStore.customRecipes)
+        .dataRecoveryAlerts(library: recipeStore.customRecipes, loadouts: recipeStore.loadouts)
         .debugHUD(enabled: !MacAppLaunchConfiguration.isUITesting)
         .task {
             DebugLogger.log(.info, category: .app, "App appeared — Tab: \(selectedTab.rawValue)")

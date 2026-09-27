@@ -185,11 +185,11 @@ final class CameraFeedbackTests: XCTestCase {
             "Created C4 with 1 difference: Grain."
         )
         XCTAssertEqual(
-            PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color], draftEditedDuringWrite: true).summary,
+            PTPPresetSlotWriteResult(slot: 3, differences: [.grainEffect, .color], draftChange: .edited).summary,
             "Wrote C3 with 2 differences: Grain, Color. You edited it during the write, so the newer draft is still staged."
         )
         XCTAssertEqual(
-            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, draftEditedDuringWrite: true).summary,
+            PTPPresetSlotWriteResult(slot: 4, createdFromEmpty: true, draftChange: .edited).summary,
             "Created C4. You edited it during the write, so the newer draft is still staged."
         )
     }

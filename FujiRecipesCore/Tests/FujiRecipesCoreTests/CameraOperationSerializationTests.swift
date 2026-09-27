@@ -122,7 +122,7 @@ final class CameraOperationSerializationTests: XCTestCase {
         let outcomes = await writeAll.value
 
         let result = try XCTUnwrap(outcomes.first { $0.slot == 3 }).result.get()
-        XCTAssertTrue(result.draftEditedDuringWrite)
+        XCTAssertEqual(result.draftChange, .edited)
         XCTAssertFalse(result.isVerified)
         XCTAssertEqual(
             WriteAllSummary.text(for: outcomes),
@@ -183,7 +183,7 @@ final class CameraOperationSerializationTests: XCTestCase {
         store.setHighlight(for: 3, highlight: 2)
         let result = try await write.value
 
-        XCTAssertTrue(result.draftEditedDuringWrite)
+        XCTAssertEqual(result.draftChange, .edited)
         XCTAssertEqual(result.summary, "Wrote C3. You edited it during the write, so the newer draft is still staged.")
     }
 
@@ -198,7 +198,7 @@ final class CameraOperationSerializationTests: XCTestCase {
 
         let result = try await manager.writeSlot(6, from: store)
 
-        XCTAssertFalse(result.draftEditedDuringWrite)
+        XCTAssertNil(result.draftChange)
         XCTAssertEqual(result.summary, "Wrote and verified C6.")
         XCTAssertEqual(result.observedSnapshot?.name, "Six")
         XCTAssertFalse(store.isDirty(6))

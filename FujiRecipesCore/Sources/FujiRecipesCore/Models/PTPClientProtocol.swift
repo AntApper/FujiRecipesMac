@@ -256,9 +256,7 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
     public let observedSnapshot: PTPClientPresetData?
     /// Requested settings that `observedSnapshot` reads back differently.
     public let differences: [PresetField]
-    /// The user changed the slot's draft while this write ran, so the store
-    /// kept the newer draft instead of adopting the readback.
-    public let draftEditedDuringWrite: Bool
+    public let draftChange: DraftChangeDuringWrite?
 
     public init(
         slot: Int,
@@ -268,7 +266,7 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         rollback: PTPPresetSlotRollbackOutcome = .notNeeded,
         observedSnapshot: PTPClientPresetData? = nil,
         differences: [PresetField] = [],
-        draftEditedDuringWrite: Bool = false
+        draftChange: DraftChangeDuringWrite? = nil
     ) {
         self.slot = slot
         self.createdFromEmpty = createdFromEmpty
@@ -277,26 +275,32 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
         self.rollback = rollback
         self.observedSnapshot = observedSnapshot
         self.differences = differences
-        self.draftEditedDuringWrite = draftEditedDuringWrite
+        self.draftChange = draftChange
     }
 
-    public var isVerified: Bool { differences.isEmpty && !draftEditedDuringWrite }
+    public var isVerified: Bool { differences.isEmpty && draftChange == nil }
 
     public var summary: String {
         let verb = createdFromEmpty ? "Created" : "Wrote"
         let outcome: String
         if differences.isEmpty {
-            outcome = draftEditedDuringWrite ? "\(verb) C\(slot)." : "\(verb) and verified C\(slot)."
+            outcome = draftChange == nil ? "\(verb) and verified C\(slot)." : "\(verb) C\(slot)."
         } else {
             let count = differences.count
             let names = differences.map(\.displayName).joined(separator: ", ")
             outcome = "\(verb) C\(slot) with \(count) difference\(count == 1 ? "" : "s"): \(names)."
         }
-        guard draftEditedDuringWrite else { return outcome }
-        return "\(outcome) You edited it during the write, so the newer draft is still staged."
+        switch draftChange {
+        case nil:
+            return outcome
+        case .edited:
+            return "\(outcome) You edited it during the write, so the newer draft is still staged."
+        case .cleared:
+            return "\(outcome) You cleared its draft during the write, so nothing is staged."
+        }
     }
 
-    func markingDraftEditedDuringWrite() -> PTPPresetSlotWriteResult {
+    func marking(_ draftChange: DraftChangeDuringWrite) -> PTPPresetSlotWriteResult {
         PTPPresetSlotWriteResult(
             slot: slot,
             createdFromEmpty: createdFromEmpty,
@@ -305,9 +309,15 @@ public struct PTPPresetSlotWriteResult: Sendable, Equatable {
             rollback: rollback,
             observedSnapshot: observedSnapshot,
             differences: differences,
-            draftEditedDuringWrite: true
+            draftChange: draftChange
         )
     }
+}
+
+/// What the user did to the slot's draft while the write ran. The store kept
+/// that change instead of adopting the readback.
+public enum DraftChangeDuringWrite: Sendable, Equatable {
+    case edited, cleared
 }
 
 public enum PresetField: Sendable {
@@ -434,24 +444,28 @@ public struct PTPPresetSlotWriteRecoveryError: Error, Sendable, LocalizedError {
     }
 
     public var errorDescription: String? {
-        let recovery: String
-        switch rollback {
-        case .restored:
-            recovery = "The previous configured C\(slot) values were restored."
-        case .notAttemptedEmptySentinel:
-            recovery = "The slot was an empty camera sentinel, so no raw-zero rollback was attempted."
-        case .failed(let message):
-            recovery = "Rollback failed: \(message)"
-        case .notNeeded:
-            recovery = "No rollback was required."
-        }
         let failure: String
         switch failurePhase {
         case .write:
-            failure = "C\(slot) write failed"
+            failure = "C\(slot) write failed before post-write verification"
         case .postWriteVerification:
-            failure = "C\(slot) post-write verification failed"
+            failure = "C\(slot) write completed, but post-write verification failed"
         }
-        return "\(failure): \(writeErrorDescription). \(recovery)"
+        let recovery: String
+        switch rollback {
+        case .restored:
+            recovery = "Previous camera settings were restored."
+        case .notAttemptedEmptySentinel:
+            recovery = "The camera slot was previously empty, so there were no settings to restore."
+        case .failed(let message):
+            recovery = "Recovery could not restore previous camera settings: \(Self.droppingPeriod(message))."
+        case .notNeeded:
+            recovery = "No recovery was required."
+        }
+        return "\(failure): \(Self.droppingPeriod(writeErrorDescription)). \(recovery)"
+    }
+
+    private static func droppingPeriod(_ sentence: String) -> String {
+        sentence.hasSuffix(".") ? String(sentence.dropLast()) : sentence
     }
 }

@@ -742,6 +742,7 @@ public struct SlotEditorSheet: View {
 
     private func writeToCamera() {
         commit {
+            writeMessage = "Writing C\(slot)…"
             Task {
                 do {
                     let result = try await cameraManager.writeSlot(slot, from: store)
@@ -751,34 +752,12 @@ public struct SlotEditorSheet: View {
                     }
                     writeMessage = result.summary
                 } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
-                    writeMessage = cSlotWriteFailureMessage(recoveryError)
+                    writeMessage = recoveryError.localizedDescription
                 } catch {
                     writeMessage = "Camera did not verify the write: \(error.localizedDescription)"
                 }
             }
         }
-    }
-
-    private func cSlotWriteFailureMessage(_ error: PTPPresetSlotWriteRecoveryError) -> String {
-        let failure: String
-        switch error.failurePhase {
-        case .write:
-            failure = "C\(error.slot) write failed before post-write verification"
-        case .postWriteVerification:
-            failure = "C\(error.slot) write completed, but post-write verification failed"
-        }
-        let recovery: String
-        switch error.rollback {
-        case .restored:
-            recovery = "Previous camera settings were restored."
-        case .notAttemptedEmptySentinel:
-            recovery = "The camera slot was previously empty, so there were no settings to restore."
-        case .failed(let message):
-            recovery = "Recovery could not restore previous camera settings: \(message)"
-        case .notNeeded:
-            recovery = "No recovery was required."
-        }
-        return "\(failure): \(error.writeErrorDescription). \(recovery)"
     }
 
     private func pickerSection<T: Hashable>(

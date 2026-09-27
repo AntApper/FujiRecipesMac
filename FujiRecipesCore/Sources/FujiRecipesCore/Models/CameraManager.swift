@@ -217,7 +217,7 @@ public final class CameraManager: ObservableObject {
 
     /// Writes the store's current draft for `slot`, captured once the camera
     /// is free. The readback is adopted only if the draft did not change
-    /// during the write; the result's `draftEditedDuringWrite` says when it did.
+    /// during the write; the result's `draftChange` says how it changed.
     public func writeSlot(_ slot: Int, from loadouts: LoadoutStore) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
             throw PTPError.invalidResponse("Preset slot must be 1–7")
@@ -362,7 +362,7 @@ public final class CameraManager: ObservableObject {
     ) -> PTPPresetSlotWriteResult {
         guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return result }
         guard loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision, writtenFrom: recipe) else {
-            return result.markingDraftEditedDuringWrite()
+            return result.marking(loadouts.loadout(for: slot)?.hasAnySettings == false ? .cleared : .edited)
         }
         return result
     }
@@ -542,13 +542,15 @@ public typealias SlotWriteOutcome = (slot: Int, result: Result<PTPPresetSlotWrit
 public enum WriteAllSummary {
     public static func text(for outcomes: [SlotWriteOutcome]) -> String {
         guard !outcomes.isEmpty else { return "No staged slots were written." }
+        if outcomes.count == 1, case .success(let result) = outcomes[0].result {
+            return result.summary
+        }
         let written = outcomes.compactMap { try? $0.result.get() }
         let failures = outcomes.compactMap { outcome -> String? in
             guard case .failure(let error) = outcome.result else { return nil }
             return "C\(outcome.slot): \(error.localizedDescription)"
         }
         if failures.isEmpty, written.allSatisfy(\.isVerified) {
-            guard written.count > 1 else { return written[0].summary }
             let head = "Wrote and verified all \(written.count) staged slots."
             let created = written.filter(\.createdFromEmpty).map { "C\($0.slot)" }
             guard let last = created.last else { return head }

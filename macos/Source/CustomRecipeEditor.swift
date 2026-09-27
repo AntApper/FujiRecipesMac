@@ -350,7 +350,7 @@ struct CustomRecipeEditor: View {
         let dr = DynamicRange(rawValue: dynamicRange) ?? .dr100
         let selectedGrain = GrainEffect(rawValue: grain) ?? .off
         let wb = WhiteBalanceMode(rawValue: whiteBalance) ?? .auto
-        let settings = [
+        let editedSettings = [
             "filmSimulation": sim.displayName,
             "dynamicRange": dr.displayName,
             "grainEffect": selectedGrain.displayName,
@@ -362,14 +362,30 @@ struct CustomRecipeEditor: View {
             "highIsoNr": signed(highIsoNR),
             "clarity": signed(clarity)
         ]
+        // Half-step tones live only in the raw preset, so keep each raw value
+        // until the user moves that slider off its initial whole-step value.
+        var rawPreset = recipe.sourceRawPreset
+        if highlight != Int(recipe.highlight ?? 0) { rawPreset?.highlight = nil }
+        if shadow != Int(recipe.shadow ?? 0) { rawPreset?.shadow = nil }
+        if color != Int(recipe.color ?? 0) { rawPreset?.color = nil }
+        if sharpness != Int(recipe.sharpness ?? 0) { rawPreset?.sharpness = nil }
+        if clarity != Int(recipe.clarity ?? 0) { rawPreset?.clarity = nil }
+
         return Recipe(
             id: recipe.id,
             name: trimmedName,
             source: source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "My Recipes" : source,
-            sourceUrl: nil,
+            sourceUrl: recipe.sourceUrl,
+            previewImageUrl: recipe.previewImageUrl,
+            imageUrls: recipe.imageUrls,
+            date: recipe.date,
+            dateString: recipe.dateString,
             filmSimulation: sim,
             dynamicRange: dr,
             grainEffect: selectedGrain,
+            colorChrome: recipe.colorChrome,
+            colorChromeFxBlue: recipe.colorChromeFxBlue,
+            smoothSkin: recipe.smoothSkin,
             whiteBalanceMode: wb,
             wbShiftRed: Int32(redShift),
             wbShiftBlue: Int32(blueShift),
@@ -380,11 +396,14 @@ struct CustomRecipeEditor: View {
             sharpness: Int32(sharpness),
             highIsoNr: Int32(highIsoNR),
             clarity: Int32(clarity),
-            settings: settings,
+            iso: recipe.iso,
+            exposureCompensation: recipe.exposureCompensation,
+            settings: (recipe.settings ?? [:]).merging(editedSettings) { _, edited in edited },
             sensorGeneration: "X-Trans V",
             compatibleCameras: ["X100VI"],
             tags: ["My Recipes"],
-            parseStatus: .ok
+            parseStatus: .ok,
+            sourceRawPreset: rawPreset?.hasAnyValue == true ? rawPreset : nil
         )
     }
 

@@ -374,6 +374,51 @@ final class CustomRecipeLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testRelaunchingWithTheSameUnreadableFileKeepsOneBackup() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let first = Data("{\"version\": 1, \"recipes\": [".utf8)
+        try first.write(to: url)
+
+        let firstLaunch = try XCTUnwrap(CustomRecipeLibrary(storageURL: url).loadIssue?.backupURL)
+        let secondLaunch = try XCTUnwrap(CustomRecipeLibrary(storageURL: url).loadIssue?.backupURL)
+
+        XCTAssertEqual(secondLaunch, firstLaunch)
+        XCTAssertEqual(try backupContents(in: directory), [first])
+
+        let second = Data("{\"version\": 1, \"recipes\": [{".utf8)
+        try second.write(to: url)
+        _ = CustomRecipeLibrary(storageURL: url)
+
+        XCTAssertEqual(Set(try backupContents(in: directory)), [first, second])
+    }
+
+    @MainActor
+    func testFailedBackupKeepsBlockingSavesAfterTheNoticeUntilACopyExists() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("custom-recipes-v1.json")
+        let original = Data("{\"version\": 1, \"recipes\": [".utf8)
+        try original.write(to: url)
+        let fileManager = CopyFailingFileManager()
+
+        let library = CustomRecipeLibrary(storageURL: url, fileManager: fileManager)
+        XCTAssertNil(library.loadIssue?.backupURL)
+        library.acknowledgeLoadIssue()
+
+        XCTAssertThrowsError(try library.save(recipe(id: "custom-new", name: "New")))
+        XCTAssertEqual(try Data(contentsOf: url), original)
+        XCTAssertEqual(try backupContents(in: directory), [])
+
+        fileManager.failsCopies = false
+        try library.save(recipe(id: "custom-new", name: "New"))
+
+        XCTAssertEqual(try backupContents(in: directory), [original])
+        XCTAssertEqual(CustomRecipeLibrary(storageURL: url).recipes.map(\.name), ["New"])
+    }
+
+    @MainActor
     func testMissingLibraryFileLoadsEmptyWithoutAnIssue() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -395,6 +440,14 @@ final class CustomRecipeLibraryTests: XCTestCase {
             ]),
             backupURL: URL(fileURLWithPath: "/tmp/custom-recipes-v1.unreadable-20260927-012400.json")
         )
+        let skippedOne = CustomRecipeLibraryLoadIssue(
+            problem: .skippedRecipes([.init(name: "Future Film", reason: "a name is required")]),
+            backupURL: URL(fileURLWithPath: "/tmp/custom-recipes-v1.unreadable-20260927-012400.json")
+        )
+        let unreadableCopied = CustomRecipeLibraryLoadIssue(
+            problem: .unreadableFile(reason: "The given data was not valid JSON"),
+            backupURL: URL(fileURLWithPath: "/tmp/custom-recipes-v1.unreadable-20260927-012400.json")
+        )
         let unreadable = CustomRecipeLibraryLoadIssue(
             problem: .unreadableFile(reason: "The given data was not valid JSON"),
             backupURL: nil
@@ -402,12 +455,26 @@ final class CustomRecipeLibraryTests: XCTestCase {
 
         XCTAssertEqual(
             skipped.message,
-            "2 custom recipes couldn’t be read and were left out: “Night Walk” (a name is required), “Recipe 4” (filmSimulation: Cannot initialize FilmSimulation from invalid UInt32 value 9999). The original file was copied to “custom-recipes-v1.unreadable-20260927-012400.json”. Changes to My Recipes won’t be saved until you dismiss this."
+            "2 custom recipes couldn’t be read and were left out: “Night Walk” (a name is required), “Recipe 4” (filmSimulation: Cannot initialize FilmSimulation from invalid UInt32 value 9999). The original file was copied to “custom-recipes-v1.unreadable-20260927-012400.json”, which keeps them. After you dismiss this, your next change to My Recipes saves the main file without them."
+        )
+        XCTAssertEqual(
+            skippedOne.message,
+            "1 custom recipe couldn’t be read and was left out: “Future Film” (a name is required). The original file was copied to “custom-recipes-v1.unreadable-20260927-012400.json”, which keeps it. After you dismiss this, your next change to My Recipes saves the main file without it."
+        )
+        XCTAssertEqual(
+            unreadableCopied.message,
+            "FujiRecipes couldn’t read your custom recipe library (The given data was not valid JSON). The original file was copied to “custom-recipes-v1.unreadable-20260927-012400.json”, which keeps its contents. After you dismiss this, your next change to My Recipes replaces the main file."
         )
         XCTAssertEqual(
             unreadable.message,
-            "FujiRecipes couldn’t read your custom recipe library (The given data was not valid JSON). FujiRecipes couldn’t make a copy of the original file, so it was left untouched. Changes to My Recipes won’t be saved until you dismiss this."
+            "FujiRecipes couldn’t read your custom recipe library (The given data was not valid JSON). FujiRecipes couldn’t make a copy of the original file, so it was left untouched. My Recipes won’t save changes until FujiRecipes can make that copy."
         )
+    }
+
+    private func backupContents(in directory: URL) throws -> [Data] {
+        try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent != "custom-recipes-v1.json" }
+            .map { try Data(contentsOf: $0) }
     }
 
     private func error(from operation: () throws -> Void) throws -> CustomRecipeLibraryError {
@@ -450,5 +517,16 @@ final class CustomRecipeLibraryTests: XCTestCase {
             compatibleCameras: ["X100VI"],
             tags: ["My Recipes"]
         )
+    }
+}
+
+private final class CopyFailingFileManager: FileManager, @unchecked Sendable {
+    var failsCopies = true
+
+    override func copyItem(at srcURL: URL, to dstURL: URL) throws {
+        if failsCopies {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        try super.copyItem(at: srcURL, to: dstURL)
     }
 }

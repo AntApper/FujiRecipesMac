@@ -194,11 +194,13 @@ DR-P may use `0xD02E` (WideDynamicRange) with values:
 | 6         | Off, Small    |
 | 7         | Off, Large    |
 
-The camera reports 6 and 7 when grain is turned off in its own menu. It rejects both in a write with `0x201C`, so write 1 for Off. The names for 6 and 7 come from the Fuji table in libgphoto2 2.5.34.
+The camera stores Off as 6 or 7. The names for 6 and 7 come from the Fuji table in libgphoto2 2.5.34.
 
 ### Preset Property (`0xD195`)
 
-Same enum as `0xD023`. C5, C7, and the live `0xD023` have been read as 6. A write of 6 is rejected with `0x201C`.
+Same enum as `0xD023`. C5, C7, and the live `0xD023` have been read as 6.
+
+A write of 1 (Off) is accepted, and the camera keeps the current grain size: 1 over 2 or 3 reads back 6, and 1 over 4 or 5 reads back 7. A write of 6 or 7 is rejected with `0x201C`, even when the slot already reads that value. Measured on an X100VI, firmware 1.31, by write and readback on C3.
 
 ### d185 Profile Format
 

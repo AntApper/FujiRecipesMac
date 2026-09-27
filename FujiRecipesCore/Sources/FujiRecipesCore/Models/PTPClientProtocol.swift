@@ -356,6 +356,9 @@ extension PTPClientPresetData {
         func differs<T: Equatable>(_ requested: T?, _ actual: T?) -> Bool {
             requested != nil && requested != actual
         }
+        func grain(_ raw: UInt32?) -> UInt32? {
+            raw.map { GrainEffect(cameraValue: $0)?.rawValue ?? $0 }
+        }
         let requestedName = name.trimmingCharacters(in: .whitespaces)
         let checks: [(PresetField, Bool)] = [
             (.name, !requestedName.isEmpty && requestedName != observed.name.trimmingCharacters(in: .whitespaces)),
@@ -365,7 +368,7 @@ extension PTPClientPresetData {
             (.filmSimulation, differs(filmSimulation, observed.filmSimulation)),
             (.monoWarmCool, monochrome && differs(monoWarmCool, observed.monoWarmCool)),
             (.monoMagentaGreen, monochrome && differs(monoMagentaGreen, observed.monoMagentaGreen)),
-            (.grainEffect, differs(grainEffect, observed.grainEffect)),
+            (.grainEffect, differs(grain(grainEffect), grain(observed.grainEffect))),
             (.colorChrome, differs(colorChrome, observed.colorChrome)),
             (.colorChromeFxBlue, differs(colorChromeFxBlue, observed.colorChromeFxBlue)),
             (.smoothSkin, differs(smoothSkin, observed.smoothSkin)),

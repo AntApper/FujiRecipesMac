@@ -10,6 +10,7 @@ enum MacAppCommand {
     static let focusSearch = Notification.Name("com.ant.fuji-recipes.focus-search")
     static let toggleDebugHUD = Notification.Name("com.ant.fuji-recipes.toggle-debug-hud")
     static let showToast = Notification.Name("com.ant.fuji-recipes.show-toast")
+    static let showMainWindow = Notification.Name("com.ant.fuji-recipes.show-main-window")
     static let tabKey = "tab"
     static let slotKey = "slot"
     static let toastTitleKey = "title"
@@ -23,6 +24,8 @@ enum MacAppCommand {
 public typealias CameraSessionFactory = @Sendable () -> any PTPClientProtocol
 
 private enum MacAppLaunchConfiguration {
+    static let mainWindowID = "main"
+
     static var isUITesting: Bool {
         ProcessInfo.processInfo.environment["FUJI_RECIPES_CUSTOM_LIBRARY_PATH"] != nil
     }
@@ -63,8 +66,27 @@ func loadBundledRecipes() throws -> [Recipe] {
     return try RecipeLoader.loadRecipes(from: .main)
 }
 
+/// Closing the window must not quit, because a camera write may still be
+/// running and the stores it updates outlive the window.
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            NotificationCenter.default.post(name: MacAppCommand.showMainWindow, object: nil)
+        }
+        return true
+    }
+}
+
 @main
 struct FujiRecipesMacApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: MacAppDelegate
+    @StateObject private var recipeStore = MacAppLaunchConfiguration.recipeStore()
+    @StateObject private var cameraManager = CameraManager()
+
     init() {
         DebugLogger.setMinimumLevel(.debug)
         DebugLogger.log(.info, category: .app, "🚀 FujiRecipesMac Pro launching")
@@ -84,9 +106,10 @@ struct FujiRecipesMacApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Fuji Recipes", id: MacAppLaunchConfiguration.mainWindowID) {
             FujiRecipesMacRoot(
-                recipeStore: MacAppLaunchConfiguration.recipeStore(),
+                recipeStore: recipeStore,
+                cameraManager: cameraManager,
                 cameraSessionFactory: {
                     if MacAppLaunchConfiguration.usesImageCaptureCoreTransport {
                         return ImageCaptureCorePTPClient()
@@ -153,6 +176,9 @@ struct FujiRecipesMacApp: App {
                     .keyboardShortcut(KeyEquivalent(Character("\(slot)")), modifiers: .option)
                 }
             }
+            CommandGroup(before: .windowList) {
+                ShowMainWindowButton()
+            }
             #if DEBUG
             CommandGroup(after: .help) {
                 Divider()
@@ -166,19 +192,35 @@ struct FujiRecipesMacApp: App {
     }
 }
 
+private struct ShowMainWindowButton: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Fuji Recipes") {
+            openWindow(id: MacAppLaunchConfiguration.mainWindowID)
+        }
+        .keyboardShortcut("0", modifiers: .command)
+        .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.showMainWindow)) { _ in
+            openWindow(id: MacAppLaunchConfiguration.mainWindowID)
+        }
+    }
+}
+
 public struct FujiRecipesMacRoot: View {
-    @StateObject private var recipeStore: RecipeStore
-    @StateObject private var cameraManager = CameraManager()
+    @ObservedObject private var recipeStore: RecipeStore
+    @ObservedObject private var cameraManager: CameraManager
     @State private var selectedTab: AppTab = .recipes
     @State private var selectedDialSlot: Int = 1
     @State private var isSearchFocusPending = false
     private let cameraSessionFactory: CameraSessionFactory
 
     public init(
-        recipeStore: RecipeStore = RecipeStore(),
+        recipeStore: RecipeStore,
+        cameraManager: CameraManager,
         cameraSessionFactory: @escaping CameraSessionFactory
     ) {
-        _recipeStore = StateObject(wrappedValue: recipeStore)
+        self.recipeStore = recipeStore
+        self.cameraManager = cameraManager
         self.cameraSessionFactory = cameraSessionFactory
     }
 

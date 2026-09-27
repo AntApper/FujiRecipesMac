@@ -250,9 +250,18 @@ public struct RecipeListView: View {
         ) {
             Button("Delete Recipe", role: .destructive) {
                 if let recipe = recipeToDelete {
+                    let visible = store.filteredRecipes
                     do {
                         try store.customRecipes.delete(id: recipe.id)
                         store.favorites.removeFavorite(recipe.id)
+                        if selectedRecipeID == recipe.id {
+                            let remaining = visible.filter { $0.id != recipe.id }
+                            if let index = visible.firstIndex(where: { $0.id == recipe.id }), !remaining.isEmpty {
+                                selectedRecipeID = remaining[min(index, remaining.count - 1)].id
+                            } else {
+                                selectedRecipeID = nil
+                            }
+                        }
                     } catch {
                         customRecipeMessage = error.localizedDescription
                     }

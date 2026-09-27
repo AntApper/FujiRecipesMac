@@ -658,7 +658,7 @@ public struct LoadoutCard: View {
                 }
 
                 if let dr = loadout.dr {
-                    Text("DR\(dr.rawValue)")
+                    Text(dr.badgeLabel)
                         .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .foregroundStyle(Theme.emeraldGreen)
                         .padding(.horizontal, 4)

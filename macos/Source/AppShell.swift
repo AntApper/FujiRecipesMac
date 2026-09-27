@@ -917,6 +917,12 @@ public enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
+extension DynamicRange {
+    var badgeLabel: String {
+        self == .auto ? "DR Auto" : displayName
+    }
+}
+
 // MARK: - CameraStatus Formatting
 
 public extension CameraStatus {

@@ -1461,7 +1461,7 @@ private struct RecipeCard: View {
                     }
 
                     if let dr = recipe.dynamicRange {
-                        Text("DR\(dr.rawValue)")
+                        Text(dr.badgeLabel)
                             .font(.system(size: 8, weight: .bold, design: .monospaced))
                             .foregroundStyle(Theme.emeraldGreen)
                             .padding(.horizontal, 5)
@@ -1885,7 +1885,7 @@ private struct RecipeDragPreview: View {
                 .lineLimit(1)
 
             if let dr = recipe.dynamicRange {
-                Text("DR\(dr.rawValue)")
+                Text(dr.badgeLabel)
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundStyle(Theme.emeraldGreen)
                     .padding(.horizontal, 4)
@@ -2106,7 +2106,7 @@ public struct RecipeQuickLookView: View {
                     FilmSimBadge(name: simName, isCompact: false)
 
                     if let dr = recipe.dynamicRange {
-                        Text("DR\(dr.rawValue)")
+                        Text(dr.badgeLabel)
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .foregroundStyle(Theme.emeraldGreen)
                             .padding(.horizontal, 6)

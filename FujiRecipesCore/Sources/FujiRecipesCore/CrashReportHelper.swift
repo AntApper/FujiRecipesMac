@@ -35,7 +35,7 @@ public final class CrashReportHelper: @unchecked Sendable {
     #if canImport(Darwin)
     /// Capture diagnostic data from an uncaught exception.
     public static func captureException(_ exception: NSException, favorites: Set<String> = [], loadoutSummary: String = "") -> CrashReport {
-        let callStack = exception.callStackSymbols ?? []
+        let callStack = exception.callStackSymbols
         return CrashReport(
             type: "exception:\(exception.name.rawValue)",
             message: exception.reason ?? "Unknown exception",
@@ -186,11 +186,11 @@ func FujiRecipes_ABORT_handler(_ sig: Int32) -> Int32 {
 
 // Void-returning wrappers for signal()
 func FujiRecipes_SEGV_handler_void(_ sig: Int32) {
-    FujiRecipes_SEGV_handler(sig)
+    _ = FujiRecipes_SEGV_handler(sig)
 }
 
 func FujiRecipes_ABORT_handler_void(_ sig: Int32) {
-    FujiRecipes_ABORT_handler(sig)
+    _ = FujiRecipes_ABORT_handler(sig)
 }
 
 #if canImport(Darwin)

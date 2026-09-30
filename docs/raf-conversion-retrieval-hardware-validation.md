@@ -69,7 +69,7 @@ diagnostics with every run.
 ### Continuation evidence — 2026-09-13
 
 - Host: macOS 26.6.2 (build 25G83), Darwin 25.6.0 arm64.
-- Source search was restricted to `/Users/ant/Desktop` and found no files with
+- Source search was restricted to `~/Desktop` and found no files with
   either `.RAF` or `.raf` extension. No candidate was opened, copied, moved,
   or modified. Consequently, no RAF upload, profile write, conversion trigger,
   baseline inventory, storage-ID query, delta poll, or JPEG retrieval was
@@ -100,7 +100,7 @@ diagnostics with every run.
 
 ### Full conversion attempt — 2026-09-13 (DSCF3904)
 
-- Source RAF: `/Users/ant/Desktop/DSCF3904.RAF`; it was a readable
+- Source RAF: `~/Desktop/DSCF3904.RAF`; it was a readable
   87,550,976-byte file (mode `-rwx------`) with SHA-256
   `d96e162bdc3f107f01b0031607ab4e8055c854a7e8fd4c90340caaf7983fdfed`.
   The helper only read this path; it was neither copied nor modified.

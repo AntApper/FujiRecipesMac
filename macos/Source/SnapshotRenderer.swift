@@ -32,21 +32,41 @@ public enum SnapshotRenderer {
         let outputDir = snapshotOutputDirectory()
         try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
-        let tag = "v3"
         let canvasSize = CGSize(
             width: windowWidth + canvasPadding * 2,
             height: windowHeight + canvasPadding * 2
         )
 
         let shots: [(String, AppTab, AnyView)] = [
-            ("recipes_studio_\(tag).png", .recipes, AnyView(
+            ("recipe-library.png", .recipes, AnyView(
                 RecipeListView(store: store, cameraManager: camera)
             )),
-            ("camera_hub_\(tag).png", .camera, AnyView(
+            ("camera-hub.png", .camera, AnyView(
                 CameraConnectionView(manager: camera, loadouts: store.loadouts)
             )),
-            ("darkroom_\(tag).png", .darkroom, AnyView(
+            ("darkroom-preview.png", .darkroom, AnyView(
                 RAFDarkroomView(manager: camera, store: store)
+            )),
+            ("recipe-editor.png", .recipes, AnyView(
+                ZStack {
+                    RecipeListView(store: store, cameraManager: camera)
+                    Color.black.opacity(0.60)
+                    VStack(spacing: 0) {
+                        CustomRecipeEditor(
+                            recipe: store.recipes.first { $0.filmSimulation == .classicChrome } ?? topRecipes[0],
+                            existingRecipes: store.recipes,
+                            onSave: { _ in }
+                        )
+                    }
+                    .frame(width: 720, height: 680)
+                    .background(Color(red: 0.10, green: 0.105, blue: 0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.65), radius: 32, y: 16)
+                }
             )),
         ]
 

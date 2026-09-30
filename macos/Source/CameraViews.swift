@@ -599,7 +599,7 @@ public struct CameraConnectionView: View {
             .foregroundStyle(Theme.textSecondary)
         }
         .buttonStyle(.plain)
-        .disabled(loadouts.loadoutCountWithSettings() == 0 || manager.isBusy)
+        .disabled(loadouts.loadoutCountWithContent() == 0 || manager.isBusy)
         .help("Clears all 7 local recipe drafts")
     }
 

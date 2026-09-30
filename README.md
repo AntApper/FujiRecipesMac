@@ -2,16 +2,16 @@
 
 # FujiRecipes for macOS
 
-### The native macOS studio for Fujifilm film simulation recipes, direct USB-C custom dial synchronization, and hardware-accelerated RAW darkroom development.
+### A native macOS recipe studio with an X100VI C1–C7 camera workflow.
 
 [![Platform: macOS 14.0+](https://img.shields.io/badge/Platform-macOS%2014.0%2B%20(Sonoma%20%7C%20Sequoia)-000000?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com/macos)
 [![Swift: 6.0](https://img.shields.io/badge/Swift-6.0-FA7343?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
 [![Xcode: 16+](https://img.shields.io/badge/Xcode-16%2B-1575F9?style=for-the-badge&logo=xcode&logoColor=white)](https://developer.apple.com/xcode/)
 [![Camera: Fujifilm X100VI](https://img.shields.io/badge/Camera-Fujifilm%20X100VI-E60012?style=for-the-badge&logo=fujifilm&logoColor=white)](https://fujifilm-x.com/products/cameras/x100vi/)
 [![Sensor: X-Trans V](https://img.shields.io/badge/Sensor-40.2MP%20X--Trans%20V-4B5563?style=for-the-badge)](https://fujifilm-x.com)
-[![Protocol: USB PTP Direct](https://img.shields.io/badge/Protocol-USB%20PTP%20Direct-10B981?style=for-the-badge)](docs/camera-connection-guide.md)
+[![Protocol: USB PTP](https://img.shields.io/badge/Protocol-USB%20PTP-10B981?style=for-the-badge)](docs/camera-connection-guide.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Build: Passing](https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge)](#building-from-source)
+[![macOS CI](https://github.com/AntApper/FujiRecipesMac/actions/workflows/macos-ci.yml/badge.svg)](https://github.com/AntApper/FujiRecipesMac/actions/workflows/macos-ci.yml)
 
 <br/>
 
@@ -29,7 +29,7 @@
 
 Setting up custom film simulation recipes on Fujifilm cameras has historically been a slow, manual chore: navigating nested camera menus with rotary dials to configure over 20 distinct imaging parameters for every custom slot (**C1–C7**). 
 
-**FujiRecipes solves this directly at the hardware layer.** Connect your Fujifilm camera (such as the **X100VI**) to your Mac via USB-C in `USB RAW CONV. / BACKUP RESTORE` mode, and FujiRecipes communicates directly through native Picture Transfer Protocol (PTP). You can browse curated film stocks, fine-tune color formulas, stage C1–C7 dial banks offline, and push verified configurations straight to camera memory in seconds—with automated pre-write backups, safety baselines, and complete post-write readback verification.
+**FujiRecipes provides an offline recipe library and an X100VI C1–C7 workflow.** The camera procedure uses USB-C in `USB RAW CONV. / BACKUP RESTORE` mode. The app stages recipes locally and compares camera writes with readback. ImageCaptureCore is the default transport. The [September 29 native checks](docs/x100vi-imagecapturecore-hardware-checks-2026-09-29.md) cover all-seven-slot reads, configured C4 writes/rollback through the real manager diagnostic, and packaged-app connection/recovery on the recorded uncommitted working tree. Native GUI writes and the listed wider conditions remain untested. The [September 12 helper record](docs/x100vi-c-slot-evidence-manifest-2026-09-12.json) remains separate historical evidence. See [release scope](docs/RELEASE.md).
 
 ---
 
@@ -58,8 +58,8 @@ Establish a direct USB-C link to your camera using native Fujifilm PTP protocols
 
 - **Real-Time Hardware Telemetry**: Live inspection of connected camera state, hardware model detection (e.g. `FUJIFILM X100VI`), sensor capabilities (40.2 MP Back-Illuminated X-Trans CMOS 5 HR), and USB Vendor ID (`0x04CB`) / Product ID (`0x0305`).
 - **Interactive Connection Checklist**: Step-by-step guidance ensuring camera connection mode, high-speed data cables, and macOS PTP endpoint permissions are properly configured.
-- **Safe Readback Verification**: Every write transaction automatically backs up prior slot settings, writes individual camera properties, and executes a full readback before confirming physical persistence.
-- **Dual Transport Architecture**: Modern `ImageCaptureCore` session management by default (coexisting harmoniously with macOS `ptpcamerad`) with an optional bundled universal `libusb` helper fallback.
+- **Readback Verification**: The C-slot workflow compares camera readback with the requested values before reporting a verified write. Hardware validation applies only to the operations, working tree, and environment in the dated native and historical helper records.
+- **Native macOS Transport**: `ImageCaptureCore` is the default. `FUJI_RECIPES_TRANSPORT=helper` selects the legacy bundled libusb helper, which can conflict with macOS camera-session ownership.
 
 ---
 
@@ -77,19 +77,16 @@ A complete visual command center for staging, comparing, and managing all 7 phys
 
 ---
 
-### 4. In-Camera RAF Darkroom & RAW Processing
-Harness the authentic image processing power of your camera's dedicated onboard **X-Processor 5** chip directly from macOS.
+### 4. Experimental RAF conversion (unsupported)
+RAF conversion screens and code are experimental. The active default transport does not implement RAF conversion, and this is not a supported or released capability.
 
 <p align="center">
   <img src="docs/screenshots/darkroom-preview.png" alt="RAF In-Camera Darkroom" width="880" />
 </p>
 
-- **Hardware-Accelerated In-Camera Development**: Sends native uncompressed or lossless-compressed RAF files to the connected camera over USB for hardware-level demosaicing and rendering.
-- **Authentic Fujifilm Color Science**: Because processing runs on the camera's dedicated imaging ASIC, results deliver 100% genuine Fuji color, grain texture, and tonal gradation with zero third-party software approximation.
-- **3-Stage Development Pipeline**:
-  1. *Source RAF Ingestion*: Drag and drop uncompressed or lossless compressed RAF raw files.
-  2. *Recipe Profile Selection*: Choose any curated or custom recipe from your library.
-  3. *Hardware Conversion Trigger*: Initiate development on camera hardware and export high-resolution JPEGs.
+- The experimental interface may describe a workflow that is not implemented by the default transport. Do not rely on it to convert or export RAF files.
+- No hardware conversion or JPEG retrieval support is claimed.
+- Experimental screens and notes are retained for development only.
 
 ---
 
@@ -124,20 +121,13 @@ FujiRecipes is built with defensive engineering to protect your camera presets a
 |:---|:---|
 | **Operating System** | macOS 14.0 Sonoma or later (macOS 15 Sequoia fully supported) |
 | **Architecture** | Universal binary (Apple Silicon M1/M2/M3/M4 & Intel x86_64) |
-| **Supported Camera** | **Fujifilm X100VI** (Hardware validated for C1–C7 preset persistence; compatible with X-Trans V generation cameras) |
+| **Supported Camera** | **Fujifilm X100VI** ([bounded native checks](docs/x100vi-imagecapturecore-hardware-checks-2026-09-29.md) and separate historical helper evidence; no other body is covered) |
 | **Camera Connection Mode** | `SET-UP` > `CONNECTION SETTING` > `CONNECTION MODE` > **`USB RAW CONV. / BACKUP RESTORE`** |
 | **USB Cable** | Direct USB-C data cable (480 Mbps USB 2.0 or 5+ Gbps USB 3.x; charge-only cables will not enumerate) |
 
 ### Connecting Your Camera
 
-1. Power on your Fujifilm camera.
-2. In the camera menu, navigate to:  
-   `SET-UP` &rarr; `CONNECTION SETTING` &rarr; `CONNECTION MODE` &rarr; select **`USB RAW CONV. / BACKUP RESTORE`**.
-3. Connect the camera directly to your Mac using a USB-C data cable.
-4. Launch **FujiRecipes** and open the **Camera & Staging** tab.
-5. Click **Connect Camera**. The status indicator will turn green and display **Session Active**.
-
-> **Note**: If another application (such as Apple Photos or Image Capture) is locking the camera PTP endpoint, close it before initiating connection.
+Use the X100VI procedure in the [camera connection guide](docs/camera-connection-guide.md). Choose **USB RAW CONV. / BACKUP RESTORE**, use a data-capable USB-C cable, then connect from the app. The ImageCaptureCore transport is the default; its bounded connection/read and recovery results are recorded in the [native hardware summary](docs/x100vi-imagecapturecore-hardware-checks-2026-09-29.md). The legacy helper is an explicit fallback and may encounter USB-session ownership conflicts.
 
 ---
 
@@ -163,7 +153,7 @@ FujiRecipes is structured into modular layers separating the native UI, business
 │                                                        │
 │   ┌──────────────────────────┐  ┌──────────────────┐  │
 │   │ ImageCaptureCore Transport│  │ libusb Helper    │  │
-│   │ (Default, macOS native)  │  │ (Fallback PTP)   │  │
+│   │ (Default, macOS native)  │  │ (Explicit legacy)│  │
 │   └──────────────────────────┘  └──────────────────┘  │
 └───────────────────────────┬────────────────────────────┘
                             │ USB-C (PTP 0x04CB:0x0305)
@@ -175,7 +165,7 @@ FujiRecipes is structured into modular layers separating the native UI, business
 
 - **`macos/`**: Pure native macOS user interface built with SwiftUI and AppKit. Implements sleek dark-theme styling, glass design system tokens, responsive split navigation, keyboard accelerators, and Quick Look integration.
 - **`FujiRecipesCore/`**: Core library with zero UI dependencies. Handles JSON recipe parsing, film simulation models, white balance Kelvin calculations, C-slot binary encoders, snapshot rendering, and write verification logic.
-- **`FujiPTPClient/`**: PTP communication layer implementing `PTPClientProtocol`. Defaults to Apple's `ImageCaptureCore` transport for seamless coexistence with system daemon `ptpcamerad`, with a bundled universal C helper (`poc-x100vi-reader`) using `libusb-1.0` available via `FUJI_RECIPES_TRANSPORT=helper`.
+- **`FujiPTPClient/`**: PTP communication layer implementing `PTPClientProtocol`. Defaults to Apple's `ImageCaptureCore` transport. The bundled universal C helper (`poc-x100vi-reader`) using `libusb-1.0` is an explicit legacy fallback selected with `FUJI_RECIPES_TRANSPORT=helper`.
 
 ---
 
@@ -184,7 +174,9 @@ FujiRecipes is structured into modular layers separating the native UI, business
 ### Prerequisites
 
 - macOS 14.0 or later
-- Xcode 16.0+ or Command Line Tools with **Swift 6.0+**
+- Xcode 16.0+ for app packaging and macOS UI tests; **Swift 6.0+**
+- Python 3 for provenance refresh/verification during packaging and repository script tests
+- `libgphoto2` development headers/runtime to build and test the experimental PTP package targets
 - Git
 
 ### 1. Clone the Repository
@@ -199,26 +191,40 @@ cd FujiRecipesMac
 Verify core business logic and PTP protocol tests:
 
 ```bash
-# Run FujiRecipesCore test suite (158 unit & integration tests)
+# Run FujiRecipesCore tests
 swift test --package-path FujiRecipesCore
 
 # Run FujiPTPClient protocol tests
 swift test --package-path FujiPTPClient
+
+# Run repository packaging/catalog script tests
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
+# Run macOS UI smoke tests without a camera
+xcodebuild test \
+  -project macos/FujiRecipesMac.xcodeproj \
+  -scheme FujiRecipesMac \
+  -destination 'platform=macOS' \
+  CODE_SIGN_IDENTITY=- \
+  CODE_SIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM=''
 ```
 
-### 3. Build the macOS App
+The UI command signs the app and XCTest runner ad-hoc for local execution,
+without Apple credentials. When retrying a build that used disabled signing,
+choose a fresh `-derivedDataPath` to avoid reusing the old runner artifacts.
 
-Build the debug executable using Swift Package Manager:
+### 3. Build and run the macOS App
+
+Use the project run entrypoint to package the debug build with its app resources and open the `.app` bundle:
 
 ```bash
-swift build --package-path macos
+./script/build_and_run.sh
 ```
 
-Or run the application directly from terminal:
-
-```bash
-swift run --package-path macos FujiRecipesMac
-```
+The command uses `macos/package_app.sh debug` and writes the bundle to `macos/build/Fuji Recipes.app`.
+Optional modes are `--debug` (attach LLDB), `--logs`, `--telemetry`, and
+`--verify` (confirm the debug app remains running).
 
 ### 4. Generate High-Resolution Snapshots
 
@@ -230,14 +236,14 @@ swift run --package-path macos FujiRecipesMac --generate-snapshots --snapshot-ou
 
 ### 5. Package a Distributable `.app` Bundle
 
-Produce a self-contained, notarization-ready macOS application bundle complete with icons and embedded resources:
+Produce a self-contained app bundle with icons and embedded resources. Without an externally supplied Developer ID identity and a completed notarization, this package is for structural validation only:
 
 ```bash
 cd macos
 ./package_app.sh release --version 1.0.0 --build-number 1
 ```
 
-The resulting `Fuji Recipes.app` will be created in `macos/dist/` containing universal `arm64` and `x86_64` binaries.
+The resulting `Fuji Recipes.app` is created at `macos/build/Fuji Recipes.app` and contains universal `arm64` and `x86_64` binaries for a release build. A credential-free/ad-hoc signed package is a structural check, not a distributable release.
 
 ---
 
@@ -250,7 +256,7 @@ FujiRecipesMac/
 │   │   ├── recipe-library.png           # Recipe Studio & curated library view
 │   │   ├── camera-hub.png               # Camera Hub & USB PTP hardware telemetry
 │   │   ├── dial-matrix.png              # C1–C7 Custom Dial Matrix staging
-│   │   ├── darkroom-preview.png         # In-Camera RAF Darkroom workflow
+│   │   ├── darkroom-preview.png         # Experimental RAF interface
 │   │   └── recipe-editor.png            # Custom Recipe Editor & inspector
 │   ├── RELEASE.md                       # Release guide & distribution requirements
 │   ├── MACOS_RELEASE_BOUNDARIES.md      # Signing, notarization, and runtime boundaries
@@ -259,6 +265,8 @@ FujiRecipesMac/
 │   └── x100vi-c-slot-hardware-regression-2026-09-12.md # Physical hardware verification
 ├── macos/                               # Native macOS application
 │   ├── Package.swift                    # macOS target configuration
+│   ├── FujiRecipesMac.xcodeproj/         # Xcode project and shared UI-test scheme
+│   ├── Tests/FujiRecipesMacUITests/      # Isolated macOS UI smoke tests
 │   ├── package_app.sh                   # Application bundle packager & validator
 │   ├── Resources/                       # Icons, bundled helper, and recipe catalog
 │   └── Source/                          # SwiftUI views, AppShell, and snapshot engine
@@ -283,7 +291,8 @@ For deeper architectural details and hardware verification logs, refer to the te
 - [macOS Release Guide](docs/RELEASE.md) — Scope, signing, and verification instructions.
 - [macOS Release Boundaries](docs/MACOS_RELEASE_BOUNDARIES.md) — Structural vs. notarization requirements.
 - [Camera Connection Guide](docs/camera-connection-guide.md) — Comprehensive USB PTP troubleshooting.
-- [C1–C7 Hardware Regression Record](docs/x100vi-c-slot-hardware-regression-2026-09-12.md) — Physical hardware validation logs on Fujifilm X100VI.
+- [Native X100VI Hardware Checks](docs/x100vi-imagecapturecore-hardware-checks-2026-09-29.md) — Bounded September 29 observations, source hashes, and untested conditions.
+- [Historical Helper C1–C7 Regression Record](docs/x100vi-c-slot-hardware-regression-2026-09-12.md) — Separate September 12 X100VI helper evidence.
 - [Recipe Library Schema](docs/recipe-library-schema.md) — JSON recipe format specifications.
 
 ---
@@ -291,14 +300,13 @@ For deeper architectural details and hardware verification logs, refer to the te
 ## Roadmap
 
 - [x] Curated Recipe Library with 50+ analog-inspired film formulations
-- [x] High-speed USB PTP connection in `USB RAW CONV. / BACKUP RESTORE` mode
+- [x] X100VI C1–C7 workflow documented with path-specific hardware evidence boundaries
 - [x] Complete C1–C7 custom dial matrix staging, comparison, and batch synchronization
-- [x] In-Camera RAF Darkroom integration utilizing onboard X-Processor 5 hardware
+- [ ] RAF/RAW conversion (experimental; unsupported)
 - [x] Fine-grained Custom Recipe Editor with visual color simulation chips and half-step tone curves
 - [x] Automated pre-write backup and verified readback validation
 - [ ] Expand validated hardware profiles to additional Fujifilm X-Trans V cameras (X-T5, X-H2, X-T50)
 - [ ] Recipe export/import in open JSON and QR code formats for mobile companion scanning
-- [ ] Batch RAF conversion queue with automatic JPEG export directory management
 
 ---
 

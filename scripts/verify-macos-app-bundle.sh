@@ -2,6 +2,8 @@
 # Validates a finished macOS app bundle without submitting it to Apple.
 set -euo pipefail
 
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 app=""
 require_universal=false
 require_developer_id=false
@@ -89,18 +91,7 @@ bundle_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")"
 [[ -z "$expected_build" || "$bundle_build" == "$expected_build" ]] ||
   fail "bundle build $bundle_build does not match expected $expected_build"
 
-json_value() {
-  awk -F'"' -v key="$1" '$2 == key { print $4; exit }' "$provenance"
-}
-
-assert_hash() {
-  local label="$1" path="$2" expected="$3" actual
-  actual="$(shasum -a 256 "$path" | awk '{print $1}')"
-  [[ "$actual" == "$expected" ]] || fail "$label differs from bundled provenance"
-}
-
-assert_hash "bundled helper" "$helper" "$(json_value helper_sha256)"
-assert_hash "bundled libusb runtime" "$runtime" "$(json_value runtime_sha256)"
+python3 "$root/scripts/packaged-provenance.py" verify --resources "$resources"
 
 for code in "$main_executable" "$helper" "$runtime"; do
   file_output="$(file "$code")"

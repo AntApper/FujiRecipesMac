@@ -11,7 +11,11 @@ and hardware steps described below.
   ImageCaptureCore/`ptpcamerad` own the USB PTP session. The bundled
   `x100vi_helper` and libusb runtime remain an explicit fallback selected with
   `FUJI_RECIPES_TRANSPORT=helper`; that path retains the interface-ownership
-  caveat described below.
+  caveat described below. The [2026-09-29 native hardware checks](x100vi-imagecapturecore-hardware-checks-2026-09-29.md)
+  passed bounded all-seven-slot reads, configured C4 manager diagnostic
+  writes/restoration, and packaged-app connection/read and unplug recovery
+  after USB re-enumeration. The tested working tree was uncommitted; source
+  hashes and remaining hardware limits are recorded in that summary.
 - The helper now loads a bundled `libusb-1.0.0.dylib` through
   `@rpath/libusb-1.0.0.dylib` with an `@loader_path` rpath. Its source,
   helper, and runtime SHA-256 values are recorded in the app resource
@@ -66,8 +70,9 @@ creates the ZIP submitted to Apple.
 
 ## Distribution status
 
-- **Local development:** Supported for engineering validation when a compatible
-  helper, libusb runtime, and direct USB access are available.
+- **Local development:** The app defaults to ImageCaptureCore. The explicit
+  helper fallback requires its bundled libusb runtime and can encounter USB
+  interface ownership conflicts.
 - **Developer ID:** The repository can prepare and locally validate a signing
   candidate. Actual distribution remains blocked on an Apple-issued Developer
   ID Application certificate, hardened-runtime signing, timestamping,
@@ -104,10 +109,11 @@ establish notarization acceptance.
 
 The explicit legacy helper claims the USB PTP interface directly through
 libusb. On macOS, `ptpcamerad` can automatically claim that same interface.
-The default ImageCaptureCore path avoids that conflict and has been
-validated on physical X100VI hardware (reads, writes, restores, and 10-cycle
-soak tests). The behavior of either path has not been validated under App
-Sandbox restrictions.
+The default ImageCaptureCore path delegates the session to macOS and avoids
+the helper's direct interface claim. The bounded native run passed with
+`ptpcamerad` and `icdd` running. Keep the older helper results scoped to that
+transport. Neither camera path has been validated under App Sandbox
+restrictions; sandboxed fixture UI tests do not establish camera access.
 
 ## Required evidence before a public macOS release
 
@@ -119,9 +125,12 @@ Sandbox restrictions.
 3. Run `scripts/notarize-macos-app.sh` with an external keychain profile,
    wait for accepted notarization, staple the resulting ticket, and
    independently assess the stapled artifact.
-4. Verify the helper's architecture coverage and camera behavior on supported
-   Intel and Apple Silicon machines.
+4. Verify the helper's architecture coverage and extend native camera evidence
+   beyond the bounded arm64 run. Intel hardware, native GUI writes,
+   other-slot/empty-slot writes, and the other limits in the native summary
+   remain untested. Keep the helper record scoped to the helper.
 5. Define and test a signed, sandbox-compatible distribution design, or
    explicitly limit distribution to a non-App-Store channel.
-6. Validate camera behavior without relying on manually killing
-   `ptpcamerad` (completed and verified using ImageCaptureCore).
+6. Extend broker-coexistence evidence to the intended unattended usage. The
+   bounded native checks passed without terminating `ptpcamerad` or `icdd`;
+   extended unattended operation and unplug during a write remain untested.

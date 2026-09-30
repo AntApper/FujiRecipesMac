@@ -2,7 +2,9 @@
 """Derive each bundled recipe's raw C-slot `presetSettings` from its `settings` text.
 
 Recipe cards show `settings`; camera writes use `presetSettings`. This script treats
-the text as the source of truth and reports every raw field that disagrees with it.
+the text as the source of truth and reports every derived raw field that disagrees
+with it, including optional fields whose source setting was removed. Unknown raw
+keys and fields whose text cannot be parsed are preserved.
 
     scripts/sync-catalog-presets.py            # list disagreements, exit 1 if any
     scripts/sync-catalog-presets.py --write    # rewrite presetSettings to match the text
@@ -65,7 +67,7 @@ def required_text(text, key):
 
 
 def film_simulation(recipe):
-    if recipe["filmSimEnum"] is None:
+    if recipe.get("filmSimEnum") is None:
         raise TextError("filmSimulation: filmSimEnum is missing")
     return recipe["filmSimEnum"]
 
@@ -102,20 +104,30 @@ def expected_preset(recipe):
     for key, derive in derivations.items():
         try:
             preset[key] = derive()
-        except TextError as error:
-            errors.append((key, error))
+        except (ValueError, TypeError, OverflowError) as error:
+            errors.append((key, error if isinstance(error, TextError) else TextError(f"{key}: {error}")))
     try:
         preset.update(white_balance(text))
-    except TextError as error:
-        errors.append(("whiteBalance", error))
+    except (ValueError, TypeError, OverflowError) as error:
+        errors.append(("whiteBalance", error if isinstance(error, TextError) else TextError(f"whiteBalance: {error}")))
     return preset, errors
 
 
-def main():
+def absent_optional_keys(recipe, expected):
+    """Return only keys whose source is absent, never keys that failed to parse."""
+    absent = {raw_key for text_key, raw_key in TONES.items() if text_key not in recipe["settings"]}
+    # A successfully parsed non-Kelvin mode no longer specifies colorTemp.
+    # A failed white balance parse must keep its existing temperature and shifts.
+    if "whiteBalance" in expected and "colorTemp" not in expected:
+        absent.add("colorTemp")
+    return sorted(absent)
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true", help="rewrite presetSettings to match the text")
     parser.add_argument("--fields", help="comma-separated presetSettings keys to check (default: all)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     fields = set(args.fields.split(",")) if args.fields else None
 
     catalog = json.loads(CATALOG.read_text())
@@ -135,6 +147,13 @@ def main():
                 print(f"{recipe['id']}: {key} {current} -> {value}")
                 problems += 1
                 preset[key] = value
+        for key in absent_optional_keys(recipe, expected):
+            if fields and key not in fields:
+                continue
+            if key in preset:
+                print(f"{recipe['id']}: {key} {preset[key]} -> removed (not specified by settings)")
+                problems += 1
+                del preset[key]
 
     if args.write:
         CATALOG.write_text(json.dumps(catalog, indent=2, ensure_ascii=False))

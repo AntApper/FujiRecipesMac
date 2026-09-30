@@ -402,7 +402,7 @@ private final class BatchMockPTPClient: PTPClientProtocol, @unchecked Sendable {
     func disconnect() { isConnected = false }
 
     func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
-        .unsupported
+        code == PTPProperty.presetSlot ? .uint32(7) : .unsupported
     }
 
     func writeProperty(_ code: UInt16, value: Int32) async throws {}

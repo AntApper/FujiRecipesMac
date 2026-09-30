@@ -19,6 +19,8 @@ public func slotAccent(_ slot: Int) -> Color {
 // MARK: - Loadout Slot Card
 
 public struct LoadoutCard: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
     public let loadout: Loadout?
     public let slot: Int
     public var isSelected: Bool = false
@@ -37,7 +39,7 @@ public struct LoadoutCard: View {
     @State private var isDropTargeted = false
 
     private var accent: Color { slotAccent(slot) }
-    private var isConfigured: Bool { loadout?.hasAnySettings ?? false }
+    private var isConfigured: Bool { loadout?.hasContent ?? false }
     private var isCameraVerified: Bool {
         isCameraConnected && loadout?.provenance == .cameraSynced && !isDirty
     }
@@ -156,7 +158,7 @@ public struct LoadoutCard: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
-        .scaleEffect(isDropTargeted ? 1.025 : (isHovered ? 1.012 : (isSelected ? 1.008 : 1.0)))
+        .scaleEffect(motion.scale(isDropTargeted ? 1.025 : (isHovered ? 1.012 : (isSelected ? 1.008 : 1.0))))
         .shadow(
             color: isDropTargeted
                 ? Theme.fujiAmber.opacity(0.55)
@@ -164,10 +166,10 @@ public struct LoadoutCard: View {
             radius: isDropTargeted ? 20 : 14,
             y: isDropTargeted ? 2 : 5
         )
-        .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isHovered)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isConfigured)
-        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: isDropTargeted)
+        .animation(motion.animation(.spring(response: 0.26, dampingFraction: 0.76)), value: isHovered)
+        .animation(motion.animation(.spring(response: 0.3, dampingFraction: 0.8)), value: isSelected)
+        .animation(motion.animation(.spring(response: 0.3, dampingFraction: 0.8)), value: isConfigured)
+        .animation(motion.animation(.spring(response: 0.24, dampingFraction: 0.78)), value: isDropTargeted)
         .onHover { isHovered = $0 }
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture(perform: onSelect)

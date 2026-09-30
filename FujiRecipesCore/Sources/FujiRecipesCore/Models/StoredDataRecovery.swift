@@ -1,5 +1,31 @@
 import Foundation
 
+/// Values retrieved from UserDefaults are valid property-list objects, but an
+/// older or damaged value may not be the JSON Data these stores expect.
+func storedJSONData(_ value: Any) throws -> Data {
+    guard let data = value as? Data else {
+        throw DecodingError.typeMismatch(Data.self, .init(
+            codingPath: [],
+            debugDescription: "Expected JSON data in the app’s preferences"
+        ))
+    }
+    return data
+}
+
+/// Keep the original value before replacing it with recovered state. This also
+/// preserves incorrectly typed preferences, not just malformed JSON bytes.
+func backUpUnreadableStoredValue(_ value: Any, forKey key: String, in defaults: UserDefaults) -> String {
+    let baseKey = "\(key).unreadable-\(storedDataRecoveryTimestamp())"
+    var attempt = 1
+    var backupKey = baseKey
+    while defaults.object(forKey: backupKey) != nil {
+        attempt += 1
+        backupKey = "\(baseKey)-\(attempt)"
+    }
+    defaults.set(value, forKey: backupKey)
+    return backupKey
+}
+
 /// A short clause explaining why stored data couldn't be read, such as
 /// `filmSimulation: Cannot initialize FilmSimulation from invalid UInt32 value 9999`.
 func storedDataFailureReason(_ error: Error) -> String {

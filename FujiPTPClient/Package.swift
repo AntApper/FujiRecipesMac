@@ -29,10 +29,7 @@ let package = Package(
         .target(
             name: "PTPClientMacOS",
             dependencies: ["PTPClient", "FujiRecipesCore"],
-            path: "Sources/PTPClientMacOS",
-            resources: [
-                .process("Resources/libgphoto2")
-            ]
+            path: "Sources/PTPClientMacOS"
         ),
         .target(
             name: "PTPClientiOS",

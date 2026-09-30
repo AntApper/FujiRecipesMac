@@ -11,8 +11,7 @@ permissions:
 
 jobs:
   test-and-package:
-    name: Swift tests and release structure
-    # Swift tools 6.0 requires an Xcode 16+ image.
+    name: Swift, UI, script tests and release structure
     runs-on: macos-15
     timeout-minutes: 30
 
@@ -20,29 +19,70 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Select an installed Xcode explicitly
+        shell: bash
         run: |
-          swift --version
+          set -euo pipefail
+          xcode_app="$(python3 - <<'PY'
+          import glob
+          import os
+          import re
+
+          apps = glob.glob('/Applications/Xcode*.app')
+
+          def version(path):
+              match = re.search(r'Xcode[_-](\d+(?:\.\d+)*)\.app$', os.path.basename(path))
+              return tuple(map(int, match.group(1).split('.'))) if match else ()
+
+          versioned = [path for path in apps if version(path)]
+          if versioned:
+              print(max(versioned, key=version))
+          elif '/Applications/Xcode.app' in apps:
+              print('/Applications/Xcode.app')
+          PY
+          )"
+          if [[ -z "$xcode_app" ]]; then
+            echo "No Xcode application is installed under /Applications" >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$xcode_app/Contents/Developer"
+          echo "DEVELOPER_DIR=$xcode_app/Contents/Developer" >> "$GITHUB_ENV"
           xcodebuild -version
+          swift --version
 
-      - name: Install libgphoto2 build dependency
-        run: brew install libgphoto2
+      - name: Install build tools and experimental PTP package dependency
+        run: brew install xcodegen libgphoto2
 
-      - name: Test Core and PTP packages
+      - name: Test Core, PTP and repository Python scripts
         shell: bash
         run: |
           set -euo pipefail
           swift test --package-path FujiRecipesCore
           swift test --package-path FujiPTPClient
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
-      - name: Build macOS package
-        run: swift build --package-path macos
-
-      - name: Check package scripts parse
+      - name: Check shell scripts parse
         shell: bash
         run: |
           set -euo pipefail
-          bash -n scripts/*.sh macos/package_app.sh
+          for script in scripts/*.sh macos/package_app.sh script/build_and_run.sh; do
+            bash -n "$script"
+          done
+
+      - name: Generate the standalone Xcode project
+        run: xcodegen generate --spec project.yml
+        working-directory: macos
+
+      - name: Run isolated macOS UI tests with ad-hoc signing
+        run: |
+          xcodebuild test \
+            -project macos/FujiRecipesMac.xcodeproj \
+            -scheme FujiRecipesMac \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/FujiRecipesDerivedData" \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=''
 
       - name: Build credential-free release package
         shell: bash

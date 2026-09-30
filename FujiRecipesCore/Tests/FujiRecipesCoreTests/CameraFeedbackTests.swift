@@ -393,7 +393,9 @@ final class ScriptedCamera: PTPClientProtocol, @unchecked Sendable {
         conversionOutcome
     }
 
-    func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse { .unsupported }
+    func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
+        code == PTPProperty.presetSlot ? .uint32(7) : .unsupported
+    }
     func writeProperty(_ code: UInt16, value: Int32) async throws {}
     func readNativeProfile() async throws -> Data { Data() }
     func writePTPSettings(from recipe: Recipe) async throws {}

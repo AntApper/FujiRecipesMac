@@ -9,6 +9,8 @@ import X100VIHelper
 // hardware telemetry with ViewThatFits adaptive width handling, and film simulation shortcuts.
 
 public struct SidebarView: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
     @Binding public var selection: AppTab
     @Binding public var selectedDialSlot: Int
     @ObservedObject public var recipeStore: RecipeStore
@@ -134,8 +136,11 @@ public struct SidebarView: View {
 
                             Spacer()
 
-                            let armedCount = recipeStore.loadouts.loadoutCountWithSettings()
+                            let armedCount = recipeStore.loadouts.loadoutCountWithContent()
                             Text("\(armedCount)/7")
+                                .accessibilityIdentifier("dial-rack-occupied-count")
+                                .accessibilityLabel("Assigned dial slots: \(armedCount) of 7")
+                                .accessibilityValue("\(armedCount) of 7")
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(armedCount > 0 ? Theme.fujiAmber : Theme.textTertiary)
                                 .padding(.horizontal, 5)
@@ -448,9 +453,9 @@ public struct SidebarView: View {
                 Circle()
                     .stroke(cameraManager.status.tint.opacity(0.6), lineWidth: 1.2)
                     .frame(width: 14, height: 14)
-                    .scaleEffect(cameraManager.status == .connecting ? 1.4 : 1.1)
+                    .scaleEffect(motion.scale(cameraManager.status == .connecting ? 1.4 : 1.1))
                     .opacity(cameraManager.status == .connecting ? 0.4 : 0.8)
-                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: cameraManager.status)
+                    .animation(motion.animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)), value: cameraManager.status)
             }
         }
         .shadow(color: cameraManager.status.tint.opacity(0.8), radius: 3)
@@ -547,6 +552,8 @@ public struct SidebarView: View {
 // MARK: - Sidebar Library Row
 
 private struct SidebarLibraryRow: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
     let title: String
     let icon: String
     let accentColor: Color
@@ -599,8 +606,8 @@ private struct SidebarLibraryRow: View {
                     .stroke(isDropTargeted ? accentColor : (isSelected ? Theme.specularGlowBorder : Color.clear), lineWidth: isDropTargeted ? 1.5 : 0.8)
                     .blendMode(isDropTargeted ? .normal : .plusLighter)
             )
-            .scaleEffect(isDropTargeted ? 1.02 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected || isHovered || isDropTargeted)
+            .scaleEffect(motion.scale(isDropTargeted ? 1.02 : 1.0))
+            .animation(motion.animation(.spring(response: 0.22, dampingFraction: 0.8)), value: isSelected || isHovered || isDropTargeted)
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)
@@ -623,6 +630,8 @@ private struct SidebarLibraryRow: View {
 // MARK: - Sidebar Interactive Dial Rack Row (C1–C7)
 
 public struct SidebarDialRackRow: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
     public let slot: Int
     public let loadout: Loadout?
     public let isSelected: Bool
@@ -640,7 +649,7 @@ public struct SidebarDialRackRow: View {
     @State private var justDropped = false
 
     private var accent: Color { slotAccent(slot) }
-    private var hasSettings: Bool { loadout?.hasAnySettings ?? false }
+    private var hasSettings: Bool { loadout?.hasContent ?? false }
 
     private var isCameraSynced: Bool {
         loadout?.provenance == .cameraSynced && !isDirty
@@ -684,8 +693,8 @@ public struct SidebarDialRackRow: View {
                     .stroke(rowBorderColor, lineWidth: isDropTargeted ? 1.5 : (isSelected ? 1.0 : 0.8))
             )
             .shadow(color: isDropTargeted ? Theme.fujiAmber.opacity(0.6) : (isSelected ? accent.opacity(0.2) : Color.clear), radius: isDropTargeted ? 8 : (isSelected ? 4 : 0))
-            .scaleEffect(isDropTargeted ? 1.03 : (justDropped ? 1.04 : 1.0))
-            .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isHovered || isSelected || isDropTargeted || justDropped)
+            .scaleEffect(motion.scale(isDropTargeted ? 1.03 : (justDropped ? 1.04 : 1.0)))
+            .animation(motion.animation(.spring(response: 0.22, dampingFraction: 0.78)), value: isHovered || isSelected || isDropTargeted || justDropped)
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)
@@ -827,6 +836,8 @@ public struct SidebarDialRackRow: View {
 // MARK: - Sidebar Row Item (for Utilities & Tabs)
 
 private struct SidebarRow: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
     let tab: AppTab
     let isSelected: Bool
     let badge: String?
@@ -876,7 +887,7 @@ private struct SidebarRow: View {
                     .stroke(isSelected ? Theme.specularGlowBorder : Color.clear, lineWidth: 0.8)
                     .blendMode(.plusLighter)
             )
-            .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected || isHovered)
+            .animation(motion.animation(.spring(response: 0.22, dampingFraction: 0.8)), value: isSelected || isHovered)
             .onHover { isHovered = $0 }
         }
         .buttonStyle(.plain)

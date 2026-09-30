@@ -2,9 +2,10 @@
 
 ## Supported scope
 
-The supported macOS camera workflow is a direct USB PTP write to the Fujifilm
-X100VI's C1–C7 custom slots. It is not a general Fujifilm-camera compatibility
-claim.
+The macOS camera workflow targets the Fujifilm X100VI's C1–C7 custom slots over
+USB PTP. The native hardware record below covers all-seven-slot reads and
+configured C4 writes; it does not establish other-body compatibility or
+all-seven-slot writes.
 
 Before overwriting a slot:
 
@@ -18,18 +19,28 @@ Before overwriting a slot:
 3. Read and retain a complete baseline of the target slot. Empty raw-zero
    sentinel values are not a usable rollback fixture; use a documented,
    camera-accepted replacement baseline for an empty slot.
-4. Write only through the app's C1–C7 flow. Success requires the helper's
-   per-property responses and a complete post-write readback, not a local
-   recipe selection.
+4. Write only through the app's C1–C7 flow. Success requires a complete
+   post-write readback comparison, not a local recipe selection.
 5. Confirm persistence by switching to another slot, returning to the target,
-   disconnecting/reconnecting the helper, and reading the target again.
+   disconnecting/reconnecting the transport, and reading the target again.
 
-The X100VI direct-helper regression completed those checks for C1–C7. C1 and
+The recorded X100VI direct-helper regression completed those checks for C1–C7. C1 and
 C2 were restored to their original fixtures; C3–C7 use explicitly recorded
 replacement baselines because their original empty values cannot be written
 back. The detailed evidence is in
-[x100vi-c-slot-hardware-regression-2026-09-12.md](x100vi-c-slot-hardware-regression-2026-09-12.md).
-This evidence applies only to the tested X100VI/helper combination.
+[x100vi-c-slot-evidence-manifest-2026-09-12.json](x100vi-c-slot-evidence-manifest-2026-09-12.json)
+and [detailed chronology](x100vi-c-slot-hardware-regression-2026-09-12.md).
+This historical evidence applies only to the tested X100VI/helper combination.
+
+The [2026-09-29 native hardware checks](x100vi-imagecapturecore-hardware-checks-2026-09-29.md)
+record bounded ImageCaptureCore reads, configured C4 write/readback/adoption,
+and verified rollback after an injected acknowledgement failure through an
+actual `CameraManager` diagnostic. The packaged app's connection/read,
+physical unplug detection, absent-device timeout, and reconnect after USB
+re-enumeration also passed. The record identifies the uncommitted working
+tree and source hashes. Native GUI writes, empty-slot creation, Intel
+hardware, unplug during a write, extended unattended operation, firmware
+identity, and independently verified power-cycle persistence remain untested.
 
 ## Explicit exclusions
 
@@ -54,7 +65,9 @@ Apple credentials:
 
 ```bash
 set -euo pipefail
-bash -n scripts/*.sh macos/package_app.sh
+for script in scripts/*.sh macos/package_app.sh script/build_and_run.sh; do
+  bash -n "$script"
+done
 swift test --package-path FujiRecipesCore
 swift test --package-path FujiPTPClient
 swift build --package-path macos
@@ -106,6 +119,8 @@ release package runs directly from this checkout:
 
 This produces an ad-hoc-signed `.app` and runs strict universal bundle checks.
 It does not contact Apple, notarize, staple, or create a distributable build.
+The UI tests use a generated shared scheme and isolated temporary recipe files
+and defaults suites; they do not require a camera.
 
 ## Developer ID release boundary
 

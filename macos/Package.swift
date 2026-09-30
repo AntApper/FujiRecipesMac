@@ -18,12 +18,12 @@ let package = Package(
                 "FujiRecipesCore",
                 .product(name: "X100VIHelper", package: "FujiPTPClient"),
                 .product(name: "PTPClientMacOS", package: "FujiPTPClient"),
-                .product(name: "GPhoto2CLI", package: "FujiPTPClient"),
             ],
             path: "Source",
             exclude: ["Info.plist"],
             resources: [
-                .process("../Resources")
+                .process("../Resources/recipes-data.json"),
+                .process("../Resources/Assets.xcassets")
             ]
         )
     ]

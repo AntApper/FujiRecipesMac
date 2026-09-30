@@ -2,7 +2,6 @@
 import Foundation
 import FujiRecipesCore
 import PTPClient
-@preconcurrency import ImageCaptureCore
 
 /// macOS camera transport backed by Apple's ImageCaptureCore broker.
 ///
@@ -10,21 +9,28 @@ import PTPClient
 /// X100VI vendor-command codec is being validated. ImageCaptureCore owns the
 /// camera session, so this transport does not compete with `ptpcamerad`.
 public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Sendable {
-    private let state = State()
+    private let state: NativePTPSession
 
-    public init() {}
+    public init() {
+        state = NativePTPSession(provider: ImageCaptureCoreDeviceProvider.shared)
+    }
+
+    /// The injected boundary keeps lifecycle tests independent of USB hardware.
+    init(deviceProvider: any NativePTPDeviceProvider, scheduler: any NativePTPDeadlineScheduler = DispatchPTPDeadlineScheduler()) {
+        state = NativePTPSession(provider: deviceProvider, scheduler: scheduler)
+    }
+
+    deinit { state.disconnect() }
 
     public var isConnected: Bool {
-        state.queue.sync { state.connected }
+        state.isConnected
     }
 
     public var cameraInfo: PTPCameraInfo {
-        state.queue.sync {
-            PTPCameraInfo(
-                model: state.camera?.name ?? "Not connected",
-                vendorExtensionId: PTPProperty.fujiVendorExtensionId
-            )
-        }
+        PTPCameraInfo(
+            model: state.cameraName,
+            vendorExtensionId: PTPProperty.fujiVendorExtensionId
+        )
     }
 
     public func connect() async throws {
@@ -40,7 +46,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
     }
 
     public func setDisconnectHandler(_ handler: (@Sendable () -> Void)?) {
-        state.onDisconnect = handler
+        state.setDisconnectHandler(handler)
     }
 
     public func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
@@ -79,7 +85,7 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
             throw PTPError.invalidResponse("Preset slot must be 1–7")
         }
         try await writeProperty(0xD18C, value: Int32(index))
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try await Task.sleep(nanoseconds: 120_000_000)
 
         let values = try await Self.readPresetValues(using: self)
         return Self.presetData(slot: index, values: values)
@@ -376,511 +382,6 @@ public final class ImageCaptureCorePTPClient: PTPClientProtocol, @unchecked Send
     }
 }
 
-private struct SendableCamera: @unchecked Sendable {
-    let camera: ICCameraDevice
-}
-
-private final class DeviceCoordinator: NSObject, ICDeviceBrowserDelegate, @unchecked Sendable {
-    static let shared = DeviceCoordinator()
-
-    private let queue = DispatchQueue(label: "com.ant.fuji-recipes.image-capture-core.coordinator")
-    private let browser = ICDeviceBrowser()
-    private var matchingCamera: ICCameraDevice?
-    private var waiters: [(ICCameraDevice) -> Void] = []
-    private var removalHandlers: [UUID: @Sendable (ICDevice) -> Void] = [:]
-
-    override private init() {
-        super.init()
-        browser.delegate = self
-        browser.browsedDeviceTypeMask = .camera
-        browser.start()
-    }
-
-    func addRemovalHandler(_ handler: @escaping @Sendable (ICDevice) -> Void) -> UUID {
-        let id = UUID()
-        queue.async {
-            self.removalHandlers[id] = handler
-        }
-        return id
-    }
-
-    func removeRemovalHandler(_ id: UUID) {
-        queue.async {
-            self.removalHandlers.removeValue(forKey: id)
-        }
-    }
-
-    func acquireCamera(timeout: TimeInterval = 15.0) async throws -> ICCameraDevice {
-        let gate = ContinuationGate<SendableCamera>()
-        let sendable = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                gate.install(continuation)
-                lookUpCamera(timeout: timeout, gate: gate)
-            }
-        } onCancel: {
-            gate.cancel()
-        }
-        return sendable.camera
-    }
-
-    private func lookUpCamera(timeout: TimeInterval, gate: ContinuationGate<SendableCamera>) {
-        queue.async {
-            if let camera = self.matchingCamera {
-                _ = gate.finishReturning(SendableCamera(camera: camera))
-                return
-            }
-
-            for device in self.browser.devices ?? [] {
-                if let camera = device as? ICCameraDevice, self.isTargetCamera(camera) {
-                    self.matchingCamera = camera
-                    _ = gate.finishReturning(SendableCamera(camera: camera))
-                    return
-                }
-            }
-
-            let timer = DispatchWorkItem {
-                _ = gate.finishThrowing(PTPError.connectionFailed(
-                    "ImageCaptureCore did not find an X100VI camera within \(Int(timeout)) seconds."
-                ))
-            }
-            self.queue.asyncAfter(deadline: .now() + timeout, execute: timer)
-
-            self.waiters.append { camera in
-                timer.cancel()
-                _ = gate.finishReturning(SendableCamera(camera: camera))
-            }
-        }
-    }
-
-    private func isTargetCamera(_ camera: ICCameraDevice) -> Bool {
-        guard camera.usbVendorID == 0x04CB, camera.usbProductID == 0x0305 else { return false }
-        guard camera.transportType == ICDeviceTransport.transportTypeUSB.rawValue else { return false }
-        return true
-    }
-
-    func deviceBrowser(_ browser: ICDeviceBrowser, didAdd device: ICDevice, moreComing: Bool) {
-        queue.async {
-            guard let camera = device as? ICCameraDevice, self.isTargetCamera(camera) else { return }
-            self.matchingCamera = camera
-            let currentWaiters = self.waiters
-            self.waiters.removeAll()
-            for waiter in currentWaiters {
-                waiter(camera)
-            }
-        }
-    }
-
-    func deviceBrowser(_ browser: ICDeviceBrowser, didRemove device: ICDevice, moreGoing: Bool) {
-        queue.async {
-            if self.matchingCamera === device || (device as? ICCameraDevice).map(self.isTargetCamera) == true {
-                self.matchingCamera = nil
-            }
-            for handler in self.removalHandlers.values {
-                handler(device)
-            }
-        }
-    }
-
-    func deviceBrowserDidEnumerateLocalDevices(_ browser: ICDeviceBrowser) {
-        queue.async {
-            guard self.matchingCamera == nil else { return }
-            for device in browser.devices ?? [] {
-                if let camera = device as? ICCameraDevice, self.isTargetCamera(camera) {
-                    self.matchingCamera = camera
-                    let currentWaiters = self.waiters
-                    self.waiters.removeAll()
-                    for waiter in currentWaiters {
-                        waiter(camera)
-                    }
-                    break
-                }
-            }
-        }
-    }
-}
-
-private final class State: NSObject, ICDeviceDelegate, @unchecked Sendable {
-    let queue = DispatchQueue(label: "com.ant.fuji-recipes.image-capture-core")
-    var camera: ICCameraDevice?
-    var connected = false
-    var closing = false
-    var transactionID: UInt32 = 0
-    var connectWaiter: CheckedContinuation<Void, Error>?
-    var closeWaiter: CheckedContinuation<Void, Never>?
-    var connectTimeout: DispatchWorkItem?
-    var activeCommandFailure: (() -> Void)?
-    var activeCommandTimeout: DispatchWorkItem?
-    var removalHandlerID: UUID?
-    var onDisconnect: (@Sendable () -> Void)?
-
-    func didRemove(_ device: ICDevice) {
-        queue.async {
-            guard self.connected else { return }
-            self.invalidateSessionOnQueue()
-            self.onDisconnect?()
-        }
-    }
-
-    func deviceDidBecomeReady(_ device: ICDevice) {}
-
-    func device(_ device: ICDevice, didOpenSessionWithError error: (any Error)?) {}
-
-    func device(_ device: ICDevice, didCloseSessionWithError error: (any Error)?) {
-        queue.async {
-            guard self.connected, !self.closing else { return }
-            self.invalidateSessionOnQueue()
-            self.onDisconnect?()
-        }
-    }
-
-    func device(_ device: ICDevice, didEncounterError error: (any Error)?) {
-        queue.async {
-            guard self.connected, !self.closing else { return }
-            self.invalidateSessionOnQueue()
-            self.onDisconnect?()
-        }
-    }
-
-    func connect() async throws {
-        let camera = try await DeviceCoordinator.shared.acquireCamera(timeout: 15)
-        camera.delegate = self
-        guard camera.capabilities.contains(
-            ICDeviceCapability.cameraDeviceCanAcceptPTPCommands.rawValue
-        ) else {
-            throw PTPError.connectionFailed(
-                "The X100VI was found, but ImageCaptureCore does not expose raw PTP command support."
-            )
-        }
-
-        try Task.checkCancellation()
-        try await withTaskCancellationHandler {
-            try await openSession(on: camera)
-        } onCancel: {
-            self.cancelPendingConnect()
-        }
-    }
-
-    private func openSession(on camera: ICCameraDevice) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async {
-                guard !self.connected, !self.closing, self.connectWaiter == nil else {
-                    continuation.resume(throwing: PTPError.connectionFailed("Camera session is already active."))
-                    return
-                }
-
-                self.connectWaiter = continuation
-                self.camera = camera
-
-                let timeout = DispatchWorkItem { [self] in
-                    self.queue.async {
-                        guard let waiter = self.connectWaiter else { return }
-                        self.connectWaiter = nil
-                        self.camera = nil
-                        self.connected = false
-                        self.transactionID = 0
-                        waiter.resume(throwing: PTPError.connectionFailed(
-                            "ImageCaptureCore session open timed out."
-                        ))
-                    }
-                }
-                self.connectTimeout = timeout
-                self.transactionID = 0
-                self.queue.asyncAfter(deadline: .now() + 15, execute: timeout)
-
-                camera.requestOpenSession { [self] error in
-                    self.queue.async {
-                        if let error {
-                            self.finishConnect(with: .failure(
-                                PTPError.connectionFailed("ImageCaptureCore session open failed: \(error.localizedDescription)")
-                            ))
-                        } else {
-                            self.finishConnect(with: .success(()))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    func disconnect(completion: (@Sendable () -> Void)? = nil) {
-        queue.async {
-            self.disconnectOnQueue(completion: completion)
-        }
-    }
-
-    private func cancelPendingConnect() {
-        queue.async {
-            guard self.connectWaiter != nil else { return }
-            self.disconnectOnQueue(completion: nil)
-        }
-    }
-
-    private func disconnectOnQueue(completion: (@Sendable () -> Void)?) {
-        if let id = removalHandlerID {
-            removalHandlerID = nil
-            DeviceCoordinator.shared.removeRemovalHandler(id)
-        }
-        connectTimeout?.cancel()
-        connectTimeout = nil
-        let cameraToClose = camera
-        failActiveCommand()
-
-        if let waiter = connectWaiter {
-            connectWaiter = nil
-            camera = nil
-            connected = false
-            transactionID = 0
-            waiter.resume(throwing: PTPError.connectionFailed(
-                "Camera connection was cancelled."
-            ))
-        }
-
-        guard let camera = cameraToClose else {
-            connected = false
-            closeWaiter?.resume()
-            closeWaiter = nil
-            completion?()
-            return
-        }
-
-        connected = false
-        self.camera = nil
-        closing = true
-        transactionID = 0
-        camera.requestCloseSession { [self] _ in
-            self.queue.async {
-                self.closing = false
-                self.closeWaiter?.resume()
-                self.closeWaiter = nil
-                completion?()
-            }
-        }
-    }
-
-    struct PTPResult: Sendable {
-        let response: Data
-        let data: Data?
-    }
-
-    func send(command: Data, outData: Data?) async throws -> PTPResult {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PTPResult, Error>) in
-            let gate = ContinuationGate(continuation)
-            queue.async {
-                guard self.connected, let camera = self.camera else {
-                    gate.finishThrowing(PTPError.notConnected)
-                    return
-                }
-                self.transactionID &+= 1
-                var command = command
-                command.setU32LE(self.transactionID, at: 8)
-                let operationCode = command.u16LE(at: 6)
-                let timeout = DispatchWorkItem { [self] in
-                    self.invalidateSession()
-                    _ = gate.finishThrowing(PTPError.commandFailed(
-                        operationCode,
-                        "ImageCaptureCore command timed out after 20 seconds."
-                    ))
-                }
-                self.activeCommandFailure = {
-                    _ = gate.finishThrowing(PTPError.notConnected)
-                }
-                self.activeCommandTimeout = timeout
-                self.queue.asyncAfter(deadline: .now() + 20, execute: timeout)
-                camera.requestSendPTPCommand(command, outData: outData) { data, response, error in
-                    self.queue.async {
-                        if let error {
-                            self.clearActiveCommand()
-                            self.invalidateSessionOnQueue()
-                            self.onDisconnect?()
-                            if gate.finishThrowing(PTPError.commandFailed(
-                                operationCode,
-                                error.localizedDescription
-                            )) {
-                                timeout.cancel()
-                            }
-                            return
-                        }
-                        guard response.count >= 12 else {
-                            self.clearActiveCommand()
-                            self.invalidateSessionOnQueue()
-                            let respHex = response.map { String(format: "%02x", $0) }.joined(separator: " ")
-                            let dataHex = data.map { String(format: "%02x", $0) }.joined(separator: " ")
-                            if gate.finishThrowing(PTPError.invalidResponse(
-                                "ImageCaptureCore returned an incomplete PTP response: count=\(response.count) bytes=[\(respHex)] dataCount=\(data.count) [\(dataHex)]."
-                            )) {
-                                timeout.cancel()
-                            }
-                            return
-                        }
-                        let responseCode = response.u16LE(at: 6)
-                        guard responseCode == 0x2001 else {
-                            self.clearActiveCommand()
-                            if gate.finishThrowing(PTPError.unknown(responseCode)) {
-                                timeout.cancel()
-                            }
-                            return
-                        }
-                        self.clearActiveCommand()
-                        let payload = data.isEmpty ? nil : data
-                        if gate.finishReturning(PTPResult(response: response, data: payload)) {
-                            timeout.cancel()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func invalidateSession() {
-        queue.async {
-            self.invalidateSessionOnQueue()
-        }
-    }
-
-    private func invalidateSessionOnQueue() {
-        if let id = removalHandlerID {
-            removalHandlerID = nil
-            DeviceCoordinator.shared.removeRemovalHandler(id)
-        }
-        clearActiveCommand()
-        guard connected || camera != nil else { return }
-        let camera = self.camera
-        connected = false
-        self.camera = nil
-        transactionID = 0
-        closing = true
-        queue.asyncAfter(deadline: .now() + 5) {
-            guard !self.connected, self.camera == nil else { return }
-            self.closing = false
-        }
-        camera?.requestCloseSession { [weak self] _ in
-            guard let owner = self else { return }
-            owner.queue.async {
-                owner.closing = false
-            }
-        }
-    }
-
-    private func clearActiveCommand() {
-        activeCommandTimeout?.cancel()
-        activeCommandTimeout = nil
-        activeCommandFailure = nil
-    }
-
-    private func failActiveCommand() {
-        let failure = activeCommandFailure
-        clearActiveCommand()
-        failure?()
-    }
-
-    private func finishConnect(with result: Result<Void, Error>) {
-        connectTimeout?.cancel()
-        connectTimeout = nil
-        guard let waiter = connectWaiter else { return }
-        connectWaiter = nil
-        switch result {
-        case .success:
-            connected = true
-            let id = DeviceCoordinator.shared.addRemovalHandler { [weak self] device in
-                guard let self else { return }
-                self.queue.async {
-                    if self.connectWaiter != nil {
-                        self.finishConnect(with: .failure(
-                            PTPError.connectionFailed("The X100VI was disconnected while opening its session.")
-                        ))
-                        return
-                    }
-                    guard self.connected else { return }
-                    self.invalidateSessionOnQueue()
-                    self.onDisconnect?()
-                }
-            }
-            removalHandlerID = id
-            waiter.resume()
-        case .failure(let error):
-            if let id = removalHandlerID {
-                removalHandlerID = nil
-                DeviceCoordinator.shared.removeRemovalHandler(id)
-            }
-            let cameraToClose = camera
-            camera = nil
-            connected = false
-            if let cameraToClose {
-                closing = true
-                queue.asyncAfter(deadline: .now() + 5) {
-                    guard !self.connected, self.camera == nil else { return }
-                    self.closing = false
-                }
-                cameraToClose.requestCloseSession { [weak self] _ in
-                    guard let owner = self else { return }
-                    owner.queue.async {
-                        owner.closing = false
-                    }
-                }
-            }
-            waiter.resume(throwing: error)
-        }
-    }
-}
-
-private final class ContinuationGate<Value: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<Value, Error>?
-    private var cancelled = false
-
-    init() {}
-
-    init(_ continuation: CheckedContinuation<Value, Error>) {
-        self.continuation = continuation
-    }
-
-    func install(_ continuation: CheckedContinuation<Value, Error>) {
-        lock.lock()
-        guard !cancelled else {
-            lock.unlock()
-            continuation.resume(throwing: CancellationError())
-            return
-        }
-        self.continuation = continuation
-        lock.unlock()
-    }
-
-    func cancel() {
-        lock.lock()
-        cancelled = true
-        let continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-        continuation?.resume(throwing: CancellationError())
-    }
-
-    @discardableResult
-    func finishReturning(_ value: Value) -> Bool {
-        lock.lock()
-        guard let continuation else {
-            lock.unlock()
-            return false
-        }
-        self.continuation = nil
-        lock.unlock()
-        continuation.resume(returning: value)
-        return true
-    }
-
-    @discardableResult
-    func finishThrowing(_ error: Error) -> Bool {
-        lock.lock()
-        guard let continuation else {
-            lock.unlock()
-            return false
-        }
-        self.continuation = nil
-        lock.unlock()
-        continuation.resume(throwing: error)
-        return true
-    }
-}
-
 enum PTPPacket {
     static func command(operation: UInt16, parameters: [UInt32]) -> Data {
         var bytes = Data(count: 12 + parameters.count * 4)
@@ -919,4 +420,3 @@ extension Data {
         self[offset + 3] = UInt8((value >> 24) & 0xff)
     }
 }
-

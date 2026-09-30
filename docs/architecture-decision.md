@@ -1,189 +1,72 @@
-# Architecture Decision: Cross-Platform PTP Communication
+# Architecture Decision: macOS PTP Transport
 
-**Date:** 2026-07-03  
-**Status:** Accepted  
-**Context:** Session 4 hardware probe results
+**Original decision:** 2026-07-03
+**Status:** Accepted; supersedes the original macOS libgphoto2 conclusion
+**Current implementation:** `ImageCaptureCorePTPClient` is the default macOS transport. `X100VIHelperClient` remains an explicit legacy fallback.
 
-> **Current status (2026-09-26):** Validated on physical Fujifilm X100VI
-> hardware. The original Session 4 conclusion was caused by a completion block
-> parameter ordering issue (`responseData` payload vs `ptpResponseData` 12-byte
-> container). With `ImageCaptureCorePTPClient` and `DeviceCoordinator`, macOS
-> ImageCaptureCore successfully reads, writes, and restores C1–C7 preset slots
-> and survives reconnect soak tests without competing with `ptpcamerad`.
-> `ImageCaptureCorePTPClient` is verified and ready for production use.
+## Context
 
-## Problem
-
-We need a Fujifilm recipe manager that:
-- Runs on **iOS** (primary target, iPad/iPhone with USB-C)
-- Runs on **macOS** (secondary target, development/debugging)
-- Communicates with the **X100VI** via USB to push recipe presets to C1–C7 slots
-- Has all dependencies **bundled** — no user-facing setup required
-- Uses a **single codebase** shared across platforms
-
-The core technical challenge: **how to send raw PTP commands to Fuji cameras on both macOS and iOS.**
+The app needs to read and write Fujifilm X100VI C1–C7 preset properties over
+USB PTP. The original July probe misread ImageCaptureCore's completion
+parameters: `responseData` contains the payload, while `ptpResponseData`
+contains the PTP response container. That probe did not establish that native
+ImageCaptureCore could not perform the operations.
 
 ## Decision
 
-**Use ImageCaptureCore on iOS + libgphoto2 (bundled) on macOS, unified under a `PTPClient` protocol.**
+Use Apple's ImageCaptureCore session and PTP passthrough APIs by default on
+macOS. This lets macOS and `ptpcamerad` own the camera session and avoids the
+legacy helper's direct libusb interface claim during the normal app workflow.
+The `FUJI_RECIPES_TRANSPORT=helper` setting explicitly selects the bundled
+raw-libusb helper as a diagnostic/fallback path.
 
-```
-┌─────────────────────────────────────────────────┐
-│                 FujiRecipesCore                  │
-│  (shared Swift: recipes, models, PTP mapping)   │
-└────────────────┬────────────────────────────────┘
-                 │
-     ┌───────────┴───────────┐
-     │                       │
-┌────▼─────┐          ┌──────▼──────┐
-│FujiRecipes│         │FujiRecipesMac│
-│  (iOS)    │         │  (macOS)     │
-│           │         │              │
-│ ImageCap- │         │ libgphoto2   │
-│ tureCore  │         │ (bundled)    │
-└───────────┘         └─────────────┘
-```
+The macOS app constructs this transport in both its root app scene and the
+standalone camera view factory. Keep those factories consistent when changing
+the default. The shared `PTPClientProtocol` keeps camera operations behind a
+transport boundary; FujiRecipesCore owns recipe mapping, C-slot encoding,
+readback comparison, and recovery decisions.
 
-## Why Not Pure ImageCaptureCore?
+## Evidence and limits
 
-Our Session 4 probe proved that **macOS ImageCaptureCore transforms raw PTP responses** for non-Apple cameras:
+The [2026-09-29 native hardware checks](x100vi-imagecapturecore-hardware-checks-2026-09-29.md)
+passed a bounded X100VI run on macOS 27.0.1 arm64. They cover all-seven-slot
+reads and comparisons, configured C4 writes through the real manager
+diagnostic, restoration after an injected acknowledgement failure, and
+packaged-app unplug detection and reconnect after USB re-enumeration.
+`ptpcamerad` and `icdd` remained running. The record identifies the uncommitted
+`codex/refinement-fixes` working tree by its base commit and source hashes.
+Native GUI writes, other-slot and empty-slot writes, Intel hardware, and the
+other listed limits remain untested.
 
-| What We Sent | What We Got |
-|-------------|-------------|
-| PTP GetDeviceInfo (0x1001), 18 bytes | Response: 12 bytes, code `0x2000` |
-| Expected: standard PTP response (18+ bytes, code 0x2001) | Not parseable as PTP |
+The repository hardware record documents X100VI C1–C7 persistence and rollback
+through the legacy helper, plus a production macOS UI C4 operation, on
+2026-09-12. See the [evidence manifest](x100vi-c-slot-evidence-manifest-2026-09-12.json)
+and [detailed chronology](x100vi-c-slot-hardware-regression-2026-09-12.md).
+Those results identify the helper path and camera, but the retained record
+does not identify the tested repository revision or macOS version, and the
+camera firmware was unavailable. Keep this helper record separate from the
+later native transport checks. Builds and software tests provide their own
+evidence; broader physical-device acceptance requires the remaining hardware
+checks recorded in the native summary.
 
-This means ImageCaptureCore on macOS:
-- Cannot parse GetDeviceInfo into readable fields
-- Cannot read/write device properties via raw PTP
-- Cannot push recipes to camera preset slots
+The X100VI is the only camera in the repository's C1–C7 hardware record. iOS
+transport and other Fujifilm bodies remain outside that evidence.
 
-**Conclusion:** ImageCaptureCore alone won't work for the macOS target.
+## Consequences
 
-## Why Not Pure libgphoto2?
+- The default macOS path uses ImageCaptureCore and does not directly claim the
+  USB interface through libusb.
+- The helper, its libusb runtime, and provenance remain packaged for the
+  explicit fallback and are still subject to release validation.
+- The helper path can conflict with `ptpcamerad`; do not force-terminate the
+  system PTP service as a connection workaround.
+- RAF/RAW conversion code is experimental and is not a supported release
+  capability.
+- Mac App Store distribution remains unsupported until a sandbox-compatible
+  design is demonstrated.
 
-libgphoto2 is available on both platforms but:
-- Requires significant build complexity for iOS (cross-compilation, bitcode, etc.)
-- The iOS ImageCaptureCore path is simpler if it works
-- libgphoto2 is ~8MB — fine for macOS, heavy for iOS if not needed
+## Reproducible references
 
-## Why This Hybrid?
-
-| Factor | iOS (ImageCaptureCore) | macOS (libgphoto2) |
-|--------|----------------------|-------------------|
-| PTP support | ✅ May work (untested) | ✅ Proven for X100VI |
-| Dependencies | None (native) | ~8MB bundled |
-| Complexity | Low | Medium (FFI) |
-| App Store | ✅ Clean | ✅ With proper stripping |
-
-**iOS path:** Test first. If ImageCaptureCore returns raw PTP responses on iOS, we're done — zero dependencies. If it also transforms responses, iOS needs libgphoto2 too.
-
-**macOS path:** libgphoto2 is the reliable option. We bundle a prebuilt binary.
-
-## Package Structure
-
-```
-FujiPTPClient/                     ← Swift Package Manager package
-├── Package.swift
-├── Sources/
-│   └── FujiPTPClient/
-│       ├── PTPClient.swift        ← Public protocol (shared across platforms)
-│       ├── CameraInfo.swift       ← Parsed camera info types
-│       ├── PropertyResponse.swift ← Typed property values
-│       ├── PTP+macOS.swift        ← libgphoto2 FFI implementation
-│       └── PTP+iOS.swift          ← ImageCaptureCore implementation
-└── Resources/
-    └── libgphoto2/
-        ├── arm64-apple-macosx/
-        │   ├── libgphoto2.a
-        │   └── headers/
-        ├── x86_64-apple-macosx/
-        │   ├── libgphoto2.a
-        │   └── headers/
-        └── arm64-apple-ios/
-            ├── libgphoto2.a
-            └── headers/
-```
-
-## The PTPClient Protocol
-
-```swift
-public protocol PTPClient {
-    func connect() async throws
-    func disconnect()
-    var isConnected: Bool { get }
-    var cameraInfo: CameraInfo { get async }
-    func readProperty(_ code: UInt16) async throws -> PropertyResponse
-    func writeProperty(_ code: UInt16, value: UInt32) async throws
-    func readPresetSlot(_ index: Int) async throws -> PresetData
-    func writePresetSlot(_ index: Int, data: PresetData) async throws
-}
-
-public struct CameraInfo {
-    public let manufacturer: String
-    public let model: String
-    public let firmwareVersion: String
-    public let vendorExtension: VendorExtension?
-    public let supportedProperties: [UInt16]
-}
-
-public enum PropertyResponse {
-    case uint8(UInt8)
-    case int8(Int8)
-    case uint16(UInt16)
-    case int16(Int16)
-    case uint32(UInt32)
-    case int32(Int32)
-    case uint64(UInt64)
-    case string(String)
-    case data(Data)
-}
-
-public struct PresetData {
-    public let filmSimulation: UInt16
-    public let filmSimulationTune: Int16
-    public let dynamicRange: UInt16
-    public let colorMode: UInt16
-    public let whiteBalance: UInt16
-    public let whiteBalanceTune1: Int16
-    public let whiteBalanceTune2: Int16
-    public let colorTemperature: UInt16
-    public let quality: UInt16
-    public let noiseReduction: UInt16
-    public let grainEffect: UInt16
-    public let shadowing: UInt16
-    public let wideDynamicRange: UInt16
-    public let highlightTone: UInt16
-    public let shadowTone: UInt16
-    public let colorChrome: UInt16
-    public let clarity: UInt16
-    public let sharpness: Int16
-    public let exposureCompensation: Int32
-    public let lightTune: UInt16
-    public let priorityMode: UInt16
-}
-```
-
-## Risk Assessment
-
-| Risk | Mitigation |
-|------|-----------|
-| iOS ImageCaptureCore may also mangle PTP | libgphoto2 iOS bundle in contingency plan |
-| libgphoto2 binary size (~8MB) | Acceptable for macOS; iOS gets it only if needed |
-| FFI overhead for libgphoto2 | Minimal — calls are infrequent (recipe writes) |
-| App Store review for bundled C lib | Documented, stripped, notarized builds |
-| libgphoto2 updates break ABI | Pin to specific version; test on every update |
-
-## Open Questions
-
-1. **iOS hardware testing:** Do we have an iPhone/iPad with USB-C to test iOS PTP?
-2. **libgphoto2 iOS build:** Do we need a prebuilt iOS binary, or can we cross-compile at build time?
-3. **App Store entitlements:** Does the macOS app need any special entitlements for USB access?
-4. **libgphoto2 licensing:** libgphoto2 is LGPL — does our app comply (dynamic linking, user modifications)?
-
-## References
-
-- `ios-app/PTP-probe-results.md` — Session 4 probe results with byte-level analysis
-- `docs/setting-to-ptp-map.md` — Fuji setting-to-PTP property mapping
-- `docs/ptp-command-map.md` — PTP command reference (from previous research)
-- libgphoto2 X100VI driver source (public GitHub)
+- [macOS release guide](RELEASE.md)
+- [Release boundaries](MACOS_RELEASE_BOUNDARIES.md)
+- [Camera connection guide](camera-connection-guide.md)

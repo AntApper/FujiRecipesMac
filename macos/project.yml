@@ -71,6 +71,18 @@ targets:
         TEST_TARGET_NAME: FujiRecipesMac
         GENERATE_INFOPLIST_FILE: YES
 
+schemes:
+  FujiRecipesMac:
+    build:
+      targets:
+        FujiRecipesMac: all
+        FujiRecipesMacUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - FujiRecipesMacUITests
+      gatherCoverageData: false
+
 packages:
   FujiRecipesCore:
     path: ../FujiRecipesCore

@@ -177,12 +177,29 @@ public final class CameraManager: ObservableObject {
     }
 
     private func readSlots(using client: PTPClientProtocol) async -> SlotRefreshResult {
+        let selectedSlot: Int
+        do {
+            switch try await client.readProperty(PTPProperty.presetSlot) {
+            case .uint32(let value) where (1...7).contains(value):
+                selectedSlot = Int(value)
+            case .error(let error):
+                throw error
+            case .unsupported:
+                throw PTPError.invalidResponse("The active-slot selector is unsupported")
+            default:
+                throw PTPError.invalidResponse("The active-slot selector must report a slot from 1 to 7")
+            }
+        } catch {
+            let message = "Could not determine the active camera slot: \(error.localizedDescription). No slots were read, so the camera's selection was preserved. Retry refreshing after reconnecting."
+            return SlotRefreshResult(
+                presets: [],
+                failures: (1...7).map { SlotRefreshFailure(slot: $0, message: message) }
+            )
+        }
+
         var order = Array(1...7)
         // Reading a slot selects it on the camera, so the slot it was on is read last.
-        if case .uint32(let value)? = try? await client.readProperty(PTPProperty.presetSlot),
-           let selectedIndex = order.firstIndex(of: Int(value)) {
-            order.append(order.remove(at: selectedIndex))
-        }
+        order.append(order.remove(at: selectedSlot - 1))
 
         var presetData: [Int: PTPClientPresetData] = [:]
         var failures: [Int: SlotRefreshFailure] = [:]
@@ -206,6 +223,7 @@ public final class CameraManager: ObservableObject {
 
     /// When `loadouts` is given, the verified readback replaces the slot only
     /// if the slot has not changed since this call, including while queued.
+    /// A differing readback leaves the requested recipe staged for retry.
     public func importRecipeToCState(
         _ recipe: Recipe,
         slot: Int,
@@ -226,7 +244,8 @@ public final class CameraManager: ObservableObject {
 
     /// Writes the store's current draft for `slot`, captured once the camera
     /// is free. The readback is adopted only if the draft did not change
-    /// during the write; the result's `draftChange` says how it changed.
+    /// during the write and matches the request. A differing request stays
+    /// staged; the result's `draftChange` says whether a newer edit was kept.
     public func writeSlot(_ slot: Int, from loadouts: LoadoutStore) async throws -> PTPPresetSlotWriteResult {
         guard (1...7).contains(slot) else {
             throw PTPError.invalidResponse("Preset slot must be 1–7")
@@ -358,7 +377,7 @@ public final class CameraManager: ObservableObject {
         }
         let revision = loadouts.revision(of: slot)
         let result = try await writePreset(CSlotPresetEncoder.encode(loadout: loadout, slot: slot), to: slot, using: client, gen: gen)
-        return adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, gen: gen)
+        return adopt(result, for: slot, into: loadouts, ifUnchangedSince: revision, requestedDraft: loadout, gen: gen)
     }
 
     private func adopt(
@@ -367,11 +386,24 @@ public final class CameraManager: ObservableObject {
         into loadouts: LoadoutStore,
         ifUnchangedSince revision: Int,
         writtenFrom recipe: Recipe? = nil,
+        requestedDraft: Loadout? = nil,
         gen: Int
     ) -> PTPPresetSlotWriteResult {
-        guard gen == generation, let observed = result.observedSnapshot, observed.slot == slot else { return result }
+        guard gen == generation else { return result }
+        if !result.differences.isEmpty, loadouts.revision(of: slot) == revision {
+            // Preserve the request, including an import that wasn't staged
+            // before the write. Newer edits/clears follow the revision guard
+            // in adoptCameraWrite below and are never replaced here.
+            if let recipe {
+                loadouts.applyRecipe(recipe, to: slot)
+            } else if let requestedDraft {
+                loadouts.saveLocalDraft(requestedDraft)
+            }
+            return result
+        }
+        guard let observed = result.observedSnapshot, observed.slot == slot else { return result }
         guard loadouts.adoptCameraWrite(observed, ifUnchangedSince: revision, writtenFrom: recipe) else {
-            return result.marking(loadouts.loadout(for: slot)?.hasAnySettings == false ? .cleared : .edited)
+            return result.marking(loadouts.hasContent(for: slot) ? .edited : .cleared)
         }
         return result
     }
@@ -463,7 +495,28 @@ public final class CameraManager: ObservableObject {
             rollback = .notAttemptedEmptySentinel
         case .configured(let saved):
             do {
-                _ = try await client.writePresetSlot(slot, data: saved)
+                let writeResult = try await client.writePresetSlot(slot, data: saved)
+                guard writeResult.slot == slot, writeResult.isVerified else {
+                    let fields = writeResult.differences.map(\.displayName).joined(separator: ", ")
+                    throw PTPError.invalidResponse("Rollback write was not verified for C\(slot)\(fields.isEmpty ? "" : ": \(fields)")")
+                }
+                let readback = try await client.readPresetSlot(slot)
+                guard readback.slot == slot, !readback.isEmptySlot else {
+                    throw PTPError.invalidResponse("Rollback readback did not report configured C\(slot)")
+                }
+                var differences = saved.differences(from: readback)
+                // A blank request normally means "leave the name alone";
+                // rollback must also restore a baseline that had no name.
+                if saved.name.trimmingCharacters(in: .whitespaces).isEmpty,
+                   !readback.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                    differences.insert(.name, at: 0)
+                }
+                // Restoration must match the raw baseline, including hidden
+                // values such as the grain size retained while grain is off.
+                guard readback == saved else {
+                    let fields = differences.isEmpty ? "raw preset state" : differences.map(\.displayName).joined(separator: ", ")
+                    throw PTPError.invalidResponse("Rollback readback differed from the saved baseline: \(fields)")
+                }
                 rollback = .restored
             } catch {
                 rollback = .failed(error.localizedDescription)

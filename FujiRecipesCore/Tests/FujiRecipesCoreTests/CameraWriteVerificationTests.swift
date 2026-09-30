@@ -21,7 +21,7 @@ final class CameraWriteVerificationTests: XCTestCase {
         XCTAssertEqual(result.observedSnapshot, observed)
         XCTAssertEqual(result.rollback, .notNeeded)
         XCTAssertEqual(client.writes.count, 1)
-        XCTAssertGreaterThanOrEqual(client.postWriteReadCount, 1)
+        XCTAssertEqual(client.postWriteReadCount, 1)
     }
 
     @MainActor
@@ -52,7 +52,7 @@ final class CameraWriteVerificationTests: XCTestCase {
 
         XCTAssertEqual(client.writes.count, 2)
         XCTAssertEqual(client.writes.last, baseline)
-        XCTAssertGreaterThanOrEqual(client.postWriteReadCount, 1)
+        XCTAssertEqual(client.postWriteReadCount, 2, "rollback must read the restored baseline back")
     }
 }
 
@@ -88,7 +88,7 @@ private final class WriteVerificationPTPClient: PTPClientProtocol, @unchecked Se
     }
 
     func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
-        .unsupported
+        code == PTPProperty.presetSlot ? .uint32(UInt32(slot)) : .unsupported
     }
 
     func writeProperty(_ code: UInt16, value: Int32) async throws {}
@@ -100,6 +100,7 @@ private final class WriteVerificationPTPClient: PTPClientProtocol, @unchecked Se
 
         if !writes.isEmpty {
             postWriteReadCount += 1
+            if writes.count > 1 { return baseline }
             if let postWriteReadError {
                 throw postWriteReadError
             }

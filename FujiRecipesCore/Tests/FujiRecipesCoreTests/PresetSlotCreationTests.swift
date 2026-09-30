@@ -93,6 +93,7 @@ final class PresetSlotCreationTests: XCTestCase {
 
         XCTAssertEqual(client.writtenPresets.count, 2)
         XCTAssertEqual(client.writtenPresets.last, baseline)
+        XCTAssertEqual(client.readSlots, [3, 3], "rollback must verify the saved baseline after writing it")
     }
 
     @MainActor
@@ -269,7 +270,7 @@ private final class RecordingPTPClient: PTPClientProtocol, @unchecked Sendable {
     func disconnect() { isConnected = false }
     func readProperty(_ code: UInt16) async throws -> PTPPropertyResponse {
         readPropertyCodes.append(code)
-        return .unsupported
+        return code == PTPProperty.presetSlot ? .uint32(7) : .unsupported
     }
     func writeProperty(_ code: UInt16, value: Int32) async throws {}
     func readPresetSlot(_ index: Int) async throws -> PTPClientPresetData {

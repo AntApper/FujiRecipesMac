@@ -79,8 +79,10 @@ public enum Glass {
 // MARK: - Window Backdrop with Dynamic Ambient Lighting
 
 public struct GlassWindowBackground: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     @State private var ambientPhase: Bool = false
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
     
     public init() {}
 
@@ -109,7 +111,7 @@ public struct GlassWindowBackground: View {
                         .frame(width: 500, height: 500)
                         .position(x: geo.size.width * 0.15, y: geo.size.height * 0.1)
                         .blur(radius: 50)
-                        .offset(x: ambientPhase ? 15 : -15, y: ambientPhase ? -10 : 10)
+                        .offset(x: reduceMotion ? 0 : (ambientPhase ? 15 : -15), y: reduceMotion ? 0 : (ambientPhase ? -10 : 10))
                     
                     // Cool sapphire / cyan bottom-right glow (digital sensor readout)
                     Circle()
@@ -128,12 +130,12 @@ public struct GlassWindowBackground: View {
                         .frame(width: 600, height: 600)
                         .position(x: geo.size.width * 0.85, y: geo.size.height * 0.9)
                         .blur(radius: 60)
-                        .offset(x: ambientPhase ? -20 : 20, y: ambientPhase ? 15 : -15)
+                        .offset(x: reduceMotion ? 0 : (ambientPhase ? -20 : 20), y: reduceMotion ? 0 : (ambientPhase ? 15 : -15))
                 }
             }
             .ignoresSafeArea()
             .animation(
-                reduceMotion ? .default : .easeInOut(duration: 16).repeatForever(autoreverses: true),
+                motion.animation(.easeInOut(duration: 16).repeatForever(autoreverses: true)),
                 value: ambientPhase
             )
             .onAppear {
@@ -156,6 +158,7 @@ public struct GlassWindowBackground: View {
             )
             .ignoresSafeArea()
         }
+        .respectingReducedMotion()
     }
 }
 
@@ -269,8 +272,11 @@ public extension View {
 // MARK: - Modern 2026 Button Styles
 
 public struct GlassProminentButtonStyle: ButtonStyle {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     public var color: Color = Theme.fujiAmber
     public var height: CGFloat = 38
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     public init(color: Color = Theme.fujiAmber, height: CGFloat = 38) {
         self.color = color
@@ -300,14 +306,18 @@ public struct GlassProminentButtonStyle: ButtonStyle {
                 x: 0,
                 y: configuration.isPressed ? 2 : 5
             )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: configuration.isPressed)
+            .scaleEffect(motion.scale(configuration.isPressed ? 0.97 : 1.0))
+            .animation(motion.animation(.spring(response: 0.25, dampingFraction: 0.75)), value: configuration.isPressed)
+            .respectingReducedMotion()
     }
 }
 
 public struct GlassBorderedButtonStyle: ButtonStyle {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     public var accentColor: Color = .white
     public var height: CGFloat = 38
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     public init(accentColor: Color = .white, height: CGFloat = 38) {
         self.accentColor = accentColor
@@ -346,8 +356,9 @@ public struct GlassBorderedButtonStyle: ButtonStyle {
                 x: 0,
                 y: configuration.isPressed ? 1 : 4
             )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: configuration.isPressed)
+            .scaleEffect(motion.scale(configuration.isPressed ? 0.97 : 1.0))
+            .animation(motion.animation(.spring(response: 0.25, dampingFraction: 0.75)), value: configuration.isPressed)
+            .respectingReducedMotion()
     }
 }
 
@@ -454,18 +465,24 @@ public struct SectionHeader: View {
 // MARK: - Fluid Sliding Pill Toggle / Segmented Picker
 
 public struct GlassPillToggle<Value: Hashable>: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     public let options: [(value: Value, label: String)]
     @Binding public var selection: Value
     public var accentColor: Color = Theme.fujiAmber
+    public var accessibilityIdentifiers: [Value: String]
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     public init(
         options: [(value: Value, label: String)],
         selection: Binding<Value>,
-        accentColor: Color = Theme.fujiAmber
+        accentColor: Color = Theme.fujiAmber,
+        accessibilityIdentifiers: [Value: String] = [:]
     ) {
         self.options = options
         self._selection = selection
         self.accentColor = accentColor
+        self.accessibilityIdentifiers = accessibilityIdentifiers
     }
 
     public var body: some View {
@@ -473,7 +490,7 @@ public struct GlassPillToggle<Value: Hashable>: View {
             ForEach(options, id: \.value) { option in
                 let isSelected = selection == option.value
                 Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                    withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.8))) {
                         selection = option.value
                     }
                 } label: {
@@ -496,6 +513,8 @@ public struct GlassPillToggle<Value: Hashable>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                .accessibilityIdentifier(accessibilityIdentifiers[option.value] ?? option.label)
             }
         }
         .padding(2)
@@ -509,6 +528,7 @@ public struct GlassPillToggle<Value: Hashable>: View {
                         .blendMode(.plusLighter)
                 )
         )
+        .respectingReducedMotion()
     }
 
     @Namespace private var pillNamespace

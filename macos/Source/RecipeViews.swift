@@ -22,6 +22,7 @@ private struct PendingStageTop {
 }
 
 public struct RecipeListView: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     @ObservedObject public var store: RecipeStore
     @ObservedObject public var cameraManager: CameraManager
     @State private var expandedRecipeIDs: Set<Recipe.ID> = []
@@ -38,6 +39,16 @@ public struct RecipeListView: View {
     @FocusState private var isSearchFocused: Bool
     @FocusState private var isGridFocused: Bool
     @State private var isSearchPresented = false
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
+
+    private var selectedRecipe: Recipe? {
+        store.filteredRecipes.first { $0.id == selectedRecipeID }
+    }
+
+    private var selectionAccessibilityLabel: String {
+        selectedRecipe.map { "Recipes. Selected recipe: \($0.name)" } ?? "Recipes. No recipe selected"
+    }
 
     private var columnCount: Int {
         GridNavigation.columnCount(width: gridWidth, minimum: 330, spacing: 14)
@@ -83,7 +94,7 @@ public struct RecipeListView: View {
                         recipeLoadingState
                     } else if store.loadingState == .failed {
                         emptyState
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .transition(motion.transition(.opacity.combined(with: .scale(scale: 0.95))))
                     }
 
                     // Stays mounted while recipes load so it keeps keyboard focus.
@@ -101,13 +112,13 @@ public struct RecipeListView: View {
                                 },
                                 onQuickLook: {
                                     select(recipe)
-                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                    withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.8))) {
                                         quickLookRecipe = recipe
                                     }
                                 },
                                 onToggleExpand: {
                                     select(recipe)
-                                    withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                                    withAnimation(motion.animation(.spring(response: 0.34, dampingFraction: 0.8))) {
                                         if expandedRecipeIDs.contains(recipe.id) {
                                             expandedRecipeIDs.remove(recipe.id)
                                         } else {
@@ -138,18 +149,30 @@ public struct RecipeListView: View {
                                 }
                             )
                             .id(recipe.id)
-                            .transition(.asymmetric(
+                            .transition(motion.transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.94)).combined(with: .offset(y: 10)),
                                 removal: .opacity.combined(with: .scale(scale: 0.96))
-                            ))
+                            )))
                         }
                     }
-                    .animation(.spring(response: 0.32, dampingFraction: 0.8), value: store.filteredRecipes.map(\.id))
+                    .animation(motion.animation(.spring(response: 0.32, dampingFraction: 0.8)), value: store.filteredRecipes.map(\.id))
                     .frame(maxWidth: .infinity)
                     .onGeometryChange(for: Double.self) { $0.size.width } action: { gridWidth = $0 }
                     .focusable()
                     .focusEffectDisabled()
                     .focused($isGridFocused)
+                    .accessibilityElement(children: .contain)
+                    // macOS does not export string AXValue for this container.
+                    // Include selection in its name so VoiceOver can read it.
+                    .accessibilityLabel(selectionAccessibilityLabel)
+                    .accessibilityHint("Use arrow keys to select a recipe and Space to open Quick Look.")
+                    .accessibilityIdentifier("recipe-grid")
+                    .accessibilityAction(named: "Select next recipe") {
+                        _ = moveSelection(.right, scrollProxy: scrollProxy)
+                    }
+                    .accessibilityAction(named: "Select previous recipe") {
+                        _ = moveSelection(.left, scrollProxy: scrollProxy)
+                    }
                     .onKeyPress { press in
                         guard let move = GridNavigation.Move(key: press.key) else { return .ignored }
                         return moveSelection(move, scrollProxy: scrollProxy)
@@ -160,7 +183,7 @@ public struct RecipeListView: View {
                     }
                     .onKeyPress(.escape) {
                         guard quickLookRecipe != nil else { return .ignored }
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        withAnimation(motion.animation(.spring(response: 0.25, dampingFraction: 0.8))) {
                             quickLookRecipe = nil
                         }
                         return .handled
@@ -168,11 +191,11 @@ public struct RecipeListView: View {
 
                     if store.filteredRecipes.isEmpty && store.loadingState != .failed && store.loadingState != .loading {
                         emptyState
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .transition(motion.transition(.opacity.combined(with: .scale(scale: 0.95))))
                     }
                 }
                 .padding(16)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: store.filteredRecipes.isEmpty)
+                .animation(motion.animation(.spring(response: 0.3, dampingFraction: 0.8)), value: store.filteredRecipes.isEmpty)
             }
         }
         .navigationTitle("Fuji Recipes Studio")
@@ -191,6 +214,16 @@ public struct RecipeListView: View {
         .onChange(of: isSearchFocusPending) {
             focusSearchIfRequested()
         }
+        .onChange(of: store.filteredRecipes.map(\.id)) { _, visibleIDs in
+            if let selectedRecipeID, !visibleIDs.contains(selectedRecipeID) {
+                self.selectedRecipeID = nil
+            }
+        }
+        .onChange(of: selectedRecipeID) { _, _ in
+            if let selectedRecipe {
+                AccessibilityNotification.Announcement("\(selectedRecipe.name), selected").post()
+            }
+        }
         .onChange(of: activeHUDToast) { _, toast in
             if let toast {
                 AccessibilityNotification.Announcement("\(toast.title). \(toast.message)").post()
@@ -202,7 +235,7 @@ public struct RecipeListView: View {
                 let message = notification.userInfo?[MacAppCommand.toastMessageKey] as? String
             else { return }
             let isError = notification.userInfo?[MacAppCommand.toastIsErrorKey] as? Bool ?? false
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
                 activeHUDToast = HUDToast(title: title, message: message, isError: isError)
             }
             if !isError {
@@ -305,12 +338,12 @@ public struct RecipeListView: View {
                     loadouts: store.loadouts,
                     isCameraConnected: cameraManager.status == .connected,
                     onToggleFavorite: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.6))) {
                             store.favorites.toggleFavorite(for: recipe.id)
                         }
                     },
                     onDismiss: {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        withAnimation(motion.animation(.spring(response: 0.25, dampingFraction: 0.8))) {
                             quickLookRecipe = nil
                         }
                     },
@@ -324,14 +357,14 @@ public struct RecipeListView: View {
                     },
                     onDuplicate: {
                         let duplicated = store.customRecipes.uniquelyNamedCopy(of: recipe)
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        withAnimation(motion.animation(.spring(response: 0.25, dampingFraction: 0.8))) {
                             quickLookRecipe = nil
                         }
                         recipeToEdit = duplicated
                     }
                 )
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                .animation(.spring(response: 0.28, dampingFraction: 0.8), value: quickLookRecipe?.id)
+                .transition(motion.transition(.opacity.combined(with: .scale(scale: 0.96))))
+                .animation(motion.animation(.spring(response: 0.28, dampingFraction: 0.8)), value: quickLookRecipe?.id)
             }
         }
         .overlay(alignment: .bottom) {
@@ -354,7 +387,7 @@ public struct RecipeListView: View {
                     Spacer(minLength: 12)
 
                     Button {
-                        withAnimation(.easeOut(duration: 0.2)) {
+                        withAnimation(motion.animation(.easeOut(duration: 0.2))) {
                             activeHUDToast = nil
                         }
                     } label: {
@@ -380,17 +413,18 @@ public struct RecipeListView: View {
                 )
                 .padding(.horizontal, 24)
                 .padding(.bottom, 16)
-                .transition(.asymmetric(
+                .transition(motion.transition(.asymmetric(
                     insertion: .move(edge: .bottom).combined(with: .opacity),
                     removal: .opacity.combined(with: .scale(scale: 0.95))
-                ))
+                )))
             }
         }
+        .respectingReducedMotion()
     }
 
     private func toggleQuickLook() {
         if quickLookRecipe != nil {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            withAnimation(motion.animation(.spring(response: 0.25, dampingFraction: 0.8))) {
                 quickLookRecipe = nil
             }
         } else {
@@ -398,7 +432,7 @@ public struct RecipeListView: View {
                 ?? store.filteredRecipes.first
             if let target {
                 selectedRecipeID = target.id
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.8))) {
                     quickLookRecipe = target
                 }
             }
@@ -420,7 +454,7 @@ public struct RecipeListView: View {
         if quickLookRecipe != nil {
             quickLookRecipe = target
         }
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(motion.animation(.easeOut(duration: 0.2))) {
             scrollProxy.scrollTo(target.id)
         }
         return .handled
@@ -450,7 +484,7 @@ public struct RecipeListView: View {
     @MainActor
     private func load(_ recipe: Recipe, into slot: Int) async {
         if cameraManager.status == .connected {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+            withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.8))) {
                 activeHUDToast = HUDToast(
                     title: "Syncing to C\(slot)…",
                     message: "Writing \"\(recipe.name)\" to camera…",
@@ -460,7 +494,7 @@ public struct RecipeListView: View {
             do {
                 let result = try await cameraManager.importRecipeToCState(recipe, slot: slot, updating: store.loadouts)
                 guard result.observedSnapshot?.slot == slot else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
                         activeHUDToast = HUDToast(
                             title: "C\(slot) Sync Incomplete",
                             message: "\"\(recipe.name)\" was sent, but post-write readback was unavailable.",
@@ -470,7 +504,7 @@ public struct RecipeListView: View {
                     return
                 }
                 let matches = result.differences.isEmpty
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
                     activeHUDToast = HUDToast(
                         title: matches ? "✓ Synced to C\(slot)" : "C\(slot) Differs from \"\(recipe.name)\"",
                         message: result.summary,
@@ -481,7 +515,7 @@ public struct RecipeListView: View {
                     dismissToast(activeHUDToast, after: .seconds(4))
                 }
             } catch let recoveryError as PTPPresetSlotWriteRecoveryError {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
                     activeHUDToast = HUDToast(
                         title: "C\(slot) Write Error",
                         message: recoveryError.localizedDescription,
@@ -489,7 +523,7 @@ public struct RecipeListView: View {
                     )
                 }
             } catch {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
                     activeHUDToast = HUDToast(
                         title: "C\(slot) Error",
                         message: error.localizedDescription,
@@ -498,7 +532,7 @@ public struct RecipeListView: View {
                 }
             }
         } else {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
                 store.loadouts.applyRecipe(recipe, to: slot)
                 activeHUDToast = HUDToast(
                     title: "Saved to Local C\(slot)",
@@ -515,7 +549,7 @@ public struct RecipeListView: View {
         Task {
             try? await Task.sleep(for: delay)
             guard activeHUDToast?.id == id else { return }
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(motion.animation(.easeOut(duration: 0.3))) {
                 activeHUDToast = nil
             }
         }
@@ -535,7 +569,7 @@ public struct RecipeListView: View {
     private func stageToDial(_ recipes: [Recipe]) {
         store.loadouts.stageAll(recipes: recipes)
         let count = recipes.count
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+        withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.75))) {
             activeHUDToast = HUDToast(
                 title: count == 1 ? "✓ Staged 1 Recipe to Dial" : "✓ Staged Top \(count) to Dial",
                 message: count == 1
@@ -712,8 +746,8 @@ public struct RecipeListView: View {
                     .padding(.vertical, 3)
                     .background(Theme.fujiAmber.opacity(0.16))
                     .clipShape(Capsule())
-                    .contentTransition(.numericText())
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: store.filteredRecipes.count)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(motion.animation(.spring(response: 0.3, dampingFraction: 0.8)), value: store.filteredRecipes.count)
             }
 
             Text("Curated Fujifilm X100VI film simulation formulations & custom dial presets.")
@@ -731,7 +765,12 @@ public struct RecipeListView: View {
                 (value: Optional<RecipeStore.FilterCategory>.some(.myRecipes), label: "My Recipes (\(store.customRecipes.recipes.count))")
             ],
             selection: $store.selectedFilterCategory,
-            accentColor: Theme.fujiAmber
+            accentColor: Theme.fujiAmber,
+            accessibilityIdentifiers: [
+                .none: "recipe-collection-all",
+                .some(.favorites): "recipe-collection-favorites",
+                .some(.myRecipes): "recipe-collection-my-recipes"
+            ]
         )
     }
 
@@ -749,7 +788,7 @@ public struct RecipeListView: View {
                             isSelected: isSelected,
                             accent: accent
                         ) {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.78))) {
                                 store.selectedFilmSimFamily = family
                             }
                         }
@@ -767,7 +806,7 @@ public struct RecipeListView: View {
                             isSelected: isSelected,
                             accent: Theme.emeraldGreen
                         ) {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.78))) {
                                 store.selectedDRFilter = dr
                             }
                         }
@@ -784,7 +823,7 @@ public struct RecipeListView: View {
                 Menu {
                     ForEach(RecipeStore.SortOrder.allCases) { order in
                         Button {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.78))) {
                                 store.sortOrder = order
                             }
                         } label: {
@@ -899,7 +938,7 @@ public struct RecipeListView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
+        .animation(motion.animation(.spring(response: 0.25, dampingFraction: 0.8)), value: isSelected)
     }
 
     private func filterMenuLabel(title: String, icon: String, isActive: Bool) -> some View {
@@ -1014,8 +1053,8 @@ public struct RecipeListView: View {
                 .frame(width: 220)
                 .padding(.top, 6)
             } else if hasActiveFilters {
-                Button("Reset Filters") {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                Button("Clear Additional Filters") {
+                    withAnimation(motion.animation(.spring(response: 0.28, dampingFraction: 0.8))) {
                         store.searchQuery = ""
                         store.selectedFilmSimFamily = .all
                         store.selectedDRFilter = .all
@@ -1024,8 +1063,11 @@ public struct RecipeListView: View {
                     }
                 }
                 .buttonStyle(GlassBorderedButtonStyle(accentColor: Theme.fujiAmber, height: 32))
-                .frame(width: 140)
+                .frame(width: 190)
                 .padding(.top, 6)
+                .help("Clear search and additional filters within the current collection. Favorites or My Recipes stays selected.")
+                .accessibilityHint("Keeps the current collection selected.")
+                .accessibilityIdentifier("recipe-clear-additional-filters")
             }
         }
         .frame(maxWidth: .infinity)
@@ -1081,7 +1123,7 @@ public struct RecipeListView: View {
             return "Try searching for a different film sim, Kelvin value, or tag."
         }
         if hasActiveFilters {
-            return "No recipe matches every selected filter. Remove one or reset them all."
+            return "No recipe matches every selected filter. Clear the additional filters to browse this collection."
         }
         switch store.selectedFilterCategory {
         case .favorites:
@@ -1233,6 +1275,7 @@ private struct CSlotPickerSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
+                .accessibilityIdentifier("c-slot-picker-cancel")
             }
         }
         .padding(24)
@@ -1293,6 +1336,7 @@ private struct CSlotPickerSheet: View {
 // MARK: - Quick Dial Bar Slot Pill
 
 private struct GallerySlotPill: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     let slot: Int
     let loadout: Loadout?
     let isCameraConnected: Bool
@@ -1300,8 +1344,10 @@ private struct GallerySlotPill: View {
 
     @State private var isTargeted = false
 
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
+
     private var accent: Color { slotAccent(slot) }
-    private var isFilled: Bool { loadout?.hasAnySettings ?? false }
+    private var isFilled: Bool { loadout?.hasContent ?? false }
 
     var body: some View {
         HStack(spacing: 5) {
@@ -1336,8 +1382,8 @@ private struct GallerySlotPill: View {
                         .stroke(isTargeted ? Theme.fujiAmber : (isFilled ? accent.opacity(0.4) : Color.white.opacity(0.06)), lineWidth: 1)
                 )
         )
-        .scaleEffect(isTargeted ? 1.06 : 1.0)
-        .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isTargeted)
+        .scaleEffect(motion.scale(isTargeted ? 1.06 : 1.0))
+        .animation(motion.animation(.spring(response: 0.22, dampingFraction: 0.78)), value: isTargeted)
         .dropDestination(for: Recipe.self) { items, _ in
             guard let recipe = items.first else { return false }
             onDropRecipe(recipe)
@@ -1352,6 +1398,7 @@ private struct GallerySlotPill: View {
 // MARK: - Ultra-Sleek Recipe Card
 
 private struct RecipeCard: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     let recipe: Recipe
     let isExpanded: Bool
     var isSelected: Bool = false
@@ -1369,6 +1416,8 @@ private struct RecipeCard: View {
     let onDuplicate: () -> Void
 
     @State private var isHovered = false
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     private var isFavorite: Bool {
         favorites.isFavorite(recipe.id)
@@ -1390,10 +1439,10 @@ private struct RecipeCard: View {
             // Expanded Recipe Formula & Details
             if isExpanded {
                 expandedContent
-                    .transition(.asymmetric(
+                    .transition(motion.transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .top)),
                         removal: .opacity.combined(with: .scale(scale: 0.98))
-                    ))
+                    )))
             }
         }
         .glassCard(
@@ -1411,11 +1460,11 @@ private struct RecipeCard: View {
                 )
                 .allowsHitTesting(false)
         )
-        .scaleEffect(isHovered ? 1.012 : 1.0)
+        .scaleEffect(motion.scale(isHovered ? 1.012 : 1.0))
         .shadow(color: isHovered ? accent.opacity(0.18) : (isSelected ? Theme.fujiAmber.opacity(0.15) : Color.clear), radius: 14, y: 6)
-        .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isHovered)
-        .animation(.spring(response: 0.32, dampingFraction: 0.8), value: isExpanded)
-        .animation(.spring(response: 0.26, dampingFraction: 0.76), value: isSelected)
+        .animation(motion.animation(.spring(response: 0.26, dampingFraction: 0.76)), value: isHovered)
+        .animation(motion.animation(.spring(response: 0.32, dampingFraction: 0.8)), value: isExpanded)
+        .animation(motion.animation(.spring(response: 0.26, dampingFraction: 0.76)), value: isSelected)
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
                 onSelect?()
@@ -1456,7 +1505,7 @@ private struct RecipeCard: View {
             }
             Divider()
             Button(isFavorite ? "Remove from Favorites" : "Add to Favorites") {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.6))) {
                     favorites.toggleFavorite(for: recipe.id)
                 }
             }
@@ -1466,6 +1515,15 @@ private struct RecipeCard: View {
                 Button("Delete Recipe", role: .destructive, action: onDelete)
             }
         }
+        // Contain rather than combine so each card action remains a separate
+        // VoiceOver control beneath the recipe's selection state.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(recipe.name), \(isSelected ? "selected" : "not selected")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("recipe-card-\(recipe.id)")
+        .accessibilityAction { onSelect?() }
+        .accessibilityAction(named: "Quick Look") { onQuickLook?() }
+        .respectingReducedMotion()
     }
 
     /// The second click of a double-click belongs to Quick Look, so it must
@@ -1515,6 +1573,7 @@ private struct RecipeCard: View {
                     .glassPrimary()
                     .lineLimit(2)
                     .minimumScaleFactor(0.88)
+                    .accessibilityIdentifier("recipe-title-\(recipe.id)")
 
                 // Tone Curve Radar & Kelvin Swatch
                 toneAndKelvinCluster
@@ -1568,6 +1627,7 @@ private struct RecipeCard: View {
                 .buttonStyle(.plain)
                 .menuIndicator(.hidden)
                 .help("Stage \"\(recipe.name)\" to custom dial slot (C1–C7)")
+                .accessibilityLabel("Send \(recipe.name) to dial")
                 .accessibilityIdentifier("send-to-dial-\(recipe.id)")
 
                 HStack(spacing: 8) {
@@ -1611,7 +1671,7 @@ private struct RecipeCard: View {
 
                     // Favorite star button
                     Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        withAnimation(motion.animation(.spring(response: 0.3, dampingFraction: 0.6))) {
                             favorites.toggleFavorite(for: recipe.id)
                         }
                     }) {
@@ -1628,17 +1688,19 @@ private struct RecipeCard: View {
                     .buttonStyle(.plain)
                     .help(isFavorite ? "Remove favorite" : "Add to favorites")
                     .accessibilityLabel(isFavorite ? "Remove \(recipe.name) from favorites" : "Add \(recipe.name) to favorites")
+                    .accessibilityIdentifier("recipe-favorite-\(recipe.id)")
 
                     // Expand / Collapse Chevron Button
                     Button(action: onToggleExpand) {
                         Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.right.circle.fill")
                             .font(.system(size: 15))
                             .foregroundStyle(isExpanded ? Theme.textPrimary : (isHovered ? Theme.textSecondary : Theme.textTertiary))
-                            .animation(.spring(response: 0.28, dampingFraction: 0.75), value: isExpanded)
+                            .animation(motion.animation(.spring(response: 0.28, dampingFraction: 0.75)), value: isExpanded)
                     }
                     .buttonStyle(.plain)
                     .help(isExpanded ? "Collapse recipe formula" : "Expand recipe formula")
                     .accessibilityLabel(isExpanded ? "Collapse \(recipe.name) formula" : "Expand \(recipe.name) formula")
+                    .accessibilityIdentifier("recipe-expand-\(recipe.id)")
                 }
             }
         }
@@ -1658,7 +1720,7 @@ private struct RecipeCard: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .transition(motion.transition(.opacity.combined(with: .scale(scale: 0.95))))
                     case .failure:
                         thumbnailPlaceholder
                     @unknown default:
@@ -1947,10 +2009,13 @@ private struct RecipeDragPreview: View {
 }
 
 private struct SampleThumbnailButton: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     let urlString: String
     let url: URL
     let onSelect: (String) -> Void
     @State private var isHovered = false
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     var body: some View {
         Button {
@@ -1978,14 +2043,15 @@ private struct SampleThumbnailButton: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .stroke(isHovered ? Theme.fujiAmber.opacity(0.6) : Color.white.opacity(0.12), lineWidth: isHovered ? 1.2 : 0.8)
             )
-            .scaleEffect(isHovered ? 1.05 : 1.0)
+            .scaleEffect(motion.scale(isHovered ? 1.05 : 1.0))
             .shadow(color: isHovered ? Theme.fujiAmber.opacity(0.3) : Color.black.opacity(0.3), radius: isHovered ? 8 : 4, y: 2)
-            .animation(.spring(response: 0.24, dampingFraction: 0.72), value: isHovered)
+            .animation(motion.animation(.spring(response: 0.24, dampingFraction: 0.72)), value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .accessibilityLabel("Open sample photo")
         .accessibilityHint("Shows the selected sample photo at a larger size.")
+        .respectingReducedMotion()
     }
 }
 
@@ -2030,8 +2096,11 @@ extension Recipe {
 // MARK: - Lightbox Image Modal
 
 public struct PhotoLightboxView: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     let imageUrl: URL
     @Binding var isPresented: Bool
+
+    private var motion: MotionPolicy { MotionPolicy(reduceMotion: reduceMotion) }
 
     public var body: some View {
         ZStack {
@@ -2063,7 +2132,7 @@ public struct PhotoLightboxView: View {
                             .aspectRatio(contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .shadow(color: Color.black.opacity(0.6), radius: 24, y: 8)
-                            .transition(.scale(scale: 0.95).combined(with: .opacity))
+                            .transition(motion.transition(.scale(scale: 0.95).combined(with: .opacity)))
                     case .failure:
                         Text("Unable to load full photo").foregroundStyle(Theme.textSecondary)
                     @unknown default:
@@ -2075,6 +2144,7 @@ public struct PhotoLightboxView: View {
             }
         }
         .frame(minWidth: 500, minHeight: 400)
+        .respectingReducedMotion()
     }
 }
 
@@ -2400,6 +2470,7 @@ public struct RecipeQuickLookView: View {
             .accessibilityIdentifier("recipe-quick-look-modal")
             .padding(24)
         }
+        .respectingReducedMotion()
     }
 
     private var stageToDialLabel: some View {

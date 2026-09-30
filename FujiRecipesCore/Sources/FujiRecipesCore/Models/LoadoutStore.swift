@@ -1,13 +1,27 @@
 import Foundation
 
-/// Staged drafts that couldn't be read were copied aside and replaced with
-/// empty slots.
+/// The original drafts were copied aside. Unambiguous, readable entries stay
+/// intact; missing or unreadable slots start empty.
 public struct LoadoutRecoveryNotice: Equatable, Sendable {
     public let backupKey: String
     public let reason: String
+    public let preservedSlots: [Int]
+
+    public init(backupKey: String, reason: String, preservedSlots: [Int] = []) {
+        self.backupKey = backupKey
+        self.reason = reason
+        self.preservedSlots = preservedSlots
+    }
 
     public var message: String {
-        "FujiRecipes couldn’t read your staged C1–C7 drafts (\(reason)), so the slots start empty. The unreadable data was kept in the app’s preferences as “\(backupKey)”. Your camera wasn’t changed."
+        let recovery: String
+        if preservedSlots.isEmpty {
+            recovery = "FujiRecipes couldn’t read your staged C1–C7 drafts (\(reason)), so the slots start empty."
+        } else {
+            let slots = preservedSlots.map { "C\($0)" }.joined(separator: ", ")
+            recovery = "FujiRecipes couldn’t read all of your staged C1–C7 drafts (\(reason)). Valid entries for \(slots) were kept. Missing or ambiguous slots start empty."
+        }
+        return "\(recovery) The unreadable data was kept in the app’s preferences as “\(backupKey)”. Your camera wasn’t changed."
     }
 }
 
@@ -43,20 +57,29 @@ public final class LoadoutStore: ObservableObject {
     // MARK: - Persistence
     
     private func loadLoadouts() {
-        guard let data = defaults.data(forKey: loadoutsKey) else {
+        guard let storedValue = defaults.object(forKey: loadoutsKey) else {
             loadouts = Self.emptyLoadouts
             print("✅ DEFAULT 7 empty loadouts")
             return
         }
         do {
-            let loadouts = try JSONDecoder().decode([Loadout].self, from: data)
-            self.loadouts = loadouts.sorted { $0.slot < $1.slot }
+            let stored = try Self.recoverStoredLayout(from: storedJSONData(storedValue))
+            loadouts = stored.loadouts
             // Only loadouts persist, so a draft staged in an earlier session
             // must be re-marked or the next camera sync would discard it.
-            dirtySlots = Set(loadouts.filter { $0.provenance == .localDraft && $0.hasAnySettings }.map(\.slot))
+            dirtySlots = Set(loadouts.filter { $0.provenance == .localDraft && $0.hasContent }.map(\.slot))
+            if let reason = stored.reason {
+                let backupKey = backUpUnreadableStoredValue(storedValue, forKey: loadoutsKey, in: defaults)
+                saveLoadouts()
+                recoveryNotice = LoadoutRecoveryNotice(
+                    backupKey: backupKey,
+                    reason: reason,
+                    preservedSlots: stored.preservedSlots
+                )
+            }
             print("✅ LOADED \(loadouts.count) loadouts from UserDefaults")
         } catch {
-            let backupKey = backUpUnreadableLoadouts(data)
+            let backupKey = backUpUnreadableStoredValue(storedValue, forKey: loadoutsKey, in: defaults)
             loadouts = Self.emptyLoadouts
             // Saving the empty slots now keeps the next launch from finding
             // the same unreadable data and backing it up again.
@@ -69,16 +92,40 @@ public final class LoadoutStore: ObservableObject {
         (1...7).map { Loadout(slot: $0, name: "C\($0)", filmSim: nil, dr: nil) }
     }
 
-    private func backUpUnreadableLoadouts(_ data: Data) -> String {
-        let baseKey = "\(loadoutsKey).unreadable-\(storedDataRecoveryTimestamp())"
-        var attempt = 1
-        var backupKey = baseKey
-        while defaults.object(forKey: backupKey) != nil {
-            attempt += 1
-            backupKey = "\(baseKey)-\(attempt)"
+    private static func recoverStoredLayout(
+        from data: Data
+    ) throws -> (loadouts: [Loadout], reason: String?, preservedSlots: [Int]) {
+        let entries = try JSONDecoder().decode([StoredLoadout].self, from: data)
+        let slotCounts = Dictionary(grouping: entries.compactMap(\.slot), by: { $0 }).mapValues(\.count)
+        let duplicates = slotCounts.keys.filter { (1...7).contains($0) && slotCounts[$0]! > 1 }.sorted()
+        let outOfRange = slotCounts.keys.filter { !(1...7).contains($0) }.sorted()
+        var reasons: [String] = []
+        if !duplicates.isEmpty {
+            reasons.append("duplicate entries for \(duplicates.map { "C\($0)" }.joined(separator: ", "))")
         }
-        defaults.set(data, forKey: backupKey)
-        return backupKey
+        if !outOfRange.isEmpty {
+            reasons.append("slot numbers outside C1–C7: \(outOfRange.map(String.init).joined(separator: ", "))")
+        }
+
+        var valid: [Int: Loadout] = [:]
+        for (index, entry) in entries.enumerated() {
+            switch entry.loadout {
+            case .success(let loadout):
+                // Every occurrence of an ambiguous slot is left in the backup,
+                // rather than choosing a draft based on its array position.
+                if (1...7).contains(loadout.slot), slotCounts[loadout.slot] == 1 {
+                    valid[loadout.slot] = loadout
+                }
+            case .failure(let error):
+                let label = entry.slot.map { "C\($0)" } ?? "Entry \(index + 1)"
+                reasons.append("\(label): \(storedDataFailureReason(error))")
+            }
+        }
+        return (
+            emptyLoadouts.map { valid[$0.slot] ?? $0 },
+            reasons.isEmpty ? nil : reasons.joined(separator: "; "),
+            valid.keys.sorted()
+        )
     }
     
     private func saveLoadouts() {
@@ -91,6 +138,12 @@ public final class LoadoutStore: ObservableObject {
     
     public func loadout(for slot: Int) -> Loadout? {
         loadouts.first { $0.slot == slot }
+    }
+
+    /// Whether the slot retains a meaningful payload, including a name-only
+    /// request. A cleared slot has its default name and no recipe link.
+    public func hasContent(for slot: Int) -> Bool {
+        loadout(for: slot)?.hasContent == true
     }
 
     public func isCameraSlotEmpty(_ slot: Int) -> Bool {
@@ -109,11 +162,11 @@ public final class LoadoutStore: ObservableObject {
         revisions[slot, default: 0] += 1
     }
 
-    /// Slots holding local settings the camera doesn't have yet. A cleared
-    /// draft has no settings, so it is never written over the camera slot.
+    /// Slots holding local settings or a name request the camera doesn't have
+    /// yet. Cleared/default drafts have no content and are never batch-written.
     public var stagedSlots: [Int] {
         loadouts
-            .filter { $0.hasAnySettings && ($0.provenance != .cameraSynced || isDirty($0.slot)) }
+            .filter { $0.hasContent && ($0.provenance != .cameraSynced || isDirty($0.slot)) }
             .map(\.slot)
             .sorted()
     }
@@ -258,6 +311,11 @@ public final class LoadoutStore: ObservableObject {
     
     public func loadoutCountWithSettings() -> Int {
         loadouts.filter { $0.hasAnySettings }.count
+    }
+
+    /// Includes name-only payloads as well as camera settings.
+    public func loadoutCountWithContent() -> Int {
+        loadouts.filter { $0.hasContent }.count
     }
     
     // MARK: - Sync from Camera
@@ -405,6 +463,19 @@ public final class LoadoutStore: ObservableObject {
     }
 }
 
+/// Decode entries independently so a damaged field cannot hide valid drafts in
+/// other slots. Read the claimed slot even on failure to detect duplicates.
+private struct StoredLoadout: Decodable {
+    private enum CodingKeys: String, CodingKey { case slot }
+    let slot: Int?
+    let loadout: Result<Loadout, any Error>
+
+    init(from decoder: any Decoder) throws {
+        slot = try? decoder.container(keyedBy: CodingKeys.self).decode(Int.self, forKey: .slot)
+        loadout = Result { try Loadout(from: decoder) }
+    }
+}
+
 // MARK: - Loadout Model
 
 public struct Loadout: Identifiable, Codable, Sendable {
@@ -455,6 +526,18 @@ public struct Loadout: Identifiable, Codable, Sendable {
         highIsoNr != nil || clarity != nil || imageQuality != nil ||
         imageSize != nil || monoWarmCool != nil || monoMagentaGreen != nil ||
         longExpNr != nil || colorSpace != nil || rawPreset?.hasAnyValue == true
+    }
+
+    /// Settings, a nondefault name, or a recipe link constitute a requested
+    /// payload. The link distinguishes an imported recipe named "C4" from an
+    /// empty C4 draft without adding a new persisted field.
+    public var hasContent: Bool {
+        if hasAnySettings { return true }
+        let requestedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !requestedName.isEmpty, requestedName != "C\(slot)" { return true }
+        return [recipeID, recipeName].compactMap { $0 }.contains {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
     
     public init(
@@ -663,16 +746,20 @@ extension KeyedDecodingContainer {
 extension Loadout {
     /// Short display string for the loadout name
     public var displayLabel: String {
-        if hasAnySettings {
-            return name
+        if hasContent {
+            let label = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return label.isEmpty ? (contentName ?? "C\(slot)") : label
         }
         return "C\(slot)"
     }
 
     public var contentName: String? {
-        guard hasAnySettings else { return nil }
-        if !name.isEmpty, name != "C\(slot)" { return name }
-        if let recipeName, !recipeName.isEmpty { return recipeName }
+        guard hasContent else { return nil }
+        let label = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !label.isEmpty, label != "C\(slot)" { return label }
+        if let recipeName = recipeName?.trimmingCharacters(in: .whitespacesAndNewlines), !recipeName.isEmpty {
+            return recipeName
+        }
         return "Custom Preset"
     }
 }

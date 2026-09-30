@@ -34,14 +34,34 @@ private enum MacAppLaunchConfiguration {
         ProcessInfo.processInfo.environment["FUJI_RECIPES_TRANSPORT"] != "helper"
     }
 
+    #if DEBUG
+    static var testReduceMotionOverride: Bool? {
+        guard isUITesting else { return nil }
+        switch ProcessInfo.processInfo.environment["FUJI_RECIPES_UI_TEST_REDUCE_MOTION"] {
+        case "0": return false
+        case "1": return true
+        default: return nil
+        }
+    }
+    #endif
+
     /// UI tests supply a unique library path and defaults suite so their
     /// fixtures cannot read or alter a person's recipes, favorites, or drafts.
     @MainActor
     static func recipeStore() -> RecipeStore {
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
-        let defaults = environment["FUJI_RECIPES_DEFAULTS_SUITE"]
-            .flatMap { $0.isEmpty ? nil : UserDefaults(suiteName: $0) } ?? .standard
+        let testDefaults = environment["FUJI_RECIPES_DEFAULTS_SUITE"]
+            .flatMap { $0.isEmpty ? nil : UserDefaults(suiteName: $0) }
+        let defaults = testDefaults ?? .standard
+        // The sandboxed UI runner cannot seed this app's preferences. Seed
+        // inside the app once; a relaunch must retain the user's test edits.
+        if isUITesting, let testDefaults,
+           testDefaults.object(forKey: "com.ant.fuji-recipes.loadouts") == nil,
+           let seedPath = environment["FUJI_RECIPES_UI_TEST_LOADOUTS_PATH"],
+           let seed = try? Data(contentsOf: URL(fileURLWithPath: seedPath)) {
+            testDefaults.set(seed, forKey: "com.ant.fuji-recipes.loadouts")
+        }
         let library = environment["FUJI_RECIPES_CUSTOM_LIBRARY_PATH"]
             .flatMap { $0.isEmpty ? nil : CustomRecipeLibrary(storageURL: URL(fileURLWithPath: $0)) }
             ?? CustomRecipeLibrary()
@@ -53,14 +73,13 @@ private enum MacAppLaunchConfiguration {
 }
 
 /// Packaged apps and the Xcode project copy `recipes-data.json` into the main
-/// bundle. A bare SwiftPM build only has it in this target's resource bundle,
-/// nested under the `Resources` folder name from `Package.swift`, and
+/// bundle. A bare SwiftPM build has it at this target's resource-bundle root, and
 /// `Bundle.module` only exists (and traps if missing) under SwiftPM.
 @MainActor
 func loadBundledRecipes() throws -> [Recipe] {
     #if SWIFT_PACKAGE
     if Bundle.main.url(forResource: "recipes-data", withExtension: "json") == nil {
-        return try RecipeLoader.loadRecipes(from: .module, subdirectory: "Resources")
+        return try RecipeLoader.loadRecipes(from: .module)
     }
     #endif
     return try RecipeLoader.loadRecipes(from: .main)
@@ -69,6 +88,20 @@ func loadBundledRecipes() throws -> [Recipe] {
 /// Closing the window must not quit, because a camera write may still be
 /// running and the stores it updates outlive the window.
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
+    weak var cameraManager: CameraManager?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard cameraManager?.isBusy != true else {
+            let alert = NSAlert()
+            alert.messageText = "Camera Operation in Progress"
+            alert.informativeText = "Wait for the camera operation to finish before quitting Fuji Recipes."
+            alert.addButton(withTitle: "Keep Open")
+            alert.runModal()
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
@@ -117,6 +150,10 @@ struct FujiRecipesMacApp: App {
                     return X100VIHelperClient()
                 }
             )
+            .onAppear { appDelegate.cameraManager = cameraManager }
+            #if DEBUG
+            .environment(\.recipeReduceMotionOverride, MacAppLaunchConfiguration.testReduceMotionOverride)
+            #endif
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
@@ -207,6 +244,7 @@ private struct ShowMainWindowButton: View {
 }
 
 public struct FujiRecipesMacRoot: View {
+    @Environment(\.recipeReduceMotion) private var reduceMotion
     @ObservedObject private var recipeStore: RecipeStore
     @ObservedObject private var cameraManager: CameraManager
     @State private var selectedTab: AppTab = .recipes
@@ -248,7 +286,7 @@ public struct FujiRecipesMacRoot: View {
                                 cameraManager: cameraManager,
                                 isSearchFocusPending: $isSearchFocusPending,
                                 onNavigateToCamera: {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                                         selectedTab = .camera
                                     }
                                 }
@@ -268,13 +306,13 @@ public struct FujiRecipesMacRoot: View {
                             )
                         }
                     }
-                    .transition(.asymmetric(
+                    .transition(reduceMotion ? .identity : .asymmetric(
                         insertion: .opacity.combined(with: .scale(scale: 0.985)).combined(with: .offset(y: 6)),
                         removal: .opacity.combined(with: .scale(scale: 1.01))
                     ))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: selectedTab)
+                .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: selectedTab)
             }
             .navigationSplitViewStyle(.balanced)
             .frame(minWidth: 780, minHeight: 520)
@@ -283,10 +321,11 @@ public struct FujiRecipesMacRoot: View {
             .scrollContentBackground(.hidden)
         }
         .preferredColorScheme(.dark)
+        .respectingReducedMotion()
         .environmentObject(recipeStore)
         .environmentObject(cameraManager)
         .environment(\.cameraManager, cameraManager)
-        .dataRecoveryAlerts(library: recipeStore.customRecipes, loadouts: recipeStore.loadouts)
+        .dataRecoveryAlerts(library: recipeStore.customRecipes, loadouts: recipeStore.loadouts, favorites: recipeStore.favorites)
         .debugHUD(enabled: !MacAppLaunchConfiguration.isUITesting)
         .task {
             DebugLogger.log(.info, category: .app, "App appeared — Tab: \(selectedTab.rawValue)")
@@ -300,21 +339,21 @@ public struct FujiRecipesMacRoot: View {
                 let rawValue = notification.userInfo?[MacAppCommand.tabKey] as? String,
                 let tab = AppTab(rawValue: rawValue)
             else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedTab = tab
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.selectDialSlot)) { notification in
             guard let slot = notification.userInfo?[MacAppCommand.slotKey] as? Int,
                   (1...7).contains(slot) else { return }
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.78)) {
                 selectedTab = .camera
                 selectedDialSlot = slot
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: MacAppCommand.focusSearch)) { _ in
             if selectedTab != .recipes {
-                withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.78)) {
                     selectedTab = .recipes
                 }
             }
@@ -328,7 +367,7 @@ public struct FujiRecipesMacRoot: View {
     private func toggleCameraConnection() {
         Task {
             if cameraManager.status == .connected {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                     cameraManager.disconnect()
                 }
             } else {

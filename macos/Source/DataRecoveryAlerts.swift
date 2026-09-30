@@ -5,11 +5,27 @@ import FujiRecipesCore
 private struct DataRecoveryAlerts: ViewModifier {
     @ObservedObject var library: CustomRecipeLibrary
     @ObservedObject var loadouts: LoadoutStore
+    @ObservedObject var favorites: FavoritesStore
 
     func body(content: Content) -> some View {
         content
-            // Waits for the library alert so both launch notices are shown
-            // one after the other instead of competing to present.
+            // Launch notices appear in order: library, staged drafts, favorites.
+            // Each dismissal acknowledges only its own store's notice.
+            .alert(
+                "Favorites Couldn’t Be Read",
+                isPresented: Binding(
+                    get: {
+                        library.loadIssue == nil && loadouts.recoveryNotice == nil && favorites.recoveryNotice != nil
+                    },
+                    set: { if !$0 { favorites.acknowledgeRecoveryNotice() } }
+                ),
+                presenting: favorites.recoveryNotice
+            ) { _ in
+                Button("OK") { favorites.acknowledgeRecoveryNotice() }
+                    .keyboardShortcut(.defaultAction)
+            } message: { notice in
+                Text(notice.message)
+            }
             .alert(
                 "Staged Drafts Couldn’t Be Read",
                 isPresented: Binding(
@@ -46,7 +62,7 @@ private struct DataRecoveryAlerts: ViewModifier {
 }
 
 extension View {
-    func dataRecoveryAlerts(library: CustomRecipeLibrary, loadouts: LoadoutStore) -> some View {
-        modifier(DataRecoveryAlerts(library: library, loadouts: loadouts))
+    func dataRecoveryAlerts(library: CustomRecipeLibrary, loadouts: LoadoutStore, favorites: FavoritesStore) -> some View {
+        modifier(DataRecoveryAlerts(library: library, loadouts: loadouts, favorites: favorites))
     }
 }

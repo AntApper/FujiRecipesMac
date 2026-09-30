@@ -111,6 +111,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleShortVersionString</key><string>${VERSION}</string>
 	<key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
 	<key>LSMinimumSystemVersion</key><string>14.0</string>
+	<key>LSApplicationCategoryType</key><string>public.app-category.photography</string>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
 	<key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
@@ -124,10 +126,23 @@ if [[ -n "$SIGNING_IDENTITY" ]]; then
     "$APP/Contents/Resources/libusb-1.0.0.dylib"
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
     "$APP/Contents/Resources/x100vi_helper"
-  codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"
 else
   echo "▶ Ad-hoc code signing (not distributable)…"
-  codesign --force --deep --sign - "$APP"
+  nested_signing_args=(--force --sign -)
+  if [[ "$CONFIG" == "release" ]]; then
+    nested_signing_args+=(--options runtime)
+  fi
+  codesign "${nested_signing_args[@]}" "$APP/Contents/Resources/libusb-1.0.0.dylib"
+  codesign "${nested_signing_args[@]}" "$APP/Contents/Resources/x100vi_helper"
+fi
+
+# Signing changes Mach-O bytes. Keep the verified build hashes and record the
+# final signed hashes before the outer app seals this manifest as a resource.
+python3 ../scripts/packaged-provenance.py refresh --resources "$APP/Contents/Resources"
+if [[ -n "$SIGNING_IDENTITY" ]]; then
+  codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"
+else
+  codesign "${nested_signing_args[@]}" "$APP"
 fi
 
 validation_args=(

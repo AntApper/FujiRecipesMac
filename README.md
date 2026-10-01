@@ -11,6 +11,7 @@
 [![Sensor: X-Trans V](https://img.shields.io/badge/Sensor-40.2MP%20X--Trans%20V-4B5563?style=for-the-badge)](https://fujifilm-x.com)
 [![Protocol: USB PTP](https://img.shields.io/badge/Protocol-USB%20PTP-10B981?style=for-the-badge)](docs/camera-connection-guide.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/AntApper/FujiRecipesMac?style=for-the-badge&logo=github&color=blue)](https://github.com/AntApper/FujiRecipesMac/releases/latest)
 [![macOS CI](https://github.com/AntApper/FujiRecipesMac/actions/workflows/macos-ci.yml/badge.svg)](https://github.com/AntApper/FujiRecipesMac/actions/workflows/macos-ci.yml)
 
 <br/>
@@ -30,6 +31,16 @@
 Setting up custom film simulation recipes on Fujifilm cameras has historically been a slow, manual chore: navigating nested camera menus with rotary dials to configure over 20 distinct imaging parameters for every custom slot (**C1–C7**). 
 
 **FujiRecipes provides an offline recipe library and an X100VI C1–C7 workflow.** The camera procedure uses USB-C in `USB RAW CONV. / BACKUP RESTORE` mode. The app stages recipes locally and compares camera writes with readback. ImageCaptureCore is the default transport. The [September 29 native checks](docs/x100vi-imagecapturecore-hardware-checks-2026-09-29.md) cover all-seven-slot reads, configured C4 writes/rollback through the real manager diagnostic, and packaged-app connection/recovery on the recorded uncommitted working tree. Native GUI writes and the listed wider conditions remain untested. The [September 12 helper record](docs/x100vi-c-slot-evidence-manifest-2026-09-12.json) remains separate historical evidence. See [release scope](docs/RELEASE.md).
+
+---
+
+## Quick Download (macOS)
+
+Prebuilt release binaries are available for testing:
+
+1. **Download**: Get the latest universal `.app` bundle from [**Releases (v1.0.0 Beta)**](https://github.com/AntApper/FujiRecipesMac/releases/latest).
+2. **Install**: Unzip `FujiRecipesMac-v1.0.0.zip` and move **`Fuji Recipes.app`** to your `/Applications` folder.
+3. **Open**: On first launch, **right-click (or Control-click)** the app icon and select **Open** (required for ad-hoc signed beta builds).
 
 ---
 

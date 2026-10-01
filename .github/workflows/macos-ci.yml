@@ -75,6 +75,8 @@ jobs:
 
       - name: Run isolated macOS UI tests with ad-hoc signing
         run: |
+          defaults write com.apple.dock autohide -bool true
+          killall Dock || true
           xcodebuild test \
             -project macos/FujiRecipesMac.xcodeproj \
             -scheme FujiRecipesMac \

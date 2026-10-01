@@ -119,6 +119,7 @@ final class CustomRecipeLibraryUITests: XCTestCase {
         XCTAssertTrue(element("custom-recipe-film-simulation").exists)
         XCTAssertTrue(element("custom-recipe-save").exists)
         element("custom-recipe-cancel").click()
+        app.activate()
 
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 3))
@@ -152,6 +153,7 @@ final class CustomRecipeLibraryUITests: XCTestCase {
         let save = element("custom-recipe-save")
         XCTAssertTrue(save.isEnabled)
         save.click()
+        app.activate()
 
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))

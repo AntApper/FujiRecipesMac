@@ -291,11 +291,12 @@ struct CustomRecipeEditor: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 540, minHeight: 620)
+        .frame(minWidth: 520, idealWidth: 540, minHeight: 460, idealHeight: 520)
         .navigationTitle(recipe.source.starts(with: "Customized from") ? "Customize Recipe" : (recipe.name.isEmpty ? "New Custom Recipe" : "Edit Custom Recipe"))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("custom-recipe-cancel")
             }
             ToolbarItem(placement: .confirmationAction) {
